@@ -1,4 +1,4 @@
-# notes
+# Notes
 Take notes when learning Linux
 
 # Updated weekly one to two articles
