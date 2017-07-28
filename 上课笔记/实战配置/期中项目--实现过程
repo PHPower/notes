@@ -1,0 +1,754 @@
+期中项目--实现过程
+
+
+
+实验之前所做工作：
+
+	1、同步所有机器的时间
+
+
+	2、确保网络畅通
+
+
+	3、执行初始化脚本
+	
+
+
+
+
+
+
+
+'IP地址划分：'
+	调度器：
+		Master：172.16.1.10/16		内网：192.168.1.10/24
+		Backup：172.16.1.20/16		内网：192.168.1.20/24
+
+	varnish：
+		Master：192.168.1.30/24
+		Backup：192.168.1.40/24
+
+	静态WEB：
+		A：192.168.1.50/24
+		B：192.168.1.60/24
+
+	动态AP站点：
+		A：192.168.1.70/24
+		B：192.168.1.80/24
+
+		Memcache：
+			A：192.168.1.110/24
+			B：192.168.1.120/24
+
+	MySQL：
+		192.168.1.90/24
+
+	NFS：
+		192.168.1.100/24
+
+
+
+'实现步骤'  -->  由于是最小化安装系统所以大部分软件都没有安装，这是要注意的一点。
+
+
+'一、配置后端NFS以及数据库：NFS、MySQL'
+	
+	1、配置NFS：
+		'执行初始化脚本：'
+		$ bash -x init.sh nfs-server nfs
+#!/bin/bash
+#
+
+#hostname
+hname=$1
+hostnamectl set-hostname ${hname}
+
+#yum software
+
+ver=$2
+
+if [ "$ver" == nginx ];then
+    iptables -F
+    setenforce 0
+    ntpdate 172.16.0.1
+    yum install -y -q nginx keepalived
+    [ $? -eq 0 ]  && echo "yum success" || echo "failed"
+
+elif [ "$ver" == http ];then
+    yum install -y httpd
+    yum install -y -q nfs-utils
+    iptables -F
+    setenforce 0
+    scp root@192.168.1.10:/etc/hosts /etc/
+    echo "$hname Static Server" > /var/www/html/index.html
+    mkdir -pv /var/www/html/{wordpres,discuzx}
+    mount -t nfs 192.168.1.100:/data/my_wordpress /var/www/html/wordpress
+    mount -t nfs 192.168.1.100:/data/my_discuzx /var/www/html/discuzx
+    systemctl start httpd 
+
+elif [ "$ver" == ap ];then
+    yum install -y -q nfs-utils
+    yum install -y -q httpd php php-mysql php-mbstring php-mcrypt
+    iptables -F
+    setenforce 0
+    scp root@192.168.1.10:/etc/hosts /etc/
+    mkdir -pv /var/www/html/{wordpres,discuzx}
+    mount -t nfs 192.168.1.100:/data/my_wordpress /var/www/html/wordpress
+    mount -t nfs 192.168.1.100:/data/my_discuzx /var/www/html/discuzx
+    cat > /var/www/html/index.php<<EOF
+${hname}
+<?php
+  phpinfo();
+?>
+EOF
+    systemctl start httpd
+
+
+elif [ "$ver" == nfs ];then
+	iptables -F
+	setenforce 0
+	yum install -y -q nfs-utils rpcbind
+	scp root@192.168.1.10:/etc/hosts /etc/
+	cat > /etc/exports<<EOF
+/data/my_wordpress      192.168.1.50(rw,no_root_squash) 192.168.1.60(rw,no_root_squash) 192.168.1.70(rw,no_root_squash) 192.168.1.80(rw,no_root_squash)
+/data/my_discuzx        192.168.1.50(rw,no_root_squash) 192.168.1.60(rw,no_root_squash) 192.168.1.70(rw,no_root_squash) 192.168.1.80(rw,no_root_squash)
+EOF
+    mkdir -pv /data/my_wordpress
+    mkdir -pv /data/my_discuzx
+    scp maxie@192.168.1.1:/Users/machiyuan/Downloads/LinuxPackages/wordpress-4.7.4-zh_CN.tar.gz /data/
+    scp maxie@192.168.1.1:/Users/machiyuan/Downloads/LinuxPackages/Discuz_X3.3_SC_UTF8.zip /data/
+    tar -xf /data/wordpress-3.7.4-zh_CN.tar.gz -C /data
+    mv /data/wordpress/* /data/my_wordpress
+    unzip /data/Discuz_X3.3_SC_UTF8.zip -d /data/
+    mv /data/upload/* /data/my_discuzx
+    useradd -u 48 apache
+    chown -R apache.apache /data
+    systemctl restart nfs
+    [ $? -eq 0 ] && echo "nfs deploy success" || echo "failed"
+
+
+elif [ "$ver" == mysql ];then
+    iptables -F
+    setenforce 0
+    scp root@192.168.1.10:/etc/hosts /etc/
+    scp root@192.168.1.10:/root/server.conf /etc/my.cnf.d/
+    scp root@192.168.1.10:/root/init.sql /root/
+    systemctl start mariadb.service
+    mysql < /root/init.sql
+
+else
+    echo "Usage: arg1 is hostname u want set var"
+    echo "Usage: arg2 is (nginx|varnish|http|ap|nfs|mysql)"
+fi
+
+
+
+	    '初始化之后：检查是否配置成功'
+	    $ ss -tnl 					#查看2049端口是否开启
+
+	    $ ll /data/
+		total 18988
+		-rwxr-xr-x.  1 apache apache 10920164 Jul  7 12:22 Discuz_X3.3_SC_UTF8.zip
+		drwxr-xr-x. 12 apache apache     4096 Jul  7 12:22 my_discuzx
+		drwxr-xr-x.  5 apache apache     4096 Jul  8 13:17 my_wordpress
+		drwxr-xr-x.  2 apache apache       97 Apr  1 10:23 readme
+		-rwxr-xr-x.  1 apache apache  8507412 Jul  7 12:22 wordpress-4.7.4-zh_CN.tar.gz
+
+		'修改my_wordpress中的wp-config.php文件：'
+		// ** MySQL 设置 - 具体信息来自您正在使用的主机 ** //
+		/** WordPress数据库的名称 */
+		define('DB_NAME', 'wordpress_db');
+
+		/** MySQL数据库用户名 */
+		define('DB_USER', 'wordpress');
+
+		/** MySQL数据库密码 */
+		define('DB_PASSWORD', 'root@123');
+
+		/** MySQL主机 */
+		define('DB_HOST', '192.168.1.90');
+
+
+	
+	2、配置MySQL：
+		# 安装数据库并修改配置文件：
+		$ yum install -y mariadb
+		$ vim /etc/my.cnf.d/server.conf 
+		[mysqld]
+		skip_name_resolve=ON
+		innodb_file_per_table=ON
+		log-bin=mysql_bin
+
+		# 关闭防火墙
+		$ iptables -F
+		$ setenforce 0
+
+		# 启动
+		$ systemctl start mariadb.service 
+		$ ss -tnl # 查看3306端口是否监听
+
+
+		# 创建数据库
+		$ mysql
+
+	    > CREATE DATABASE wordpress_db;
+	    > CREATE DATABASE discuzx;
+	    > GRANT ALL PRIVILEGES ON wordpress_db.* TO 'wordpress'@'192.168.1.50' IDENTIFIED BY 'root@123';
+	    > GRANT ALL PRIVILEGES ON wordpress_db.* TO 'wordpress'@'192.168.1.60' IDENTIFIED BY 'root@123';
+	    > GRANT ALL PRIVILEGES ON wordpress_db.* TO 'wordpress'@'192.168.1.70' IDENTIFIED BY 'root@123';
+	    > GRANT ALL PRIVILEGES ON wordpress_db.* TO 'wordpress'@'192.168.1.80' IDENTIFIED BY 'root@123';
+	    > GRANT ALL PRIVILEGES ON wordpress_db.* TO 'wordpress'@'192.168.1.90' IDENTIFIED BY 'root@123';
+
+	    > GRANT ALL PRIVILEGES ON discuzx.* TO 'discuzx'@'192.168.1.50' IDENTIFIED BY 'root@123';
+	    > GRANT ALL PRIVILEGES ON discuzx.* TO 'discuzx'@'192.168.1.60' IDENTIFIED BY 'root@123';
+	    > GRANT ALL PRIVILEGES ON discuzx.* TO 'discuzx'@'192.168.1.70' IDENTIFIED BY 'root@123';
+	    > GRANT ALL PRIVILEGES ON discuzx.* TO 'discuzx'@'192.168.1.80' IDENTIFIED BY 'root@123';
+	    > GRANT ALL PRIVILEGES ON discuzx.* TO 'discuzx'@'192.168.1.90' IDENTIFIED BY 'root@123';
+
+	    > FLUSH PRIVILEGES;
+
+
+
+
+
+
+
+
+'二、配置后端动静节点：'
+	
+	1、配置静态节点：
+		执行初始化脚本：
+		yum install -y httpd
+	    yum install -y -q nfs-utils
+	    iptables -F
+	    setenforce 0
+	    scp root@192.168.1.10:/etc/hosts /etc/
+	    echo "$hname Static Server" > /var/www/html/index.html
+	    mkdir -pv /var/www/html/{wordpres,discuzx}
+	    mount -t nfs 192.168.1.100:/data/my_wordpress /var/www/html/wordpress
+	    mount -t nfs 192.168.1.100:/data/my_discuzx /var/www/html/discuzx
+	    systemctl start httpd 
+
+	    检查是否监听：
+	    $ ss -tnl  | grep 80 
+	    $ curl http://192.168.1.50/index.html
+	    $ curl http://192.168.1.60/index.html
+
+
+	2、配置动态节点
+		执行初始化脚本：
+		yum install -y -q nfs-utils
+	    yum install -y -q httpd php php-mysql php-mbstring php-mcrypt
+	    iptables -F
+	    setenforce 0
+	    scp root@192.168.1.10:/etc/hosts /etc/
+	    mkdir -pv /var/www/html/{wordpres,discuzx}
+	    mount -t nfs 192.168.1.100:/data/my_wordpress /var/www/html/wordpress
+	    mount -t nfs 192.168.1.100:/data/my_discuzx /var/www/html/discuzx
+	    cat > /var/www/html/index.php<<EOF
+${hname}
+<?php
+  phpinfo();
+?>
+EOF
+    	systemctl start httpd
+
+
+    	# 检查是否监听并可以访问：
+    	$ ss -tnl | grep 80
+    	$ curl http://192.168.1.70/index.php
+    	$ curl http://192.168.1.80/index.php
+
+
+
+
+
+
+
+
+
+
+'三、配置缓存服务器：' 
+	'varnish这里做的是负载均衡，而非keepalived，但是也可以做成keepalived的双主模式，一台宕掉，另一台接替
+	如果只做负载均衡，则只需复制配置文件，开启varnish即可。
+	如果做keepalived双主，则需要配置keepalived'
+
+	$ yum install -y varnish
+	$ iptables -F
+	$ setenforce 0
+
+	''
+	$ vim /etc/varnish/varnish.params
+	VARNISH_LISTEN_PORT=80
+
+	# Admin interface listen address and port
+	VARNISH_ADMIN_LISTEN_ADDRESS=127.0.0.1
+	VARNISH_ADMIN_LISTEN_PORT=6082
+
+	# Shared secret file for admin interface
+	VARNISH_SECRET_FILE=/etc/varnish/secret
+
+	# Backend storage specification, see Storage Types in the varnishd(5)
+	# man page for details.
+	VARNISH_STORAGE="malloc,512M"
+
+	# User and group for the varnishd worker processes
+	VARNISH_USER=varnish
+	VARNISH_GROUP=varnish
+
+	# Other options, see the man page varnishd(1)
+	DAEMON_OPTS="-p thread_pool_min=50 -p thread_pool_max=2000 -p thread_pool_timeout=300"
+
+
+
+	'配置varnish缓存策略文件'
+	$ vim /etc/varnish/default.vcl
+	# new 4.0 format.
+	vcl 4.0;
+	import directors;
+
+	# Default backend definition. Set this to point to your content server.
+	backend default {
+	    .host = "127.0.0.1";
+	    .port = "8080";
+	}
+
+	backend web1 {
+	    .host = "192.168.1.50";
+	    .port = "80";
+	}
+
+	backend web2 {
+	    .host = "192.168.1.60";
+	    .port = "80";
+	}
+
+	backend app1 {
+	    .host = "192.168.1.70";
+	    .port = "80";
+	}
+
+	backend app2 {
+	    .host = "192.168.1.80";
+	    .port = "80";
+	}
+
+	#初始化 集群
+	sub vcl_init {
+	    new websrv = directors.round_robin();
+	    websrv.add_backend(web1);
+	    websrv.add_backend(web2);
+
+	    new appsrv = directors.hash();
+	    appsrv.add_backend(app1,1);
+	    appsrv.add_backend(app2,1);
+	}
+
+	# 配置清除缓存的提示信息
+	sub vcl_purge {
+	    return (synth(200,"Pruge Fishished"));
+	}
+
+	# 配置能够使用pruge的IP地址
+	acl purges {
+	    "172.16.1.11";
+	    "172.16.250.15";
+	    "127.0.0.0"/8;
+	}
+
+
+	sub vcl_recv {
+		# 配置purge提示信息
+	    if (req.method == "PURGE") {
+	    if (client.ip !~ purges)
+	    {
+	        return(synth(403,"Purging not allowed for" + client.ip));
+	    }
+	        return(purge);
+	    }
+
+	    # 配置调度
+	    if (req.url ~ "(?i)\.(html|css|js)$") {
+	    	set req.backend_hint = websrv.backend();
+	    } else {
+		set req.backend_hint = appsrv.backend(req.http.cookie);
+	    }
+
+	    # 添加自定义头部，自定义日志使用
+	    if (req.restarts == 0) {
+	    if (req.http.X-Forwarded-For) {
+	        set req.http.X-Forwarded-For = req.http.X-Forwarded-For + "," + client.ip;
+	    } else {
+	        set req.http.X-Forwarded-For = client.ip;
+	    }
+	    }
+
+	    # 不清楚登陆信息的cookie
+	    if (!(req.url ~ "wp-(login|admin)")) {
+		unset req.http.cookie;
+	    }
+	    # Happens before we check if we have this in cache already.
+	    #
+	    # Typically you clean up the request here, removing cookies you don't need,
+	    # rewriting the request, etc.
+	}
+
+
+	sub vcl_hash {
+		hash_data(req.http.host + req.url);
+		return(lookup);
+	    }
+
+	# 配置后端响应
+	sub vcl_backend_response {
+	    unset beresp.http.X-Powered-By;
+
+	    # 如果向后端请求此类资源，则删除其cookie信息，进行缓存
+	    if (bereq.url ~ "\.(css|js|png|gif|jp(e?)g|swf|ico|txt|eot|svg|woff)") {
+		unset beresp.http.cookie;
+		set beresp.http.cache-control = "public, max-age=3600";
+	    }
+
+	    # 如果响应不是200 或者 400 ，则缓存时长为120s
+	    if ( beresp.status != 200 && beresp.status != 404 ) {
+		set beresp.uncacheable = true;
+		set beresp.ttl = 120s;
+		return (deliver);
+
+	    }
+
+	    # 缓存时长
+	    set beresp.ttl = 1h;
+	    set beresp.grace = 30s;
+	    return (deliver);
+	    # Happens after we have read the response headers from the backend.
+	    #
+	    # Here you clean the response headers, removing silly Set-Cookie headers
+	    # and other mistakes your backend does.
+	}
+
+	sub vcl_deliver {
+		# 设置自定义头部，缓存命中与否
+	    if (obj.hits>0) {
+	        set resp.http.X-Cache = "Hit Via " + server.ip;
+	    } else {
+	        set resp.http.X-Cache = "Miss from " + server.ip;
+	    }
+	    # Happens when we have all the pieces we need, and are about to send the
+	    # response to the client.
+	    #
+	    # You can do accounting or modifying the final object here.
+	}
+
+
+	$ systemctl start varnish
+	$ ss -tnl |  grep 80
+
+
+
+
+
+
+
+'四、配置nginx+keepalived'
+	未配置varnish之前的配置，仅通过nginx负载均衡调度后端动静主机的配置文件：
+		$ vim /etc/nginx/nginx.conf
+
+
+
+
+	1、安装nginx并配置其调度功能
+		$ yum install -y nginx keepalived
+		$ iptables -F
+		$ setenforce 0
+		$ vim /etc/nginx/nginx.conf
+		location / {
+	            proxy_pass      http://blog.maxie.com:80;
+	    }
+
+	    $ vim /etc/hosts
+	    # vip地址为1.200
+	    172.16.1.200 www.maxie.com
+		172.16.1.10 master
+		172.16.1.20 backup
+		192.168.1.30 varnish1 blog.maxie.com
+		192.168.1.50 web1
+		192.168.1.60 web2
+		192.168.1.70 ap1
+		192.168.1.80 ap2
+
+		$ systemctl start nginx
+
+		$ scp /etc/nginx/nginx.conf root@172.16.1.20:/etc/nginx  
+
+	2、配置keepalived
+
+		$ cd /etc/keepalived/
+		$ vim keepalived.conf
+		! Configuration File for keepalived
+
+		global_defs {
+		   notification_email {
+		     root@localhost
+		   }
+		   notification_email_from KA@localhost
+		   smtp_server 127.0.0.1
+		   smtp_connect_timeout 30
+		   router_id vs1
+		   vrrp_mcast_group4 224.16.3.100
+		}
+
+		vrrp_instance VI_1 {
+		    state MASTER
+		    interface eno16777736
+		    virtual_router_id 51
+		    priority 100
+		    advert_int 2
+		    authentication {
+		        auth_type PASS
+		        auth_pass maxie95
+		    }
+		    virtual_ipaddress {
+		    172.16.1.200/16 dev eno16777736 label eno16777736:0
+		    }
+
+		    notify_master "/etc/keepalived/notify.sh master"
+		    notify_backup "/etc/keepalived/notify.sh backup"
+		    notify_fault "/etc/keepalived/notify.sh fault"
+		}
+
+		$ vim notify.sh
+		#!/bin/bash
+		#
+		contact="root@localhost"
+
+		notify() {
+		        local mailsubject="$(hostname) to be $1, VIP is folating"
+		        local mailbody="$(date + '$F $T'): vrrp transition, $(hostname) changed to be $1"
+		        echo "$mailbody" | mail -s "$mailsubject" $contact
+		}
+
+		case $1 in
+		master)
+		        systemctl start nginx
+		        notify master
+		        ;;
+		backup)
+		        systemctl start nginx
+		        notify backup
+		        ;;
+		fault)
+		        notify fault
+		        ;;
+		*)
+		        echo "Usage: $(basename $0) {master|backup|fault}"
+		        exit 1
+		        ;;
+		esac
+
+
+		$ scp -r /etc/keepalived/*  root@172.16.1.20:/etc/keepalived
+
+		$ systemctl start keepalived
+
+		'另一台keepalived'
+
+		$ vim /etc/keepalived/keepalived.conf 
+		修改
+		router_id vs2
+		state BACKUP
+		priority 95
+		即可
+
+		$ systemctl start keepalived
+
+
+
+
+'五、测试是否可以访问'
+
+	在最后测试之前，删除wordpress，并重新部署，清空数据库，在wordpress配置文件中修改为如下信息:
+
+
+	// ** MySQL 设置 - 具体信息来自您正在使用的主机 ** //
+	/** WordPress数据库的名称 */
+	define('DB_NAME', 'wordpress');
+
+	/** MySQL数据库用户名 */
+	define('DB_USER', 'wordpress');
+
+	/** MySQL数据库密码 */
+	define('DB_PASSWORD', 'root@123');
+
+	/** MySQL主机 */
+	define('DB_HOST', '192.168.1.90');
+
+	/** 创建数据表时默认的文字编码 */
+	define('DB_CHARSET', 'utf8');
+
+	/** 数据库整理类型。如不确定请勿更改 */
+	define('DB_COLLATE', '');
+
+	/**#@+
+	 * 身份认证密钥与盐。
+	 *
+	 * 修改为任意独一无二的字串！
+	 * 或者直接访问{@link https://api.wordpress.org/secret-key/1.1/salt/
+	 * WordPress.org密钥生成服务}
+	 * 任何修改都会导致所有cookies失效，所有用户将必须重新登录。
+	 *
+	 * @since 2.6.0
+	 */
+	define('COOKIE_DOMAIN', '.www.maxie.com');
+
+
+	这里的maxie.com 是我们的VIP的域名
+
+
+
+
+
+'六、将nginx调度器修改为haproxy'
+
+	1、开启haproxy日志功能：
+
+		开启rsyslog的日志记录功能
+		$ vi /etc/rsyslog.conf 找到下面两行并去掉前面的#号
+		 #$ModLoad imudp
+		 #$UDPServerRun 514
+		
+		然后找到
+ 		# Save boot messages also to boot.log
+ 		local7.*  /var/log/boot.log
+		之后加上
+ 		local0.*   /home/sam/haproxy/haproxy.log
+
+
+	2、安装并配置haproxy
+
+		$ yum install -y haproxy
+		$ cd /etc/haproxy
+		$ vim haproxy.cfg
+
+
+
+
+'注意：实验可能出现无法实现会话保持的功能，这是因为我们在varnish中设置了动静都缓存，仅登陆信息页面不缓存导致的'
+	解决办法：
+		在varnish配置策略：只对静态信息缓存，其他都不缓存
+		在nginx/haproxy配置：静态调度至varnish，动态直接负载均衡调度至后端两台ap上。
+
+
+
+
+'注意：上述配置全部没有任何问题，在测试过程中会出现访问VIP地址跳转至varnish IP或者nginx调度器的IP地址上'
+	这时需要在wordpress的 wp-config.php中添加：define('COOKIE_DOMAIN', '.www.maxie.com');
+	这里的域名是我们的VIP的对外域名。
+
+
+
+
+
+
+define('COOKIE_DOMAIN', '.www.maxie.com');
+
+
+
+
+
+
+
+
+
+'使用tomcat作为后端动态服务器：'
+	需要使用2台memcached作为session server
+	使用 solo blog作为动态程序
+	无需使用NFS，在两台AT上放SOLO-BLOG即可 --> 只实现会话保持功能
+
+
+
+
+
+
+
+
+
+
+
+
+
+#---------------------------------------------------------------------
+# main frontend which proxys to the backends
+#---------------------------------------------------------------------
+frontend  main
+    bind	*:80
+    rspadd          X-Via:\ HAProxy-1
+    rspidel         Server.*
+    acl static      path_end -i .html .css .js
+    acl static      path_end -i .jpg .jpeg .gif .png
+    acl static      path_beg -i /images /static
+    use_backend     websrvs if static
+    default_backend appsrvs
+
+#---------------------------------------------------------------------
+# Admin Stats
+#---------------------------------------------------------------------
+listen status
+    bind *:9909
+    acl auth_admin  src 172.16.250.15 172.16.1.11
+    stats           enable
+    stats uri       /myha?stats
+    stats realm     HAProxy\ Admin\ Area
+    stats auth      root:root@123
+    stats admin     if auth_admin
+
+#---------------------------------------------------------------------
+# WEB static backend
+#---------------------------------------------------------------------
+backend websrvs
+    option      forwardfor header X-Client
+    balance     roundrobin
+    server      web1    192.168.1.30:80 check weight 2
+    server      web2    192.168.1.40:80 check weight 1
+    hash-type   consistent
+
+#---------------------------------------------------------------------
+# ap backend
+#---------------------------------------------------------------------
+
+backend appsrvs
+    option      forwardfor header X-Client
+    balance     uri
+    #balance     roundrobin
+    server      app1    192.168.1.70:80 cookie app1 check weight 1
+    server      app2    192.168.1.80:80 cookie app2 check weight 1
+    hash-type   consistent
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

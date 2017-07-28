@@ -1,0 +1,338 @@
+5.16课上练习题
+
+?	自己使用 select + while + case 制作一个脚本
+
+
+练习：
+		1、指定一个用户，获取该用户的ID号和默认shell
+			$ grep "^root\>" | cut -d: -f3,7
+			0:/bin/bash
+
+			$ vim id-shell.sh
+			#!/bin/bash
+			userinfo() {
+			    if id $username &> /dev/null; then
+			        grep "^$username\>" /etc/passwd | cut -d: -f3,7
+			    else
+			        echo "no such usuer"
+			    fi
+			}
+			#开始调用函数
+			username=$1
+			userinfo
+			
+			username=$2
+			userinfo
+
+		2、服务脚本框架
+			$ vim testsrv
+			[root@centos7 function]# cat testsrv
+			#!/bin/bash
+			#
+			# chkconfig: - 50 50
+			# description: test service scrpti
+			
+			prog=$(basename $0)
+			lockfile=/var/lock/subsys/$prog
+			
+			start() {
+			    if [ -f $lockfile ];then
+			        echo "$prog is running yet"
+			    else
+			        touch $lockfile
+			        [ $? -eq 0 ] && echo "start $prog finshed"
+			   fi
+			}
+			
+			stop() {
+			    if [ -f $lockfile ];then
+			        rm -f $lockfile
+			        [ $? -eq 0 ] && echo "stop $prog finshed"
+			    else
+			        echo "$prog is not running"
+			    fi
+			}
+			
+			status() {
+			    if [ -f $lockfile ]; then
+			        echo "$prog is running"
+			    else
+			        echo "$prog is stopped"
+			    fi
+			}
+			
+			usage() {
+			    echo "Usage: $prog {start|stop|restart|status}}"
+			}
+
+			case $1 in
+			start)
+			    start ;;
+			stop)
+			    stop ;;
+			restart)
+			    stop
+			    start
+			    ;;
+			status)
+			    status ;;
+			*)
+				usage
+				exit 1 ;;
+			esac
+
+		3、添加10个用户：
+			[root@centos7 0516shell-class]# cat useradd-func.sh
+			#!/bin/bash
+			# Author: Maxie
+			# Date: 2017-05-16-16:06:12
+			# Description:add 10 users
+			adduser() {
+			    if id $1 &> /dev/null;then
+			        return 2
+			    else
+			        useradd $1
+			        retval=$?
+			        return $retval
+			    fi
+			}
+			for i in {1..10};do
+			    adduser ${1}${i}
+			    retval=$?
+			        if [ $retval -eq 0 ];then
+			            echo "add user ${1}${i} finished."
+			        elif [ $retval -eq 5 ];then
+			            echo "user ${1}${i}  exists"
+			        else
+			            echo "Unknown Error"
+			        fi
+			done
+
+
+
+			'#这里函数adduser()中$1是在脚本中的   adduser ${1}${i}  这个${1}${i}代表函数中$1'
+
+
+
+	1、写一个脚本：
+			使用函数实现ping一个主机来测试主机的在线状态；主机地址通过参数传递诶函数
+			主程序：测试172.16.1.1-172.16.67.1范围内各主机的在线状态
+				[root@centos7 0516shell-class]# cat ip-online.sh
+				#!/bin/bash
+				#user:Maxie
+				# 写一个脚本，提示请输入网络地址，如 172.16.0.0 ，判断输入的网段中主机在线状态
+				read -p "请输入IP地址的网络地址：" IP         # 说明信息IP
+				# 定义变量名称=调用$IP获取的值 抽取 以.为分隔符 1-2的字符
+				IpAddr=`echo $IP | cut -d. -f1-2`.
+				sum=`echo $IP | cut -d. -f3`
+				addr_ping() {
+				                for i in `seq 0 5`;do
+				                if ping -c 1 -W 1 ${IpAddr}${1}.${i} &> /dev/null
+				                then
+				                                echo -e "${IpAddr}${1}.${i}\tonline"
+				                else
+				                        echo -e "${IpAddr}${1}.${i}\toffline"
+				                    fi
+				                done
+				}
+				if echo $IP | egrep '\<([1-9]|[1-9][0-9]|1[0-9][0-9]|2[0-4][0-9]|25[0-5])\.(([0-9]|[1-9][0-9]|1[0-9][0-9]|2[0-4][0-9]|25[0-5])\.){2}([0-9]|[1-9][0-9]|1[0-9][0-9]|2[0-4][0-9]|25[0-5])\>' &>/dev/null;then
+				    for I in `seq 1 $sum`;do
+				        addr_ping $I
+				        [ $I -eq $sum ] && break
+				    done
+				fi
+				
+				unset IP 
+				unset sum 
+				unset IpAddr
+
+
+		2、写一个脚本：
+			实现打印 n,n （例如4,3)乘法表；
+
+			[root@centos7 0516shell-class]# cat nnchengfabiao.sh
+			#!/bin/bash
+			# Author: Maxie
+			# Date: 2017-05-16-18:26:35
+			# Description:print triangle and Trapezoid
+
+
+			Multi() {
+			    for ((i=1;i<=$1;i++));do
+			        for ((j=1;j<=$2 && j<=i;j++));do
+			            echo -e -n "${i}x${j}=$[${i}*${j}]\t"
+			        done
+			        echo
+			    done
+			}
+
+			n1=$1
+			n2=$2
+			Multi $n1 $n2
+
+			unset n1
+			unset n2
+
+
+		
+		3、打印三角形，梯形
+
+			[root@centos7 0516shell-class]# cat triangle.sh
+			#!/bin/bash
+			# Author: Maxie
+			# Date: 2017-05-16-18:38:37
+			# Description:打印三角形和梯形
+
+			TRIANGLE() {
+			    for ((line=1;line<=$1;line++));do
+			        for ((space=1;space<=$[$1-line];space++));do
+			            echo -n " "
+			        done
+
+			        for ((start=1;start<=$[line*2-1];start++));do
+			            echo -n "*"
+			        done
+			        echo
+			    done
+			}
+
+			sum_line=$1
+
+			TRIANGLE $sum_line
+
+			unset sum_line
+
+			echo
+			echo
+
+			#print Trapezoid
+
+			TRAPEZOID() {
+			    for i in `seq $1 $2`;do
+			        for j in `seq $i`;do
+			            echo -n "* "
+
+			        echo
+			    done
+			}
+
+			_MIN=$2
+			_MAX=$3
+
+			TRAPEZOID $_MIN $_MAX
+
+			unset _MIN
+			unset _MAX
+
+
+
+	1、写一个脚本：
+		ping 命令查看172.16.1.1 - 172.16.67.1 范围内的所有主机是否在线；在线的显示为up，不在线的显示down
+		并统计在线和不在线的各总数
+
+		[root@centos7 array-shell]# cat ip-online.sh
+		#!/bin/bash
+		# Author:Maxie
+		# 写一个脚本，提示请输入网络地址，如 172.16.0.0 ，判断输入的网段中主机在线状态
+
+		read -p "请输入IP地址：" IP         # 说明信息IP
+
+		# 定义变量名称=调用$IP获取的值 抽取 以.为分隔符 1-2的字符
+		IpAddr=`echo $IP | cut -d. -f1-2`.
+		sum=`echo $IP | cut -d. -f3`
+
+		#定义在线主机总数和不在线总数
+		declare -i uphosts=0
+		declare -i downhosts=0
+
+		addr_ping() {
+		        	for i in `seq 0 10`;do
+		            	if ping -c 1 -W 1 ${IpAddr}${1}.${i} &> /dev/null
+		            	then
+		                		echo -e "${IpAddr}${1}.${i}\tonline" | tee -a /root/online.log
+		                        let uphosts+=1
+
+		            	else
+		           	    	echo -e "${IpAddr}${1}.${i}\toffline"  | tee  -a /root/offline.log
+		                    let downhosts+=1
+				    fi
+		        	done
+		}
+
+		if echo $IP | egrep '\<([1-9]|[1-9][0-9]|1[0-9][0-9]|2[0-4][0-9]|25[0-5])\.(([0-9]|[1-9][0-9]|1[0-9][0-9]|2[0-4][0-9]|25[0-5])\.){2}([0-9]|[1-9][0-9]|1[0-9][0-9]|2[0-4][0-9]|25[0-5])\>' &>/dev/null;then
+		    for I in `seq 0 $sum`;do
+		        addr_ping $I
+		        [ $I -eq $sum ] && break
+		    done
+		fi
+
+		echo "在线主机数: $uphosts ;  不在线主机数: $downhosts"
+
+
+		unset downhosts
+		unset uphosts
+		unset IpAddr
+		unset sum
+		unset IP
+
+
+
+
+		方法二：（A,B,C类网络ping操作）
+			#!/bin/bash
+			#
+			cping() {
+				local i=1
+				while [ $i -le 254 ]; do
+					#statements
+					if ping -W 1 -c 1 $1.$i &> /dev/null; then 
+						echo "$1.$i is up"
+				
+					else 
+						echo "$1.$i is down"
+						
+					let i++
+				done
+			}
+
+			cping 172.16.1
+
+			bping() {
+				local j=0
+				while [ $j -le 255 ];do 
+					cping $1.$j
+					let j++
+				done
+			}
+
+			bping 172.16
+
+
+			aping() {
+				local k=0
+				while [ $k -le 255 ];do
+					bping $1.$k
+					let k++
+				done
+			}
+
+			aping 10
+
+		提示用户输入一个IP地址或网路地址；获取其网络，并扫描其网段
+		
+
+		read -p "请输入IP地址：" IP         # 说明信息IP
+
+		# 定义变量名称=调用$IP获取的值 抽取 以.为分隔符 1-2的字符
+		IpAddr=`echo $IP | cut -d. -f1-2`.
+		sum=`echo $IP | cut -d. -f3`
+
+
+
+
+
+
+
+
+
+

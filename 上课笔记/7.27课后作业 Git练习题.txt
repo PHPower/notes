@@ -1,0 +1,363 @@
+7.27课后作业 Git练习题
+
+
+$ yum install -y git 
+$ ntpdate 172.16.0.1
+
+1、'创建一个目录，并使用 git init初始化目录，试着创建一个文件，并add和commit'
+
+	(1) 初始化
+		$ mkdir myproject
+		$ cd myproject 
+		$ git init 
+
+	(2) 新建一个文件，并配置全局用户以及邮箱
+		$ vim introduce.md 
+		### Just Introduce Myself
+		    Im just a Opser.
+		--------------------------
+
+		$ git add introduce.md 
+		$ git status
+		# On branch master
+		#
+		# Initial commit
+		#
+		# Changes to be committed:
+		#   (use "git rm --cached <file>..." to unstage)
+		#
+		#	new file:   introduce.md
+		#
+
+		$ git config --global user.name maxie
+		$ git config --global user.email maxie@maxie.io
+
+		$ git config -l
+		user.name=maxie
+		user.email=maxie@maxie.io
+		core.repositoryformatversion=0
+		core.filemode=true
+		core.bare=false
+		core.logallrefupdates=true
+
+		$ git commit -m "version 0.0.1"
+		[master (root-commit) 6b22c6c] version 0.0.1
+		 1 file changed, 3 insertions(+)
+		 create mode 100644 introduce.md
+
+
+
+2、'在第一题的基础上，使用git checkout 实现版本变化'
+
+	(1) 创建一个README文件，并创建一个标签tag
+		$ vim README
+		Test Readme
+
+		$ git status
+		# On branch master
+		# Untracked files:
+		#   (use "git add <file>..." to include in what will be committed)
+		#
+		#	README
+		nothing added to commit but untracked files present (use "git add" to track)
+		
+		$ git log
+		commit 6b22c6c27282e484de14c434544527e9e6a59546
+		Author: maxie <maxie@maxie.io>
+		Date:   Thu Jul 27 20:32:59 2017 +0800
+
+		    version 0.0.1
+		
+		$ git tag v0.1 6b22c6c
+		
+		$ git log
+		commit 6b22c6c27282e484de14c434544527e9e6a59546
+		Author: maxie <maxie@maxie.io>
+		Date:   Thu Jul 27 20:32:59 2017 +0800
+
+		    version 0.0.1
+		
+		$ ls .git/refs/tags/
+		v0.1
+		$ git tag -l
+		v0.1
+		
+		$ git add README
+		$ git commit -m "version 0.0.2"
+		[master 94bb30d] version 0.0.2
+		 1 file changed, 1 insertion(+)
+		 create mode 100644 README
+		
+		$ git log
+		commit 94bb30d9dbfef5c43e8de3bfa98f6538d8e669f5
+		Author: maxie <maxie@maxie.io>
+		Date:   Thu Jul 27 20:52:42 2017 +0800
+
+		    version 0.0.2
+
+		commit 6b22c6c27282e484de14c434544527e9e6a59546
+		Author: maxie <maxie@maxie.io>
+		Date:   Thu Jul 27 20:32:59 2017 +0800
+
+		    version 0.0.1
+	
+
+	(2) 等待提交完README之后，再添加一个标签
+		$ git tag v0.2 94bb30d
+		$ git tag -l
+		v0.1
+		v0.2
+		
+		$ ls
+		introduce.md  README
+		$ git status
+		# On branch master
+		nothing to commit, working directory clean
+	
+
+
+	(3) 现在有两个标签，一个是v0.1 一个是v0.2; 一个有README版本，一个是没有
+		$ git checkout v0.1
+		Note: checking out 'v0.1'.
+
+		You are in 'detached HEAD' state. You can look around, make experimental
+		changes and commit them, and you can discard any commits you make in this
+		state without impacting any branches by performing another checkout.
+
+		If you want to create a new branch to retain commits you create, you may
+		do so (now or later) by using -b with the checkout command again. Example:
+
+		  git checkout -b new_branch_name
+
+		HEAD is now at 6b22c6c... version 0.0.1
+		
+		$ ls
+		introduce.md
+		
+		'通过checkout进行版本选择，使用的是tag标签'
+		$ git checkout v0.2
+		Previous HEAD position was 6b22c6c... version 0.0.1
+		HEAD is now at 94bb30d... version 0.0.2
+		
+		$ ls
+		introduce.md  README
+
+
+
+
+
+
+
+3、'使用 git branch 创建分支'
+
+	(1) 创建新分支 dev
+		$ git branch dev 
+		$ git branch --list
+		* (detached from v0.2)
+		  dev
+		  master
+
+		$ ls 
+		introduce.md  README
+
+
+	(2) 切换分支至dev
+		$ git checkout dev 
+		$ vim dev.md 
+		### Dev Test
+
+		* Chapter One
+
+		    This is a dev test page.
+
+		$ git add dev.md 
+		$ git commit -m "dev version 0.0.1"
+		[dev 42a0fdb] dev version 0.0.1
+		 1 file changed, 5 insertions(+)
+		 create mode 100644 dev.md
+
+		$ git tag dev_ver0.1 42a0fdb
+
+
+	(3) 查看两个分支的区别
+
+		$ git checkout dev
+		Switched to branch 'dev'
+		$ ls
+		dev.md  introduce.md  README
+		
+		$ git checkout master
+		Switched to branch 'master'
+
+
+	(4) 合并分支
+
+		$ git checkout master
+		$ git merge dev 
+		version 0.1.1
+		$ git status
+		$ ls 
+		dev.md  fstab  introduce.md  README  testdiff.txt
+		
+	
+
+
+4、'使用reset命令实现提交/暂存区的改变'
+	
+	在 working directory clean状态下执行如下操作：	
+
+	(1) 创建一个新文件，并提交，设置tag
+		$ cp /etc/fstab ./ 
+		$ git add fstab 
+		$ git commit -m "version 0.0.4"
+		$ git tag v0.4 c9b9707d
+
+	(2) 再新建一个文件，并提交，设置tag
+		$ vim test.txt
+		$ git add test.txt 
+		$ git commit -m "version 0.0.5"
+		$ git tag v0.5 a5c818
+
+	(3) 使用 --soft 回滚
+		$ git reset --soft c9b9707d
+		$ git status 
+		# HEAD detached at v0.3
+		# Changes to be committed:
+		#   (use "git reset HEAD <file>..." to unstage)
+		#
+		#	new file:   test.txt
+		#
+
+		$ git commit -m "version 0.0.5"
+
+
+	(4) 使用 --mixed回滚
+		$ git reset --mixed c9b9707d
+		$ git status
+		# HEAD detached at v0.3
+		# Untracked files:
+		#   (use "git add <file>..." to include in what will be committed)
+		#
+		#	hosts
+		#	test.txt
+		nothing added to commit but untracked files present (use "git add" to track)
+
+		$ git add .
+		$ git commit -m "version 0.0.5"
+
+	(5) 使用 --hard回滚
+		$ git reset --hard c9b9707d
+		HEAD is now at c9b9707 version 0.0.3
+		$ git status 
+		# HEAD detached at v0.3
+		nothing to commit, working directory clean
+
+		$ ls 
+		fstab  introduce.md  README
+
+
+
+
+
+5、使用diff命令比较当前工作目录和索引的中的数据 的不同之处
+
+	处于working directory clean 状态：
+
+	(1) 创建一个新文件，并添加至暂存区中，不提交
+		$ vim testdiff.txt
+		just for test 
+
+		$ git add testdiff.txt 
+
+	(2) 编辑testdiff.txt文件，添加一行信息
+		$ echo "test" >> testdiff.txt
+		$ git diff
+		diff --git a/testdiff.txt b/testdiff.txt
+		index 32380c1..e23547f 100644
+		--- a/testdiff.txt
+		+++ b/testdiff.txt
+		@@ -1 +1,2 @@
+		 just for test diff
+		+test
+		
+
+	(3) 使用 git diff HEAD ，将工作目录与最近一次提交进行比较
+
+		$ git diff HEAD
+		diff --git a/testdiff.txt b/testdiff.txt
+		new file mode 100644
+		index 0000000..e23547f
+		--- /dev/null
+		+++ b/testdiff.txt
+		@@ -0,0 +1,2 @@
+		+just for test diff
+		+test
+
+	(4) 使用 git diff --cached，将索引区 与 最近一次提交对比
+
+		$ git diff --cached 
+		diff --git a/testdiff.txt b/testdiff.txt
+		new file mode 100644
+		index 0000000..32380c1
+		--- /dev/null
+		+++ b/testdiff.txt
+		@@ -0,0 +1 @@
+		+just for test diff
+
+
+
+
+
+
+
+6、'当两个分支的同一个文件内容不同时，将其合并'
+	
+	(1) 在dev分支上，编辑README文件
+		$ git checkout dev 
+		$ echo "dev test"  >> README
+		$ git add .
+		$ git commit -m "version-dev 0.0.2"
+
+
+	(2) 在master上，编辑README文件
+		$ git checkout master
+		$ echo "Master branch" >> README
+
+		$ git add .
+		$ git commit -m "version 0.0.4"
+
+
+	(3) 在master上进行合并dev分支的操作
+
+		$ git merge dev
+		Auto-merging README
+		CONFLICT (content): Merge conflict in README
+		Automatic merge failed; fix conflicts and then commit the result.
+
+		$ vim README
+		Test README
+		Master Readme test line
+		dev test line
+		Master Readme test second line
+		dev test second line
+
+
+		$ git add README
+		$ git commit -m "version 0.1.0 merged dev"
+		[master b574a0c] version 0.1.0 merged dev
+
+
+
+
+7、
+
+
+
+		
+
+
+
+
+
+
+

@@ -1,0 +1,615 @@
+varnish样本配置文件1
+
+
+'样本配置文件2：'
+
+# 使用varnish版本4的格式.
+vcl 4.0;
+
+# 加载后端负载均衡模块
+import directors;
+
+
+#######################健康检查策略区域###########################
+# 名为www_probe的健康检查策略
+probe www_probe {
+.request =
+    "GET /html/test.html HTTP/1.1"      # 健康检查url为/html/test.html 协议为http1.1
+    "Host: www.maxie.com"               # 访问的域名为www.maxie.com
+    "Connection: close";                # 检查完关闭连接
+#其他参数 如 超时时间 检查间隔 等均使用默认
+.window                                 # 基于最近的多少次检查来判断其健康状态
+.threshold                              # 最近.window中定义的这么次检查中至有.threshhold定义的次数是成功的
+.interval                               # 检测频度
+.timeout                                # 超时时长
+}
+
+
+#名为 backend_healthcheck的健康检查策略
+probe backend_healthcheck { 
+    .url = /health.html;
+    .window = 5;
+    .threshold = 2;
+    .interval = 3s;
+}
+
+
+#########################################################
+#######################配置后端区域########################
+
+backend backend_20 {
+.host = "172.16.3.20";
+.port = "80";
+.probe = www_probe;                 # 使用名为www_probe的健康检查策略
+}
+backend backend_30 {
+.host = "172.16.3.30";
+.port = "80";
+.probe = www_probe;                 # 使用名为www_probe的健康检查策略
+}
+
+#默认后端
+backend default {
+.host = "172.16.3.40";
+.port = "81";
+}
+
+###########################################################
+#######################配置后端集群事件#######################
+
+sub vcl_init {
+# 后端集群有4种模式 random, round-robin, fallback, hash
+# random                随机
+# round-robin           轮询
+# fallback              后备
+# hash                  固定后端 根据url(req.http.url) 或 用户cookie(req.http.cookie) 或 用户session(req.http.sticky)(这个还有其他要配合)
+
+
+# 把backend_20 和 backend_30 配置为轮询集群 取名为www_round_robin
+new www_round_robin = directors.round_robin();
+www_round_robin.add_backend(backend_16);
+www_round_robin.add_backend(backend_17);
+
+
+# 把backend_16 和 backend_17配置为随机选择集群 取名为www_random
+new www_random = directors.random();
+www_random.add_backend(backend_16,10);  # 设置backend_16后端的权重为10
+www_random.add_backend(backend_17,5);   # 设置backend_17后端的权重为5
+
+
+# 把backend_16 和 backend_17配置为固定后端集群 取名为www_hash 在recv调用时还需要添加东西 看recv例子
+new www_hash = directors.hash();
+www_hash.add_backend(backend_16,1);        # 设置backend_16后端的权重为1
+www_hash.add_backend(backend_17,1);        # 设置backend_17后端的权重为1
+}
+
+
+#定义允许清理缓存的IP
+acl purge {
+# For now, I'll only allow purges coming from localhost
+"127.0.0.1";
+"localhost";
+}
+
+# 请求入口 这里一般用作路由处理 判断是否读取缓存 和 指定该请求使用哪个后端
+sub vcl_recv {
+##############################指定后端区域###########################
+# 域名为 www.xxxxx.com 的请求 指定使用名为www_round_robin的后端集群  在集群名后加上 .backend() 如只使用单独后端 直接写后端名字即可 如 = backend_16;
+
+
+if (req.http.host ~ "www.xxxxx.com") {
+set req.backend_hint = www_round_robin.backend();
+}
+
+
+# 使用固定后端集群例子 使用名为www_hash的集群
+if (req.http.host ~ "3g.xxxxx.com") {
+set req.backend_hint = www_hash.backend(req.http.cookie);           # 根据用户的cookie来分配固定后端 可以指定其他分配规则
+}
+
+
+# 其他将使用default默认后端
+#####################################################################
+# 把真实客户端IP传递给后端服务器 后端服务器日志使用X-Forwarded-For来接收
+if (req.restarts == 0) {
+if (req.http.X-Forwarded-For) {
+set req.http.X-Forwarded-For = req.http.X-Forwarded-For + ", " + client.ip;
+} else {
+set req.http.X-Forwarded-For = client.ip;
+}
+}
+
+
+# 匹配清理缓存的请求
+if (req.method == "PURGE") {
+
+# 如果发起请求的客户端IP 不是在acl purge里面定义的 就拒绝
+if (!client.ip ~ purge) {
+return (synth(405, "This IP is not allowed to send PURGE requests."));
+}
+
+# 是的话就执行清理
+return (purge);
+}
+
+
+# 如果不是正常请求 就直接穿透没商量
+if (req.method != "GET" &&
+req.method != "HEAD" &&
+req.method != "PUT" &&
+req.method != "POST" &&
+req.method != "TRACE" &&
+req.method != "OPTIONS" &&
+req.method != "PATCH" &&
+req.method != "DELETE") {
+/* Non-RFC2616 or CONNECT which is weird. */
+return (pipe);
+}
+
+
+# 如果不是GET和HEAD就跳到pass 再确定是缓存还是穿透
+if (req.method != "GET" && req.method != "HEAD") {
+return (pass);
+}
+
+# 缓存通过上面所有判断的请求 (只剩下GET和HEAD了)
+return (hash);
+}
+
+
+# pass事件
+sub vcl_pass {
+# 有fetch,synth or restart 3种模式. fetch模式下 全部都不会缓存
+return (fetch);
+}
+
+
+# hash事件(缓存事件)
+sub vcl_hash {
+# 根据以下特征来判断请求的唯一性 并根据此特征来缓存请求的内容 特征为&关系
+# 1. 请求的url
+# 2. 请求的servername 如没有 就记录请求的服务器IP地址
+# 3. 请求的cookie
+hash_data(req.url);
+if (req.http.host) {
+hash_data(req.http.host);
+} else {
+hash_data(server.ip);
+}
+
+# 返回lookup , lookup不是一个事件(就是 并非指跳去sub vcl_lookup) 他是一个操作 他会检查有没有缓存 如没有 就会创建缓存
+return (lookup);
+}
+
+
+# 缓存命中事件 在lookup操作后自动调用 官网文档说 如没必要 一般不需要修改
+sub vcl_hit {
+# 可以在这里添加判断事件(if) 可以返回 deliver restart synth 3个事件
+# deliver  表示把缓存内容直接返回给用户
+# restart  重新启动请求 不建议使用 超过重试次数会报错
+# synth    返回状态码 和原因 语法:return(synth(status code,reason))
+# 这里没有判断 所有缓存命中直接返回给用户
+return (deliver);
+}
+
+
+# 缓存不命中事件 在lookup操作后自动调用 官网文档说 如没必要 一般不需要修改
+sub vcl_miss {
+# 此事件中 会默认给http请求加一个 X-Varnish 的header头 提示: nginx可以根据此header来判断是否来自varnish的请求(就不用起2个端口了)
+# 要取消此header头 只需要在这里添加 unset bereq.http.x-varnish; 即可
+# 这里所有不命中的缓存都去后端拿 没有其他操作 fetch表示从后端服务器拿取请求内容
+return (fetch);
+}
+
+
+# 返回给用户的前一个事件 通常用于添加或删除header头
+sub vcl_deliver {
+# 例子
+# set resp.http.*    用来添加header头 如 set resp.http.xxxxx = "haha"; unset为删除
+# set resp.status     用来设置返回状态 如 set resp.status = 404;
+# obj.hits        会返回缓存命中次数 用于判断或赋值给header头
+# req.restarts    会返回该请求经历restart事件次数 用户判断或赋值给header头
+# 根据判断缓存时间来设置xxxxx-Cache header头
+if (obj.hits > 0) {
+set resp.http.xxxxx_Cache = "cached";
+} else {
+set resp.http.xxxxx_Cache = "uncached";
+}
+
+#取消显示php框架版本的header头
+unset resp.http.X-Powered-By;
+
+#取消显示nginx版本、Via(来自varnish)等header头 为了安全
+unset resp.http.Server;
+unset resp.http.X-Drupal-Cache;
+unset resp.http.Via;
+unset resp.http.Link;
+unset resp.http.X-Varnish;
+
+#显示请求经历restarts事件的次数
+set resp.http.xxxxx_restarts_count = req.restarts;
+
+#显示该资源缓存的时间 单位秒
+set resp.http.xxxxx_Age = resp.http.Age;
+
+#显示该资源命中的次数
+set resp.http.xxxxx_hit_count = obj.hits;
+
+#取消显示Age 为了不和CDN冲突
+unset resp.http.Age;
+
+#返回给用户
+return (deliver);
+}
+
+
+#处理对后端返回结果的事件(设置缓存、移除cookie信息、设置header头等) 在fetch事件后自动调用
+sub vcl_backend_response {
+#后端返回如下错误状态码 则不缓存
+if (beresp.status == 499 || beresp.status == 404 || beresp.status == 502) {
+set beresp.uncacheable = true;
+}
+
+#如请求php或jsp 则不缓存
+if (bereq.url ~ "\.(php|jsp)(\?|$)") {
+set beresp.uncacheable = true;
+
+#php和jsp以外的请求
+}else{
+
+#如请求html 则缓存5分钟
+if (bereq.url ~ "\.html(\?|$)") {
+set beresp.ttl = 300s;
+unset beresp.http.Set-Cookie;
+
+#其他缓存1小时 如css js等
+}else{
+set beresp.ttl = 1h;
+unset beresp.http.Set-Cookie;
+}
+}
+
+
+#开启grace模式 表示当后端全挂掉后 即使缓存资源已过期(超过缓存时间) 也会把该资源返回给用户 资源最大有效时间为6小时
+set beresp.grace = 6h;
+
+#返回给用户
+return (deliver);
+}
+
+
+#返回给用户前的事件 可以在这里自定义输出给用户的内容
+sub vcl_deliver {
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+"样本配置文件1"
+
+#
+# This is an example VCL file for Varnish.
+#
+# It does not do anything by default, delegating control to the
+# builtin VCL. The builtin VCL is called when there is no explicit
+# return statement.
+#
+# See the VCL chapters in the Users Guide at https://www.varnish-cache.org/docs/
+# and http://varnish-cache.org/trac/wiki/VCLExamples for more examples.
+# Marker to tell the VCL compiler that this VCL has been adapted to the
+# new 4.0 format.
+vcl 4.0;
+import directors;
+ # 创建健康监测
+probe backend_healthcheck {                
+    .url = /health.html;
+    .window = 5;
+    .threshold = 2;
+    .interval = 3s;
+}
+backend web1 {                              # 创建后端主机
+    .host = "web1.maxie.com";
+    .port = "80";
+    .probe = backend_healthcheck;
+}
+backend web2 {
+    .host = "web2.maxie.com";
+    .port = "80";
+    .probe = backend_healthcheck;
+}
+backend img1 {
+    .host = "img1.maxie.com";
+    .port = "80";
+    .probe = backend_healthcheck;
+}
+backend img2 {
+    .host = "img2.maxie.com";
+    .port = "80";
+    .probe = backend_healthcheck;
+}
+
+vcl_init {                                  # 创建后端主机组，即directors
+    new web_cluster = directors.random();
+    web_cluster.add_backend(web1, 5);
+    web_cluster.add_backend(web2, 10);
+    new img_cluster = directors.random();
+    img_cluster.add_backend(img1, 5);
+    img_cluster.add_backend(img2, 10);
+}
+
+acl purgers {                               # 定义可使用pruger方法的来源IP
+        "127.0.0.1";
+        "172.16.0.0"/16;
+}
+
+sub vcl_recv {
+    if (req.request == "GET" && req.http.cookie) {      # 带cookie首部的GET请求也缓存
+        return(hash);
+}
+    if (req.url ~ "test.html") {                        # test.html文件禁止缓存
+        return(pass);
+    }
+    if (req.request == "PURGE") {                       # PURGE请求的处理
+        if (!client.ip ~ purgers) {
+            return(synth(405,"Method not allowed"));
+        }
+        return(hash);
+    }
+    # 为发往后端主机的请求添加X-Forward-For首部
+    if (req.http.X-Forward-For) {                       
+        set req.http.X-Forward-For = req.http.X-Forward-For + "," + client.ip;
+    } else {
+        set req.http.X-Forward-For = client.ip;
+    }
+    if (req.http.host ~ "(?i)^(www.)?maxie.com$") {     # 根据不同的访问域名，分发至不同的后端主机组
+        set req.http.host = "www.maxie.com";
+        set req.backend_hint = web_cluster.backend();
+      } elsif (req.http.host ~ "(?i)^images.maxie.com$") {
+            set req.backend_hint = img_cluster.backend();
+      }
+        return(hash);
+    }
+
+# PURGE请求的处理
+sub vcl_hit {                                           
+    if (req.request == "PURGE") {  
+        purge;
+        return(synth(200,"Purged"));
+    }
+}
+
+# PURGE请求的处理
+sub vcl_miss {                                          
+    if (req.request == "PURGE") {
+        purge;
+        return(synth(404,"Not in cache"));
+    }
+}
+
+# PURGE请求的处理
+sub vcl_pass {                                          
+    if (req.request == "PURGE") {
+        return(synth(502,"PURGE on a passed object"));
+    }
+}
+
+# 自定义缓存文件的缓存时长，即TTL值
+sub vcl_backend_response {                              
+    if (req.url ~ "\.(jpg|jpeg|gif|png)$") {
+        set beresp.ttl = 7200s;
+    }
+    if (req.url ~ "\.(html|css|js)$") {
+        set beresp.ttl = 1200s;
+    }
+
+    # 定义带Set-Cookie首部的后端响应不缓存，直接返回给客户端
+    if (beresp.http.Set-Cookie) {                       
+        return(deliver);
+    }
+}
+
+sub vcl_deliver {
+    # 为响应添加X-Cache首部，显示缓存是否命中
+    if (obj.hits > 0) {                                 
+        set resp.http.X-Cache = "HIT from " + server.ip;
+    } else {
+        set resp.http.X-Cache = "MISS";
+    }
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+root@Varnish ~]# cat /etc/varnish/default.vcl          
+#定义后端默认的服务器
+backend default {
+ .host = "127.0.0.1";
+ .port = "80";       
+}            
+ 
+#定义一个vcl_recv函数         
+sub vcl_recv {
+ 
+#req.restarts可以解释为如果客户端第一次开始请求时，
+#如果请求的http中含有X-Forwarded-For信息，不管如何都在该信息后面附加客户端的ip地址信息；
+#若不含有X-Forwarded-For信息，则直接附加client.ip地址信息。
+#X-Forwarded-For通常表示代理服务器的地址
+#为什么要补充client.ip呢？因为varnish做了反向代理，为了使后端服务器记录客户端的ip地址而非varnish的地址
+   if (req.restarts == 0) {
+     if (req.http.x-forwarded-for) {
+         set req.http.X-Forwarded-For =
+              req.http.X-Forwarded-For +", " + client.ip;
+     } else {
+         set req.http.X-Forwarded-For = client.ip;
+     }
+    }
+#定义http请求的方法；如果客户端请求的http的方法不是GET/HEAD/PUT/POST/TRAGE/OPTIONS/DELETE，
+#那么我们的varnish就不会去把请求传递给varnish的vcl_hash，直接交给pipe，表示varnish无法理解或者认为是非法的请求。
+   if (req.request != "GET" &&
+     req.request != "HEAD" &&
+     req.request != "PUT" &&
+     req.request != "POST" &&
+     req.request != "TRACE" &&
+     req.request != "OPTIONS" &&
+     req.request != "DELETE") {
+       /* Non-RFC2616 or CONNECT which is weird. */
+       return (pipe);
+    }
+#如果请求的方法不是GET，也不是HEAD，那么有可能就是PUT,POST，这些都是上传数据的，
+#对于上传的数据，我们没有必要缓存，直接跟后端服务器交互。
+   if (req.request != "GET" && req.request !="HEAD") {
+       /* We only deal with GET and HEAD by default */
+       return (pass); #不查找缓存，直接从后端服务器获取数据
+    }
+#如果请求的内容中包括Authorization授权的，包括Cookie认证的，这些都是用户的敏感数据，一定不能缓存的。
+   if (req.http.Authorization || req.http.Cookie) {
+       /* Not cacheable by default */
+       return (pass);
+    }
+   return (lookup);   #lookup表示从缓存中查找
+}           
+    
+#从后端服务器fetch数据
+sub vcl_pass {
+   return (pass);
+}
+ 
+sub vcl_hash {                    #定义vcl_hash函数
+   hash_data(req.url);         #默认是根据用户请求的url做hash
+   if (req.http.host) {      #如果用户的请求http的首部中有host，那么就对此做hash
+       hash_data(req.http.host);
+    }else {
+       hash_data(server.ip);   #否则根据服务器端的地址做hash
+    }
+   return (hash);             #最终返回hash数据
+}
+#如果命中的则直接从本地缓存中返回数据给用户
+sub vcl_hit {
+   return (deliver);
+}
+ 
+#如果没有命中，则从后端服务器取数据
+sub vcl_miss {
+   return (fetch);
+}
+ 
+#如果没有命中，那么从后端服务器取数据应该怎样取呢？
+#在响应客户端之前，如果ttl头部值小于等于0秒，表示缓存已经过期了，
+#并且其中包含有"Set-Cookie","Vary"这些字段，那么就直接设定这些过期的缓存信息的缓存期限为120秒
+#如果其中没有这些字段的话就直接缓存下来了。
+sub vcl_fetch {
+   if (beresp.ttl <= 0s ||            
+       beresp.http.Set-Cookie ||    
+       beresp.http.Vary == "*") {
+              /*
+              * Mark as"Hit-For-Pass" for the next 2 minutes
+               */
+              set beresp.ttl = 120 s;
+              return (hit_for_pass);
+    }
+   return (deliver);
+}
+ 
+sub vcl_deliver {
+   return (deliver);
+}
+ 
+#客户端请求某个页面，如果服务器上不存在这个页面，就请求错误
+#对于后端服务器没有这个文件的，直接交由varnish响应一个错误信息
+sub vcl_error {
+   set obj.http.Content-Type = "text/html; charset=utf-8";
+   set obj.http.Retry-After = "5";
+   synthetic {"
+<?xml version="1.0"encoding="utf-8"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTDXHTML 1.0 Strict//EN"
+ "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html>
+ <head>
+   <title>"} + obj.status + " " + obj.response +{"</title>
+ </head>
+ <body>
+   <h1>Error "} + obj.status + " " + obj.response +{"</h1>
+   <p>"} + obj.response + {"</p>
+   <h3>Guru Meditation:</h3>
+   <p>XID: "} + req.xid + {"</p>
+   <hr>
+   <p>Varnish cache server</p>
+ </body>
+</html>
+"};
+   return (deliver);
+}
+ 
+sub vcl_init {
+     return (ok);
+}
+ 
+sub vcl_fini {
+     return (ok);
+}
+
+

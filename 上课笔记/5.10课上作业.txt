@@ -1,0 +1,467 @@
+5.10作业
+
+'练习：'
+		
+		
+		'此脚本保存在CentOS7中的/root/shell-Advance/0510shell-class-test/目录中'
+
+		1、判断/var/目录下所有文件的类型
+
+			#!/bin/bash
+			#Descript:判断/var/目录下所有文件的类型
+			#date:2017-05-10
+
+			DIR=/var
+			for type in `ls $DIR`;do
+			        MyPath=${DIR}/${type}
+			        if [ -f ${MyPath} ];then
+			                echo "$MyPaht 是普通文件"
+			        elif [ -L $MyPath ];then
+			                echo "$MyPath 是连接文件"
+			        elif [ -d $MyPath ];then
+			                echo "$MyPath 是目录文件"
+			        else
+			                echo "$MyPath 文件类型未知"
+			        fi
+			done
+
+		
+		2、添加10个用户user1-user10，密码为8位随机字符
+			随机8位数字：head -c 10000 /dev/urandom | tr -dc 0-9 | head -c 8;echo
+			随机8位字母数字：head -c 10000 /dev/urandom | tr -dc A-Za-z0-9 | head -c 8;echo
+
+				'[root@centos7 0510shell-class-test]# cat useradd-random-passwd.sh'
+				#!/bin/bash
+				#Descript:添加10个用户user1-user10，密码为8位随机字符
+				#date:2017-05-10
+
+				SUM=10
+
+				for i in `seq 1 $SUM`;do
+					useradd user${i}
+					echo "head -c 10000 /dev/urandom | tr -dc A-Za-z0-9 | head -c 8;echo" | passwd --stdin user${i}
+					echo "user${i}成功创建并修改密码"
+				done
+
+
+?		3、/etc/rc.d/rc3.d目录下分别有多个以K开头和以S开头的文件；分别读取每个文件，以K开头的文件输出为文件加stop，以S开头的文件输出为文件名加start
+			“K34filename stop”
+			“S66filename start”
+
+				'借鉴这个脚本：/etc/rc.d/rc '
+					for i in /etc/rc$runlevel.d/K* ; do
+
+						# Check if the subsystem is already up.
+						subsys=${i#/etc/rc$runlevel.d/K??}
+						[ -f /var/lock/subsys/$subsys -o -f /var/lock/subsys/$subsys.init ] || continue
+						check_runlevel "$i" || continue
+
+						# Bring the subsystem down.
+						[ -n "$UPSTART" ] && initctl emit --quiet stopping JOB=$subsys
+						$i stop
+						[ -n "$UPSTART" ] && initctl emit --quiet stopped JOB=$subsys
+					done
+
+			'[root@centos7 0510shell-class-test]# vim KorS-file.sh'
+			#!/bin/bash
+			# Author: Maxie
+			# Date: 2017-05-10-17:20:04
+			# Description:/etc/rc.d/rc3.d目录下分别有多个以K开头和以S开头的文件；分别读取每个文件，以K开头的文件输出
+			为文件加stop，以S开头的文件输出为文件名加start
+
+			File_Path=/etc/rc.d/rc3.d/
+
+			if [ -d $File_Path ];then
+			for i in `ls $File_Path`;do
+			    if [[ $i =~ ^K ]];then
+			        echo "K开头的文件: $i"
+			        ${File_Path}/$i stop
+			    elif [[ $i =~ ^S  ]];then
+			        echo "S开头的文件: "$i
+			        ${File_Path}/$i start
+			    else
+			        echo "此文件既不是S开头也不是K开头"
+			    fi
+			done
+			fi
+		
+
+		4、编写脚本，提示输入正整数n的值，计算1+2+…+n的总和
+			#!/bin/bash
+			# Author: Maxie
+			# Date: 2017-05-10-12:32:01
+			# Description: 提示输入正整数n的值，计算1+2+…+n的总和
+
+			read -p "请输入正整数: " NUM
+
+			SUM=0
+
+			if [[ $NUM =~ ^[0-9]+$ ]];then
+				echo "输入正确，下面开始计算1+..+n的值"
+				for i in `seq $SUM $NUM`;do
+					let SUM=SUM+i
+				done
+				echo "总和为:$SUM"
+			else
+				echo "输入错误，请输入正整数" && exit 1
+			fi
+		
+		
+?		5、编写脚本，提示请输入网络地址，如192.168.0.0，判断输入的网段中主机在线状态
+			测试：172.16.0.0/16网段内在线的IP地址
+			
+			'[root@centos7 0510shell-class-test]# cat ip-online.sh'
+			#!/bin/bash
+			#user:Maxie
+			# 写一个脚本，提示请输入网络地址，如 172.16.0.0 ，判断输入的网段中主机在线状态
+
+			echo -n "IP:"   # 提示输入IP
+			read IP         # 说明信息IP
+
+
+			# 定义变量名称=调用$IP获取的值 抽取 以.为分隔符 1-2的字符
+			IpAddr=`echo $IP | cut -d. -f1-2`.
+
+			# 定义变量名称=调用$IP获取的值 抽取 以.为分隔符 1-3的字符
+			#ipdizhi=`echo $IP | cut -d. -f1-3 `.
+
+			#ip地址扩展表达式
+			if echo $IP | egrep '\<([1-9]|[1-9][0-9]|1[0-9][0-9]|2[0-4][0-9]|25[0-5])\.(([0-9]|[1-9][0-9]|1[0-9][0-9]|2[0-4][0-9]|25[0-5])\.){2}([0-9]|[1-9][0-9]|1[0-9][0-9]|2[0-4][0-9]|25[0-5])\>' &>/dev/null
+			then
+			  #这里的0 20是从172.16.0.X-172.16.10.X
+			  for I in `seq 0 10`
+			  do
+				#这里的0 20是从172.16.0.0-172.16.0.20
+			    	for i in `seq 0 20`
+			    	do
+			        	if ping -c 1 -W 1 ${IpAddr}${I}.${i} &> /dev/null
+			        	then
+			            		echo -e "${IpAddr}${I}.${i}\tonline"
+			        	else
+			           		echo -e "${IpAddr}${I}.${i}\toffline"
+					fi
+			    	done
+			  done
+			fi
+
+		
+		6、打印九九乘法表
+
+			[root@centos7 0510shell-class-test]# ./99chengfabiao.sh
+			1*1=1
+			2*1=2 2*2=4
+			3*1=3 3*2=6 3*3=9
+			4*1=4 4*2=8 4*3=12 4*4=16
+			5*1=5 5*2=10 5*3=15 5*4=20 5*5=25
+			6*1=6 6*2=12 6*3=18 6*4=24 6*5=30 6*6=36
+			7*1=7 7*2=14 7*3=21 7*4=28 7*5=35 7*6=42 7*7=49
+			8*1=8 8*2=16 8*3=24 8*4=32 8*5=40 8*6=48 8*7=56 8*8=64
+			9*1=9 9*2=18 9*3=27 9*4=36 9*5=45 9*6=54 9*7=63 9*8=72 9*9=81
+			
+			'[root@centos7 0510shell-class-test]# cat 99chengfabiao.sh'
+			#!/bin/bash
+			#Descript:99乘法表
+			#date:2017-05-10
+
+			for (( i=1;i<=9;i++  ))
+			do
+		        for  (( j=1;j<=i;j++ ))
+        		do
+                	let "sum=i*j"
+                	echo  -e "$i*$j=$sum \c"
+        	done
+        			echo
+			done
+		
+		
+		7、在/testdir目录下创建10个html文件,文件名格式为数字N（从1到10）加随机8个字母，如：1AbCdeFgH.html
+			[root@centos7 0510shell-class-test]# cat create-html.sh
+			#!/bin/bash --login
+			# Author: Maxie
+			# Date: 2017-04-13-15:42:46
+			# Description: Receive an integer of 1 to 5 as a parameter, the function for the creation of documents, text. The name of the file is 8 random capital letters and ends with .html.
+
+			if echo "$1" | grep -q '^[0-9]\+$'; then
+			echo "$1 is number."  &> /dev/null
+			else
+			echo "$1 is not number." &> /dev/null
+			exit 2
+			fi
+
+			SUM=$1
+			FILE_SUM=0
+
+			while [ $SUM -gt $FILE_SUM ]
+			do
+				touch  `head -c 100 /dev/urandom | tr -dc A-Z | head -c 8;echo`.html
+				let FILE_SUM++
+			done
+
+
+?		8、打印等腰三角形
+			sumline=10  #总行数
+			sumstart=line*2-1  #一行的星星数
+			sumspace=sumline-line   #一行的空格数
+			line       #第几行
+			
+			公式：
+
+
+			老师方法：
+				#!/bin/bash
+				#
+				let sum=10
+				for line in `seq 1 $sum`;do  #打印10行
+					for space in `seq 1 $[sum-line]`;do   #打印空格
+						echo -e " \c"	#删除换行
+					done
+
+					for starts in `seq 1 $[line*2-1]`;do  #打印星星数量
+						echo -e "*\c" 	#删除换行
+					done
+					echo                #每打印完一行空格+星星之后 进行换行，打印下一行星星
+
+				done
+
+			自己做：
+				#!/bin/bash
+				#Descript:打印等腰三角形
+				#date:2017-05-10
+				sumline=10
+				for line in `seq 1 $sumline`; do
+
+				        for i in `seq 1 $[sumline-line]`;do
+				                echo -e " \c"
+				        done
+				        for j in `seq 1 $[line*2-1]`;do
+				                echo -e "*\c"
+				        done
+				        echo
+				done
+
+
+
+
+
+
+
+?		9、测试172.16.0.0/16网段中，哪个ip能上网
+			思路：
+				1、修改自己的IP
+				2、ping 一个网站
+				因为这种IP地址是加过策略的，可以上网
+				3、ipconfig命令临时加IP地址以及网关
+					或者ip addr命令
+
+				4、ping -I 指定网卡
+					选择多个网段，并行执行脚本
+				5、
+
+		10、打印国际象棋
+
+			#!/bin/bash
+			# Author: Maxie
+			# Date: 2017-05-10-18:43:54
+			# Description:打印国际象棋
+
+			#给国际象棋的长和宽赋值
+			a=8
+
+			for i in `seq 1 $a`;do
+			b=8
+			        for  j in `seq 1 $b`;do
+			                sum=$[i+j]
+			                c=`expr $sum  % 2`
+			                if [ $c -eq 0 ];then
+			                        echo -ne "\033[41;1m  \033[0m"
+			                else
+			                        echo -en "\033[43;1m  \033[0m"
+			                fi
+			        done
+			        echo
+			done
+
+
+		11、打印五星红旗
+
+
+
+
+
+
+
+进程相关作业：
+
+
+
+'实验：' 把/etc/inittab文件中的runlevel修改成了6（无限重启）
+		恢复方法：
+			开机进入倒计时，使用回车
+				进入菜单模式
+					按a键，进入到内核启动参数编辑
+						在行尾添加 3，这次启动进入3模式，绕过/etc/inittab文件
+
+
+'实验2：'忘记root用户密码，如果破解（只能在物理机上操作，不能通过远程）
+		开机进入倒计时，使用回车
+			进入菜单模式
+				按a键，进入到内核启动参数编辑
+					直接输入single 或者 single S 或者 single s 
+					即可进入到单用户模式
+					直接passwd修改密码
+
+'实验3：'删除/boot/vmlinuz...文件，如何恢复？
+	1)进入救援模式
+	2)挂载光盘
+	3)拷贝光盘中的/mnt/cdrom/isolinux/vmlinuz文件或者 /mnt/images/pxeboot下的vmlinuz文件都可以
+		这里需要修改这个文件的文件名
+		cp /mnt/cdrom/isolinux/vmlinuz /mnt/sysimage/boot/vmlinuz-`uname -r` 即可
+
+
+
+
+
+'实验4：'把程序加入到服务中：（扩展：把编译安装的httpd添加成服务）
+
+				$ vim /etc/rc.d/init.d/testsrv
+					#!/bin/bash
+					#chkconfig:345 98 01
+					#description: test service
+					case $1 in 
+					start)
+						echo testsrv is starting
+						touch /app/testsrv
+						;;
+					stop)
+						echo testsrv is stopped
+						rm -f /app/testsrv
+					status)
+						[ -f /app/testsrv ] && echo testsrv is running || echo testsrv is stopped
+						;;
+					*)
+						echo "testsrv usage:start|stop|status"
+						;;
+					esac
+				$ chmod +x /etc/rc.d/init.d/testsrv
+				$ chkconfig --add testsrv
+				即可 添加成功
+
+
+				删除服务：
+				$ chkconfig --del testsrv
+				$ rm -f /etc/rc.d/init.d/testsrv
+				即可 删除成功
+
+
+	'如果这个服务出故障了，启动时就会出BUG了，会一直停在那里；系统就起不来了'
+					如何解决？
+						解决方案：
+						方法1、 
+							1)开机进入到单用户模式
+							2)chkconfig --level 5 testsrv off #关闭5模式的自启动服务
+						
+						方法2、如果1模式也被设置了自启动
+							1)进入到菜单 按a键 
+							2)修改内核启动参数：
+								(1)kernel /vmlinuz-2.6.32-642.el6.x86_64 ro root=/dev/mapper/vg0-root rd_NO_LUKS rd_NO_DM LANG=en_US.UTF-8 rd_LVM_LV=vg0/swap rd_NO_MD SYSFONT=latarcyrheb-sun16 crashkernel=auto rd_LVM_LV=vg0/root  KEYBOARDTYPE=pc KEYTABLE=us rhgb crashkernel=auto quiet rhgb quiet
+									在最后 加入：
+									init=/bin/bash 
+									开机后直接进入/bash
+								(2)因为现在的/文件系统是只读的 ro
+									重新挂载根文件系统 mount -o remount,rw /
+								(3)再修改 服务的开机自启动
+									$ chkconfig --level 135 testsrv off
+								(4)重启即可
+
+'实验5：'
+?	'挂载ntf文件系统：（第4个视频的20分钟左右） 做这个实验'（思考：为什么开机没有启动网络服务之前，就能挂载nfs共享文件）
+		原因：
+			1、在网络服务没有起来时,nfs并没有真正挂载，在系统启动了网络服务之后，nfs才自己通过rpc协议，查找/etc/fstab文件中的NFS服务器，并挂载
+		按照系统启动顺序的原理：
+			1.应该是自动挂载会失败，因为系统启动时先执行初始化脚本/etc/rc.d/rc.sysinit，然后才会执行/etc/rc.d/下某个模式的开机服务脚本：也就是启动网络服务
+			2.正常的nfs挂载是要写在/etc/rc.d/rc.local下的，这样才不会出现bug
+				在	/etc/rc.d/rc.local中写入：
+					mount -t nfs 172.16.23.136:/app /mnt/nfs
+
+		'正确原因：'
+			查看/etc/init.d/目录下，应该有 netfs这个服务
+			所以/etc/rc.d/rc#.d/下 netfs比network服务晚启动，所以能运行这个服务并查找网络中的nfs服务器，并挂载NFS
+		
+
+'实验6：破坏MBR 446个字节，并恢复'
+	(1)如果有备份，直接使用dd命令可以恢复
+	(2)如果没有备份，使用grub-install命令
+		1）切根
+		2) $ gurb-install  /dev/sda
+	
+
+
+'实验6：破坏MBR 后续的扇区，并恢复' (stage1.5阶段的破坏)
+	删除：
+		$ dd if=/dev/zero of=/dev/sda count=2048 skip=512 seek=512
+
+	修复方法1：
+		$ grub-install /dev/sda   此命令可以修复 1，1.5，2阶段的破坏
+
+	修复方法2：
+		1)进入救援模式
+		2)切根
+		3) $ grub  进入grub界面
+			在grub的界面输入：
+				> root (hd0,0)
+				> setup (hd0)        #此命令的执行前提：/boot/grub/下的文件都必须存在 一堆stage文件，如果不存在，则执行失败
+				> quit 
+		4)exit 
+		5)reboot
+
+'实验7：删除/boot/grub/*，如何恢复'
+	修复方法：
+		1)$ 进入救援模式
+		2)切根
+		3)安装grub-install /dev/sda 
+		4)但是 grub.conf文件就没了
+		5)需要手写/boot/grub/grub.conf文件
+
+
+'实验：'
+	'LFS自己构建一个Linux操作系统'
+
+
+
+
+
+'总结：'
+	1、如果删除了MBR的前446字节的信息，恢复的话：
+		1）使用grub-install命令修复，修复之后的前446字节将与/boot/grub/stage1文件中内容相同
+		2）如果使用的是之前备份的MBR来恢复，则恢复的比较完整，一般恢复之后的信息还是与stage1文件内容不太相同
+		3）而且如果执行了 '1）步骤'，MBR512个字节之后，将会出现stage1.5和stage2的信息（这是因为我们做了修复的操作）
+
+	2、破坏stage1.5阶段：
+		可以看到我们已经把512字节之后的2048字节的信息清空了
+		现在已经找不到grub.conf的位置了，所以菜单都没有出来
+		1)恢复方法：
+			切根
+				chroot /mnt/sysimage
+			进入grub界面：
+				grub 
+			输入：
+				root (hd0,0)
+				setup (hd0)
+				quit 
+		2)方法2：
+			使用备份进行恢复
+	3、删除/boot/grub/*：
+		$ 进入救援模式
+		$ 切根
+		$ grub-install 
+		$ vim /boot/grub/grub.conf 
+			default 0
+			timeout 5
+			title CentOS 6.8 (MaxieCloud version 1.0)
+				kernel /vmlinuz-`uname -r` selinux=0 root=/dev/sda2
+				initrd /initramfs-`uname -r`.img
+	
+
+
+
+

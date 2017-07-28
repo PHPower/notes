@@ -1,0 +1,1111 @@
+6.5 (Mage vsftp、NFS、Samba)
+
+
+I/O：网络、存储IO（磁盘IO）
+	存储：SATA、SAS；IDE，SCSI；USB
+		也是一种协议
+		DAS：Directory Attached Storage，直接附加存储
+			数据存储接口：block，块设备（可被分区，格式化）
+				SATA、SAS；IDE，SCSI；USB
+		
+		NAS：Network Attached Stroage，网络附加存储（网络共享）
+			接口类型："file"文件（能存取，不能分区格式化）
+			协议：CIFS(samba),NFS(Network File System)
+			RPC：Remote Procedure Call，远程过程调用
+
+		SAN：Stroage Area Network;存储区域网络
+			接口类型：block，块
+			协议：ISCSI(IP-SAN),FC-SAN,FCoE,...
+				ISCSI:
+					SCSI：转速高(IO)，耐用(年限长)
+					I：InterNet，使用TCP/IP传输
+				FC-SAN：
+
+		分布式文件系统、分布式存储（更多企业应用）
+
+		应用层：
+			ftp、...
+
+
+文件服务：ftp,cifs,nfs 
+
+
+'PAM：Pluggable Authentication Modules；插入式认证模块'
+		认证框架：提供了一个框架，用于进行系统级的用户认证。
+			库、高度模块化
+
+
+'ftp：'(非常不安全)
+	
+	file transfer protocol :文件传输协议
+
+		各主机之间完成文件传送
+
+	端口：21/tcp
+
+	C/S:
+			Client <--> Server
+			
+	'两类连接：'
+		命令连接；传输命令；对一个客户端，只有1个命令连接
+		数据连接：传输数据；
+			两种模式：
+				主动模式：PORT；
+					Server端通过20/tcp端口连接客户端的命令连接使用的端口向后的第一个可用端口；
+				
+				被动模式：PASV；客户端使用随机端口连接服务器某随机端口；
+					客户端发出数据传输请求之后，服务器响应一个报文给客户端；
+						112,123；
+			数据内容传输模式：
+				文本格式：
+				二进制格式：
+
+		基于不同的套接字通信；
+					
+							
+		协议安全：
+			明文；认证时传输的账号和密码均为明文；
+		
+			安全增强：
+				ftps: ftp over ssl 
+				sftp: ftp over ssh
+	
+
+
+	'协议实现：C/S：'
+		Server：Serv-U(windows)、IIS(windows)、FileZilla Server(开源)
+			Server：开源解决方案；
+			wuftpd：washington university
+			vsftpd：very secure ftp daemon(安全的ftp的协议)
+			pureftp：
+			proftpd：
+
+
+		Clinet：
+			Windows：ftp、FileZilla,cuteFTP,FlashFXP.
+			开源的Linux可用：lftp,ftp,FileZilla，gftp
+			
+			CLI：ftp, lftp, curl, wget, lftpget, ... 
+			GUI：FileZilla, flashfxp, cute, gftp, ...
+			
+
+
+'vsftpd详解：'
+
+	/usr/lib/systemd/system/vsftpd.service：以服务的形式运行，当有访问时，才运行
+	/usr/lib/systemd/system/vsftpd.target：以后台进程，开机一直运行
+
+	URL:
+		Scheme://username:password@HOST:PORT/PATH/TO/FILE
+
+		路径映射：	
+			用户家目录：即每个用户的URL的/根  映射到当前用户的家目录；
+
+	vsftpd以 ftp用户的身份运行进程，默认用户即为ftp用户，匿名用户的默认路径即ftp用户的家目录/var/ftp 
+
+
+	'权限问题：'
+		共享权限：
+		文件系统权限：
+
+
+		注意:'用户通过文件共享服务访问文件系统上的文件的生效权限是：'
+			共享权限与文件系统权限的交集权限
+
+
+	'程序环境：'
+		主程序：/usr/sbin/vsftpd
+		主配置文件：/etc/vsftpd/vsftpd.conf
+		PAM配置文件：/etc/pam.d/vsftpd
+			pam_unix.so：基于/etc/password与/etc/shadows 认证
+
+		数据根目录：/var/ftp 
+		Systemd Unit File： /usr/lib/systemd/system/vsftpd.service 
+		
+		
+		'配置vsftpd：'
+			/var/ftp目录的权限只能是 root:root 
+				不能修改其的属主属组
+			
+			用户类别：
+				匿名用户：anonymous --> ftp, /var/ftp 
+				系统用户：至少禁止系统用户访问ftp服务，/etc/vsftpd/ftpusers，PAM（/etc/pam.d/vsftpd）；
+				虚拟用户：非系统用户，用户账号非可登陆操作系统的用户账号(非/etc/passwd);
+
+				
+				用户通过vsftpd服务访问到的默认路径，是用户自己的家目录；默认可以自己有权限访问的所有路径间切换；
+				禁锢用户于其家目录中；
+				
+			配置文件：/etc/vsftpd/vsftpd.conf
+				directive value：指令+数据
+				注意：directive之前不能有多余字符；
+					查看帮助：man vsftpd.conf 
+				
+
+			匿名用户：
+				anonymous_enable=YES 				#是否启用匿名登录(只能开启下载功能)
+				anon_upload_enable=YES 				#匿名用户是否允许上传（仅能上传文件）
+				anon_mkdir_write_enable=YES 		#匿名用户是否允许创建目录
+				anon_other_write_enable=YES 		#匿名用户是否允许删除文件、删除目录，改变权限之类的
+				anon_world_readable_only=YES 		#匿名全局可读
+				
+
+
+			系统用户：
+				local_enable=YES  			#是否允许本地用户访问
+				write_enable=YES 			#是否允许本地用户创建目录，创建文件，删除文件。。。。
+				local_umask=022 			#本地用户上传的文件的umask权限
+				
+				'辅助配置文件/etc/vsftpd/ftpusers；'
+					列在此文件中的用户 均禁止使用ftp服务；
+
+				chroot_local_user=YES
+					禁锢所有本地用户 于其家目录；需要事先去除用户对家目录的写权限；
+					
+				chroot_list_enable=YES
+				chroot_list_file=/etc/vsftpd/chroot_list
+					禁锢列表中文件存在的用户于其家目录中；需要'事先去除用户对家目录的写权限；'
+
+					
+			传输日志：
+				xferlog_enable=YES  			#传输日志
+				xferlog_file=/var/log/xferlog
+				xferlog_std_format=YES
+				
+			守护进程的类型：
+				standalone：独立守护进程；由服务进程自行监听套按字，并接收用户访问请求； 
+				transient：瞬时守护进程(托管)；由受托管方代为监听套按字，服务进程没有访问请求时不启动；
+						   当托管方收到访问请求时，才启动服务进程；
+
+					CentOS 6：xinetd独立守护进程, /etc/xinetd.d/,
+					CentOS 7：由systemd代为监听；
+					
+			'控制可登录vsftpd服务的用户列表：'
+				userlist_enable=YES
+					启用/etc/vsftpd/user_list文件来控制可登录用户；
+
+				userlist_deny= 		#默认为YES，也就是黑名单
+					YES：意味着此为黑名单；
+					NO：白名单； 		
+
+			'控制vsftp的速率配置：'
+				accept
+				anon_umask=077 			#匿名用户上传文件的文件权限
+				anon_max_rate=0			#最大匿名传输速率
+				local_max_rate0 		#本地最大传输速率
+				
+				max_clients=2000		#最大并发连接数
+				max_per_ip=50			#单IP最大并发连接数
+				
+
+
+					
+		'虚拟用户：'
+			用户账号存储于何处？
+				文件、MySQL、Redis、...
+				
+			vsftpd：认证功能托管给pam；
+				基于何种存储服务来存储用户信息，以及对存储服务的驱动要靠pam实现； 
+				
+			pam_mysql模块：(CentOS7需要编译安装，6可以直接在epel仓库中安装Í)
+				$ yum install mariadb-devel pam-devel
+				
+
+				编译安装：
+					ftp的/pub/Sources/source/pam目录下：pam_mysql模块
+					
+					$ ./configure --with-pam=/usr --with-mysql=/usr --with-pam-mods-dir=/usr/lib64/security
+					$ make && make install
+					$ ls /usr/lib64/security #查看目录下
+
+			编辑数据库配置文件：
+				$ vim /etc/my.cnf.d/server.conf 
+				[mysqld]
+				skip_name_resolve=ON
+				innodb_file_per_table=ON
+
+
+			创建数据库、授权用户、创建账号和密码；
+				创建数据库，授权用户：
+					mysql> GRANT ALL ON vsftpd.* TO 'vsftpd'@'127.0.0.1' IDENTIFIED BY 'vsftpd';
+					mysql> FLUSH PRIVILEGES;
+					$ mysql -uvsftpd  -pvsftpd -h127.0.0.1
+					mysql> CREATE DATABASE vsftpd;
+					mysql> CRETAE TABLE users(
+							id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+							name VARCHAR(100) NOT NULL,
+							password CHAR(48) NOT NULL,
+							UNIQUE KEY(name)
+						);
+!!!					mysql> INSERT INTO users(name,password)
+							VALUES ('tom',PASSWORD('mageedu')),('jerry',PASSWORD('jerry')
+							);
+
+
+				创建账号和密码
+					$ useradd -d /ftproot/vuser vuser 
+					$ figer vuser 
+					$ mkdir /ftproot/vuser/pub
+
+				提供配置文件：/etc/pam.d/vsftpd.vuser(创建配置文件)
+					auth required /usr/lib64/security/pam_mysql.so user=vsftpd passwd=vsftpd host=127.0.0.1 db=vsftpd table=users usercolumn=name passwdcolumn=password crypt=2
+					account required /usr/lib64/security/pam_mysql.so user=vsftpd passwd=vsftpd host=127.0.0.1 db=vsftpd table=users usercolumn=name passwdcolumn=password crypt=2 
+
+				编辑vsftpd配置文件，在最后几行修改：=号后面为我们之前创建的虚拟用户的配置文件名
+					pam_service_name=vsftpd.vuser
+
+				取消家目录写权限：
+					$ chmod a-x /ftproot/vuser
+
+			配置vsftpd，添加或修改以下选项：
+				pam_service_name=vsftpd.vusers
+				guest_enable=YES  					#启动来宾账号
+				guest_username=vuser 				#来宾用户名
+
+!!!			'创建测试目录：'
+
+				
+			'虚拟用户的写权限，通过匿名一样的指令进行定义；'
+				还能实现不同的用户有不同的权限；
+				
+				在vsftpd的配置文件中添加以下：
+				user_config_dir=/etc/vsftpd/vusers_config/
+
+				创建目录： 
+					$ mkdir /etc/vsftpd/vusers_config/
+
+				编辑配置文件：配置文件的名称为之前在数据库添加的用户要同名：
+
+					$ vim /etc/vsftpd/vusers_config/tom
+					anon_upload_enable=YES 
+					anon_mkdir_write_enable=YES 
+									
+
+
+
+'博客作业：pam_mysql认证ftp虚拟用户账号，且拥有不同的权限'
+
+	1、安装vsftpd
+		$ yum install vsftpd 
+		$ systemctl start vsftpd
+	2、拷贝解压安装pam_mysql-0.7RC1.tar.gz包
+		$ scp /Users/machiyuan/Downloads/LinuxPackages/pam_mysql-0.7RC1.tar.gz root@172.16.1.100:/root
+
+		$ tar xf pam_mysql-0.7RC1.tar.gz
+		$ cd pam_mysql-0.7RC1/
+		$ yum groupinstall "Development Tools" "Server Platform Develoment"
+		$ yum install mariadb-devel pam-devel
+		$ ./configure --with-mysql=/usr --with-pam=/usr  --with-pam-mods-dir=/usr/lib64/security
+		$ make && make install 
+
+	3、编辑数据配置文件:
+		$ vim /etc/my.cnf.d/server.conf 
+				[mysqld]
+				skip_name_resolve=ON
+				innodb_file_per_table=ON
+				log_bin=mysql-bin 
+	4、创建数据库、授权用户、创建账号和密码；
+		创建数据库，授权用户：
+			mysql> GRANT ALL ON vsftpd.* TO 'vsftpd'@'127.0.0.1' IDENTIFIED BY 'vsftpd';
+			mysql> FLUSH PRIVILEGES;
+			$ mysql -uvsftpd  -pvsftpd -h127.0.0.1
+			mysql> CREATE DATABASE vsftpd;
+			mysql> CRETAE TABLE users(
+					id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+					name VARCHAR(100) NOT NULL,
+					password CHAR(48) NOT NULL,
+					UNIQUE KEY(name)
+				);
+			mysql> INSERT INTO users(name,password)
+					VALUES ('tom',PASSWORD('mageedu')),('jerry',PASSWORD('jerry')
+					);
+
+
+	5、创建账号和密码
+		$ useradd -d /ftproot/vuser vuser 
+		$ finger vuser 
+		$ mkdir /ftproot/vuser/pub
+		$ chown -R vuser.vuser /ftproot/vuser
+
+	6、提供配置文件：/etc/pam.d/vsftpd.vuser(创建配置文件)
+			auth required /usr/lib64/security/pam_mysql.so user=vsftpd passwd=vsftpd host=127.0.0.1 db=vsftpd table=users usercolumn=name passwdcolumn=password crypt=2
+			account required /usr/lib64/security/pam_mysql.so user=vsftpd passwd=vsftpd host=127.0.0.1 db=vsftpd table=users usercolumn=name passwdcolumn=password crypt=2 
+
+	7、编辑vsftpd配置文件，在最后几行修改：=号后面为我们之前创建的虚拟用户的配置文件名
+			pam_service_name=vsftpd.vuser
+			guest_enable=YES  					#启动来宾账号
+			guest_username=vuser 				#来宾用户名
+
+	8、创建权限目录：
+		在vsftpd的配置文件中添加以下：
+		
+		user_config_dir=/etc/vsftpd/vusers_config/
+
+		创建目录： 
+			$ mkdir /etc/vsftpd/vusers_config/
+
+		编辑配置文件：配置文件的名称为之前在数据库添加的用户要同名：
+
+			$ vim /etc/vsftpd/vusers_config/tom
+			anon_upload_enable=YES 
+			anon_mkdir_write_enable=YES 
+
+	9、重启服务即可
+
+
+
+
+回顾：
+	ftp:
+		两个连接：命令连接、数据连接
+		数据连接的建立方法：主动、被动
+
+		C/S 
+			Server：系统用户、匿名用户、虚拟用户;
+
+
+
+
+'vfs：虚拟文件系统'
+		虚拟文件切换系统（virtual filesystem switch），是操作系统的文件系统虚拟层，在其下是实体的文件系统。
+		虚拟文件系统的主要功用，在于让上层的软件，能够用单一的方式，来跟底层不同的文件系统沟通。在操作系统与之下的各种文件系统之间，虚拟文件系统提供了标准的操作接口，让操作系统能够很快的支持新的文件系统。
+
+
+
+'nfs：san公司发布'
+	Network File System 
+		nis:Network Information Service (明文传输)
+		ldap:lightweight directory access protocol; ldap over ssl/tls
+
+	NFSv2,NFSv3,NFSv4
+
+	'监听的端口：'
+		nfsd:2049/tcp 
+
+
+	'辅助类的服务：rpc(远程过程调用), portmapper'
+		rpc.mountd：认证；负责检查客户端主机地址，是否是我们在服务端定义的允许访问的IP地址
+		rpc.lockd：加锁；
+		rpc.statd：状态； 保存每个连接的连接状态，恢复后的状态。
+		
+		rpc: remote procedure call 
+			监听的端口是随机的。(端口号是可以配置的)
+
+			让nfsd工作在特定端口：编辑/etc/sysconfig/nfs 文件
+		        LOCK_TCPPORT=””
+		        LOCKD_UDDPORT=””
+		        MOUNTD_PORT=’’
+		        STATD_PORT=””
+		        RQUOTAD_PORT=””
+		        STATD_OUTGROING_PROT=””
+				
+	'NFS  Server：'(不适用于多个主机连接，网络与磁盘的IO性能会成为性能瓶颈)
+		1、安装nfs-utils
+
+
+		2、编辑配置文件
+			/etc/exports或/etc/exports.d/*			#man exports 可以查看配置文件的帮助文档
+				'配置文件内格式：'这里文件路径和客户端配置之间是 TAB键的空格
+				/PATH/TO/SOME_DIR 	clients1(export_options, ...)  clients2(export_options, ...)
+					clients：
+						single host：ipv4, ipv6, FQDN；
+						network：address/netmask， 支持长短格式的掩码；
+						wildcards：主机名通配，例如：*.magedu.com; 
+						netgroups：NIS域内的主机组；@group_name；
+						anonymous：使用*通配所有主机；
+						secure：要求客户端端口小于1024，使用insecure可以禁用此功能
+						crossmnt：
+						
+					'General Options:'通用选项
+						ro：只读
+						rw：读写；
+						sync：同步；
+						async：异步；一般使用异步
+
+					'User ID Mapping：'用户ID号映射(ID号同步)
+						 root_squash：压缩root用户；一般指将其映射为nfsnobody；只要是使用root用户登录，都改变其为nfsnobody用户
+						 no_root_squash：不压缩root用户；
+						 all_squash：压缩所有用户；
+						 anonuid and anongid：将压缩的用户映射为此处指定的用户和用户所属的组；
+						 
+	
+	'NFS Client:'
+		mount -t nfs servername:/path/to/share /path/to/mount_point  [-rvVwfnsh ] [-o options]
+		
+		重新导出配置文件/etc/exportfs：(在修改了exprotfs之后使用以下命令)
+			$ exportfs -ar
+			$ exportfs -au
+		
+		'showmount 命令：'
+			- show mount information for an NFS server
+		
+			showmount -e NFS_SERVER_IP: 查看指定的nfs server上导出的所有文件系统； 
+			showmount -a：在nfs server上查看nfs服务的所有客户的列表
+
+
+		'exportfs命令：'
+			-r：重新导出
+			-a：所有文件系统
+			-v：详细信息
+			-u：取消导出文件系统
+
+
+		
+	其它参考文档：
+		man nfs：获取nfs文件系统专用的挂载选项；
+		
+
+
+
+'实验：安装NFS' 1台server，1台client
+	
+	1、lsmod | grep nfs  查看是否支持nfs
+
+	2、安装 nfs-utils：nfs组件
+		$ yum install nfs-utils 
+
+	3、编辑配置文件：
+		$ vim /etc/exports 
+		/data/mysql 172.16.1.100(rw) 172.16.0.0/16(ro,all_squash)
+
+	4、启动服务：
+		$ systemctl start nfs.service 
+		$ ss -tnl # 查看2049端口是否启用
+
+	5、在客户端上查看并挂载：
+		$ showmount -e 172.16.1.70
+		$ mount -t nfs 172.16.1.70:/data/mysql /mnt 
+		$ mount 
+
+	6、进入我们挂载nfs：
+		$ cd /mnt 
+
+	7、
+
+
+
+'博客实践作业：'
+		(1) nfs server导出/data/application/web，在目录中提供wordpress; 
+		(2) nfs client挂载nfs server导出的文件系统至/var/www/html；
+		(3) 客户端（lamp）部署wordpress，并让其正常访问；要确保能正常发文章，上传图片；
+		(4) 客户端2(lamp)，挂载nfs server导出的文件系统至/var/www/html；验正其wordpress是否可被访问； 要确保能正常发文章，上传图片；
+
+		先创建一台LAMP和NFS Server
+
+		LAMP:
+			IP:172.16.1.70
+
+		NFS server :
+			IP:172.16.1.100
+
+
+
+		1、安装LAMP：
+			(1)安装httpd并配置虚拟主机：(这里为了方便直接，编辑成了挂载nfs之后的配置文件；如需测试httpd服务，请看之前的博客文章)
+				$ yum install httpd php php-mysql php-mbstring
+				$ vim /etc/httpd/conf.d/lamp.conf
+				<VirtualHost *:80>
+				        ServerName 172.16.1.70
+				        DocumentRoot "/nfs/wordpress/"
+				        <Directory "/nfs/wordpress/">
+				                Options None
+				                AllowOverride None
+				                Require all granted
+				        </Directory>
+				        CustomLog "/nfs/wordpress/log/access_log" combined
+				        ErrorLog "/nfs/wordpress/log/error_log"
+				</VirtualHost>
+
+				$ mkdir -pv /nfs/wordpress/log 
+			
+		2、配置nfs-server
+			(1)安装nfs以及开发包nfs-utils，还有php、php-mysql，php-mbstring
+				$ yum install nfs nfs-utils php php-mysql php-mbstring
+
+			(2)配置数据库文件：
+				$ vim /etc/my.cnf.d/server.conf
+				[mysqld]
+				skip_name_resolve=ON
+				innodb_file_per_table=ON 
+				log_bin=mysql-bin
+
+			(3)启动数据库
+				$ systemctl start mariadb.service
+
+			(4)编辑/etc/exports共享配置文件：
+				$ vim /etc/exports 
+				/data/mywp	172.16.1.70(rw,no_root_squash) 172.16.1.20(rw,no_root_squash)
+
+			(5)启动nfs服务：
+				$ systemctl start nfs.service 
+
+		3、在LAMP上挂载NFS文件系统：
+			(1)挂载
+				$ mount -t nfs 172.16.1.100:/data/mywp /nfs/wordpress
+
+			(2)测试挂载点权限：
+				$ cd /nfs/wordpress
+				$ mkdir testdir
+				$ touch 1.txt 
+
+
+		4、在NFS服务器上的共享目录解压wordpress并配置，为其创建数据库，以及远程连接的权限
+			(1)解压wordpress配置其配置文件：
+
+				这一步在Mac(也就是PC机操作)
+				$ scp wordpress-4.7.4-zh_CN.tar.gz root@172.16.1.100:/data
+
+				$ cd /root 
+				$ tar xf wordpress-4.7.4-zh_CN.tar.gz
+				$ mv wordpress /data/mywp/
+				$ cd /data/mywp/wordpress
+				$ mv config.sample.inc.php config.inc.php
+				$ vim config.inc.php
+					修改如下：
+					// ** MySQL 设置 - 具体信息来自您正在使用的主机 ** //
+					/** WordPress数据库的名称 */
+					define('DB_NAME', 'wordpress');
+
+					/** MySQL数据库用户名 */
+					define('DB_USER', 'wordpress');
+
+					/** MySQL数据库密码 */
+					define('DB_PASSWORD', 'root@123');
+
+					/** MySQL主机 */
+					define('DB_HOST', '172.16.1.100');
+
+					/** 创建数据表时默认的文字编码 */
+					define('DB_CHARSET', 'utf8');
+
+					/** 数据库整理类型。如不确定请勿更改 */
+					define('DB_COLLATE', '');
+
+			(2)创建数据库，并授权：
+				$ mysql 
+				> CREATE DATEBASE wordpress;
+				> GRANT ALL PRIVILEGES ON wordpress.* TO 'wordpress'@'172.16.1.100' IDENTIFIED BY 'root@123';
+				> GRANT ALL PRIVILEGES ON wordpress.* TO 'wordpress'@'172.16.1.70' IDENTIFIED BY 'root@123';
+				> GRANT ALL PRIVILEGES ON wordpress.* TO 'wordpress'@'172.16.1.20' IDENTIFIED BY 'root@123';
+				> FLUSH PRIVILEGES;
+			
+			(3)重启数据库服务
+				$ systemctl restart mariadb.service 
+
+
+		5、在LAMP上：
+			重启httpd服务：
+				$ systemctl restart httpd
+
+			注意：这里要求能上传图片，但是在实验环境中是无法上传的，因为需要借助于网络，但是我们这里是没有Internet的
+				上传图片需要对/wordpress/wp-content具有写权限：
+					chmod a+w /data/mywp/wordpress/wp-contet
+					chown -R apache.apache /data/mywp/wordpress
+
+
+
+		6、创建另一台LAMP：
+			$ yum install httpd php php-mysql php-mbstring
+			$ vim /etc/httpd/conf.d/lamp.conf
+				<VirtualHost *:80>
+				        ServerName 172.16.1.20
+				        DocumentRoot "/nfs/wordpress/"
+				        <Directory "/nfs/wordpress/">
+				                Options None
+				                AllowOverride None
+				                Require all granted
+				        </Directory>
+				        CustomLog "/nfs/wordpress/log/access_log" combined
+				        ErrorLog "/nfs/wordpress/log/error_log"
+				</VirtualHost>
+
+			$ mkdir -pv /nfs/wordpress/log
+
+			$ mount -t nfs 172.16.1.100:/data/mywp /nfs/wordpress
+
+			$ systemctl start httpd
+
+
+
+'博客实践作业：'
+	(1) nfs server导出/data/目录；
+	(2) nfs client挂载/data/至本地的/mydata目录；本地的mysqld或mariadb服务的数据目录设置为/mydata, 要求服务能正常启动，且可正常 存储数据；
+	
+	
+		步骤：
+
+		NFS Server步骤：
+			1. $ ! rpm -q nfs-utils >/dev/null  && yum install -y nfs-utils  #安装nfs 
+
+			2. $ systemctl  start nfs.service
+
+			3. $ mkdir /data/mydata  #创建共享目录
+
+			4. $ vim /etc/exports
+			    /data/mydata    172.16.1.70(rw,anonuid=27,anongid=27,async)
+
+			5. $ exportfs  -avr
+
+			6. $ setfacl -m o:rwx  /data/mydata
+
+		NFS Clinet步骤：
+			1、 安装nfs工具包
+				$ yum install -y  nfs-utils
+
+			2、 安装数据库服务端
+				$ yum install -y mariadb-server
+
+			3、 创建挂载点
+				$ mkdir /mydata
+
+			4、 挂载nfs文件系统
+				$ mount  -t nfs  172.18.9.119:/data   /mydata
+
+			5、 编辑mariadb配置文件：
+				$ vim  /etc/my.cnf
+			        datadir=/mydata
+
+			6、 启动数据库服务
+				$ systemctl start mariadb.service 
+
+
+
+
+
+
+
+'samba：文件共享'
+		
+	不能跨操作系统
+
+	smb: Service message block；服务信息块
+	CIFS: common internet filesystem；通过互联网文件系统
+		
+	'Windows上的网上邻居：'
+		NetBIOS协议：广播，主机名解析
+		SMB：文件系统共享
+		workgroup：工作组
+		Domain：域(ldap)
+
+
+	'samba：Andrew Tridgell；'
+		功能：
+			文件系统共享；
+			打印机共享；
+			NetBIOS协议；
+			
+		peer/peer(workgroup model)
+		domain model
+		
+	'程序环境：'
+		服务端程序包：samba,samba-common,samba-libs
+			Samba is the standard Windows interoperability suite of programs for Linux and Unix.
+		主配置文件：/etc/samba/smb.conf， 由samba-common包提供；
+		'主程序：'
+			nmbd：NetBIOS name server
+			smbd：SMB/CIFS services;smb daemon
+		'Unit File：'
+			smb.service
+			nmb.service 
+	
+		'监听的端口：'
+			137/udp, 138/udp 
+			139/tcp, 445/tcp 
+	
+	d:\data\tools：共享，共享名（software）
+		servicename: 
+			//172.18.0.70/software
+	
+	
+	'客户端程序：'
+		smbclient：交互式命令行客户端，类似于lftp；
+		mount.cifs：挂载cifs文件系统的专用命令；
+		
+	
+
+
+
+	'samba的配置：'
+		smb.conf
+
+		获取配置段：
+			$ grep -E -i "#(===| ---)" /etc/samba/smb.conf 
+
+			[root@test-1 /]# grep -E -i "#(===| ---)" /etc/samba/smb.conf
+			#======================= Global Settings =====================================
+			# ----------------------- Network-Related Options -------------------------
+			# --------------------------- Logging Options -----------------------------
+			# ----------------------- Standalone Server Options ------------------------
+			# ----------------------- Domain Members Options ------------------------
+			# ----------------------- Domain Controller Options ------------------------
+			# ----------------------- Browser Control Options ----------------------------
+			# --------------------------- Printing Options -----------------------------
+			# --------------------------- File System Options ---------------------------
+			#============================ Share Definitions ==============================
+			
+			两类配置段：
+				全局配置
+					[global]
+						'Network-Related Options'
+							workgroup =
+								工作组名称
+
+							server string = 
+							
+							interfaces = lo eth0 192.168.12.2/24 192.168.13.2/24
+								= lo eth0 
+								= lo 127.0.0.0/8 172.16.  #表示127网段和172.16.0.0/16网段的地址  
+								监听的网卡接口或IP地址
+							
+							hosts allow = 127.  192.168.12.  192.168.13.
+								允许哪些地址访问samba;如果注释了表示所有都允许
+							hosts deny = 172.16.1.1
+								表示禁止访问的IP或网段
+
+
+						'Logging Options'
+							log file = /var/log/samba/log.%m
+								日志文件存储位置
+									%m：每个主机的主机名
+
+							max log size = 50
+								日志最大的存储大小，如果超出了，则滚动日志；大小单位是kb
+									log.1
+										--> log1.1
+										--> log1.2
+										--> log1.3
+										如果1满了，则创建log1.1继续记录日志
+
+
+						'Standalone Server Options' 独立samba配置：
+							security = user
+								设定安全级别：取值有四个；
+									share：匿名共享；(被弃用)
+									user：使用samba服务自我管理的账号和密码进行用户认证；用户必须是系统用户，但密码非为/etc/shadow中的密码，而由samba自行管理的文件，其密码文件的格式由passdb backend进行定义；
+									server：由第三方服务进行统一认证；(被弃用)
+									domain：使用DC进行认证；基于kerberos协议进行；
+							
+							passdb backend = tdbsam
+								sam：加密方法(windows中也有)
+
+						
+						'Name Resolution：'名称解析
+							wins：windows的名称解析服务
+						
+
+						'Printing Options'
+							load printers = yes
+								是否自动加载打印机
+							cups options = raw
+
+						
+				'共享文件系统配置'
+					[SHARED_NAME]
+					
+					有三类：
+						[homes]：为每个samba用户定义其是否能够通过samba服务访问自己的家目录；
+						[printers]：定义打印服务；
+						[shared_fs]：定义共享的文件系统； (共享名称)
+						
+					常用指令：
+						comment：注释信息；说明共享名称的意义
+						path：当前共享所映射的文件系统路径；类似于httpd中的Alias别名
+						browseable：是否可浏览，指是否可被用户查看；
+						guest ok：是否允许来宾(匿名)账号访问；
+						public：是否公开所有用户；
+						writable：是否可写；
+						write list：拥有写权限的用户列表；
+							用户名
+							@组名
+							+组名
+
+			'testparm：检查samba配置文件是否配置正常'
+					check an smb.conf configuration file for internal correctness
+				
+			'启动smb,nmb服务：'
+				systemctl start smb.service nmb.service 
+
+
+			'samba用户管理：'
+				
+				'smbpasswd命令：'添加用户时，用户必须要在/etc/passwd中存在(也就是这里的用户，必须在系统上存在)
+					smbpasswd [options] USERNAME
+						-a：添加
+						-x：删除
+						-d：禁用
+						-e：启用
+						-n：设置空密码
+						如果不给参数，表示修改USER的密码
+
+				
+				'pdbedit命令：'
+					-L：列出samba服务中的所有用户；
+					-a, --create：添加用户为samba用户；
+						-u, --user=USER：要管理的用户；
+					-x, --delete：删除用户；
+						-x -u USER:删除指定用户
+					-t, --password-from-stdin：从标准输出接收字符串作为用户密码；
+						使用空提示符，而后将密码输入两次
+					-v：显示详细信息
+			
+
+			'查看服务器端的共享：'
+				smbclient -L SMB_SERVER  [-U USERNAME]
+				
+			
+			'交互式文件访问：'
+				smbclient //SMB_SERVER/SHARE_NAME [-U USERNAME]
+				
+			
+
+			'挂载访问smb文件系统'：
+				mount -t cifs //SMB_SERVER/SAHRE_NAME  -o username=USERNAME,password=PASSWORD
+				
+				注意：挂载操作的用户，与-o选项中指定用户直接产生映射关系；
+					此时，访问挂载点，是以-o选项中的username指定的用户身份进行，与本地用户无关；
+				
+		'smbstatus命令：'
+			显示samba服务的相关共享的访问状态信息；
+				-b：显示简要格式信息；
+				-v：显示详细格式信息； 
+
+
+		'创建一个目录并共享：'
+			1、在配置文件尾部添加：
+				$ vim /etc/samba/smb.conf
+				[myfiles]
+					comment = A test shared dir. 
+					path = /data/samba/files
+					public = yes 
+					writable = yes
+					browseabl = yes 
+			2、测试语法
+				$ testparm 
+
+			3、重启服务
+				$ systemctl restart smb.service
+
+			4、在客户端查看：
+				$ smbclient -L 172.16.1.70 -U smbuser1
+
+			5、客户端连接smb共享的目录：
+				$ smbclient //172.16.1.70/myfiles -U smbuser1
+
+			6、服务端使smbuser1对共享目录具有写权限：
+				$ setfacl -m u:smbuser1:rwx /data/samba/files/
+
+			7、再连接测试：
+				$ smbclient //172.16.1.70/myfiles -U smbuser1
+				sbm:\> put 1.txt
+
+			8、使用Mount挂载共享目录：
+				$ mount.cifs //172.16.1.70/myfiles -o username=smbuser1,password=root@123  /mnt
+				$ mount 查看是否挂在成功
+
+			samba必须具有 文件写权限、共享权限，本地写权限
+
+
+				
+	练习：
+		创建一个共享data，路径为/var/ftp/data；要求仅centos和gentoo用户能上传；此路径对其他用户不可见；
+		
+'博客实践作业：'
+	(1) samba server导出/data/application/web，在目录中提供wordpress; 
+	(2) samba  client挂载nfs server导出的文件系统至/var/www/html；
+	(3) 客户端（lamp）部署wordpress，并让其正常访问；要确保能正常发文章，上传图片；
+	(4) 客户端2(lamp)，挂载samba  server导出的文件系统至/var/www/html；验正其wordpress是否可被访问； 要确保能正常发文章，上传图片；
+		
+	1、在samba服务器上创建共享目录，安装samba并添加共享目录配置：
+		$ mkdir -pv /samba/mywp 
+		$ yum install samba 
+		$ vim /etc/samba/smb.conf 
+		在文件尾部添加如下信息：
+		[wordpress]
+        comment = My samba share WordPress 			#配置说明
+        path = /samba/mywp							#共享目录位置
+        writable = yes 								#是否可写
+        write list = apache 						#拥有写权限的用户列表
+        guest ok = no 								#来宾账号是否可读
+
+    2、检查语法：
+    	$ testparm
+		Load smb config files from /etc/samba/smb.conf
+		rlimit_max: increasing rlimit_max (1024) to minimum Windows limit (16384)
+		Processing section "[homes]"
+		Processing section "[printers]"
+
+		
+		Processing section "[wordpress]"
+		Loaded services file OK.
+		Server role: ROLE_STANDALONE
+
+		Press enter to see a dump of your service definitions
+		...
+		...
+		...
+		[wordpress]
+			comment = My samba share WordPress
+			path = /samba/mywp
+			write list = apache
+			read only = No 
+
+	3、拷贝wordpress文件到共享目录，并设置apache用户对其拥有rwx权限
+		$ tar xf wordpress-4.7.4-zh_CN.tar.gz 
+		$ mv wordpress /samba/mywp/
+		$ cp /samba/mywp/wp-config-sample.php  /samba/mywp/wp-config.php
+		$ vim /samba/mywp/wp-config.php
+		// ** MySQL 设置 - 具体信息来自您正在使用的主机 ** //
+		/** WordPress数据库的名称 */
+		define('DB_NAME', 'smb_wordpress');
+
+		/** MySQL数据库用户名 */
+		define('DB_USER', 'smb_wordpress');
+
+		/** MySQL数据库密码 */
+		define('DB_PASSWORD', 'root@123');
+
+		/** MySQL主机 */
+		define('DB_HOST', '172.16.1.100');
+
+		/** 创建数据表时默认的文字编码 */
+		define('DB_CHARSET', 'utf8');
+
+		/** 数据库整理类型。如不确定请勿更改 */
+		define('DB_COLLATE', '');
+
+		$ chown -R apache.apache /samba/mywp/wordpress
+		$ chmod 777 /samba/mywp/wordpress/wp-content
+
+	4、添加apache用户到smb，并重载smb.service：
+		$ smbpasswd -a apache 
+		$ systemctl reload smb.service
+
+	5、在LAMP服务器上挂载samba共享目录以及配置httpd虚拟主机：
+		$ mkdir /samba/wordpress/ -pv
+		$ mount.cifs //172.16.1.100/wordpress /samba/wordpress/ -o username=apache
+		$ mount
+		$ cd /samba/wordpress/
+		$ ll 
+		$ cp /etc/httpd/conf.d/lamp.conf /etc/httpd/conf.d/wp2.conf
+		$ vim /etc/httpd/conf.d/wp2.conf
+		<VirtualHost 172.16.1.70:80>
+		        ServerName www.mywp2.com
+		        DocumentRoot "/samba/wordpress/"
+		        <Directory "/samba/wordpress/">
+		                Options None
+		                AllowOverride None
+		                Require all granted
+		        </Directory>
+		</VirtualHost>
+
+		$ vim /etc/httpd/conf.d/lamp.conf 		#修改之前配置nfs的虚拟主机配置
+		<VirtualHost 172.16.1.70:80>
+		        ServerName www.mywp1.com
+		        DocumentRoot "/nfs/wordpress/"
+		        <Directory "/nfs/wordpress/">
+		                Options None
+		                AllowOverride None
+		                Require all granted
+		        </Directory>
+		        CustomLog "/nfs/wordpress/log/access_log" combined
+		        ErrorLog "/nfs/wordpress/log/error_log"
+		</VirtualHost>
+
+		$ systemctl restart httpd #重启httpd服务
+
+	6、在客户端上的操作：
+		$ vim /etc/hosts
+		172.16.1.70 www.mywp1.com
+		172.16.1.70 www.mywp2.com
+
+		打开浏览器访问，并创建wordpress站点，创建文章， 测试上传图片的功能
+
+
+
+
+
+'博客实践作业：'
+	(1) samba  server导出/data/目录；
+	(2) samba  client挂载/data/至本地的/mydata目录；本地的mysqld或mariadb服务的数据目录设置为/mydata, 要求服务能正常启动，且可正常 存储数据；
+		[mysqld]
+		datadir=/mydata 
+
+		mysql服务的数据目录的属主属组得是运行进程的用户，一般为mysql 
+
+
+
+	1、在Samba服务器上创建共享目录，修改配置文件，添加mysql用户对共享目录的rwx权限，把mysql添加到smb中，重载smb服务
+
+		$ mkdir /samba/mysql 
+		$ chown mysql.mysql /samba/mysql/
+		$ vim /etc/samba/smb.conf
+		[mysqldata]
+        comment = My samba share MySQL Data
+        path = /samba/mysql
+        writable = yes
+        write list = mysql
+        guest ok = no
+
+        $ smbpasswd -a mysql
+
+        $ systemctl reload smb.service
+
+    2、在LAMP上的操作：
+    	创建挂载点目录，并为httpd创建虚拟主机配置文件。
+    	修改mysql主配置文件以及Server.conf
+
+    	$ mkdir /samba/mydata -pv
+    	$ mount.cifs //172.16.1.100/mysqldata /samba/mydata/ -o username=mysql 
+    	$ mount
+    	$ vim /etc/my.cnf.d/server.conf
+    	[mysqld]
+		skip_name_resolve=ON
+		innodb_file_per_table=ON
+		log_bin=mysql-bin
+
+		$ vim /etc/my.cnf
+		[mysqld]
+		datadir=/samba/mydata
+
+		$ systemctl start mariadb.service
+
+		登入数据库创建数据库，表，进行读写测试：
+		$ mysql 
+		MariaDB [(none)]> CREATE DATABASE test_db;
+		MariaDB [(none)]> user test_db;
+		MariaDB [(none)]> CREATE TABLE test_tb (id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,name VARCHAR(30),gender ENUM('M','F'));
+		MariaDB [(none)]> DESC test_db.test_tb;
+		+--------+------------------+------+-----+---------+----------------+
+		| Field  | Type             | Null | Key | Default | Extra          |
+		+--------+------------------+------+-----+---------+----------------+
+		| id     | int(10) unsigned | NO   | PRI | NULL    | auto_increment |
+		| name   | varchar(30)      | YES  |     | NULL    |                |
+		| gender | enum('M','F')    | YES  |     | NULL    |                |
+		+--------+------------------+------+-----+---------+----------------+
+		3 rows in set (0.00 sec)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

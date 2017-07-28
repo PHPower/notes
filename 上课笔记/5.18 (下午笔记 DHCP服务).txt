@@ -1,0 +1,228 @@
+5.18 (下午笔记 DHCP服务)
+
+
+DHCP工作原理：
+	1、客户端发送（ARP）广播，寻找DHCP服务器
+		发送一个目标地址为255.255.255.255的广播给网络中的所有主机
+		发送的是DHCP DISCOVER包
+
+	2、DHCP收到消息后则会从地址池中随机选择一个IP给发送此消息的客户端来配置其网络参数
+		给客户端分配基本的网络参数：DHCP offer
+
+		但是可能会出现：出现多个DHCP服务器
+
+	3、客户端接收DHCP offer：
+		如果客户端收到网络上多台DHCP服务器的响应，客户端会挑选最快的一个DHCP OFFER并向网络发送一个DHCP REQUEST广播封包，
+		告诉所有DHCP服务器它将使用哪一台服务器提供的IP地址。
+		同时，客户端还会向网络发送ARP广播数据包，查询有没有其他机器使用此IP地址。
+			如果被占用：客户端则会发送一个DHCP DECLINE数据包给DHCP服务器，拒绝接收其DHCP OFFER，并重新发送DHCP REQUEST信息
+
+	4、服务器确认
+		将地址分配给客户端后，DHCP服务器会发送一个DHCP ACK消息，确认IP租约的正式生效，结束完整的DHCP工作过程
+
+
+'租约：'
+	当客户端取得IP地址后，一般不需要再发送DHCP DISCOVER信息了
+	'除非租约到期或者IP地址重新设定回0.0.0.0'
+	此时客户端会直接使用已经租用到的IP地址向DHCP服务器发出DHCUP REQUEST信息，DHCP服务器会尽量让客户端使用原来的IP地址
+		如果没有特殊的情况，会直接相应DHCP ACK，允许客户端继续使用此IP地址
+
+	如果该地址已经失效或者已经被其他主机使用了，服务器则会响应一个DHCP NACK数据包给客户端，要求其重新执行DHCP DISCOVER
+
+
+
+
+
+
+搭建DHCP服务：
+	1、关闭防火墙，清空防火墙策略
+		$ iptables -F
+		$ systemctl stop firewalld.service
+		$ systemctl disable firewalld.service
+	2、安装软件 
+		rmp -qa dhcp
+
+	3、配置文件/etc/dhcpd.conf
+		但一般情况下此文件并不存在，需要我们自己手动配置
+		所以我们可以拷贝一个现成的配置文件到etc目录下将其改名即可：
+		
+		$ cp  /usr/share/doc/dhcp-4.2.5/dhcpd.conf.example /etc/dhcp/dhcpd.conf
+
+		'配置文件:'/etc/dhcp/dhcpd.conf
+			全局配置：
+				# option definitions common to all supported networks...
+				option domain-name "example.org";					#DNS域名
+				option domain-name-servers ns1.example.org, ns2.example.org;	#DNS域名地址
+
+				default-lease-time 600;			#默认超时时间
+				max-lease-time 7200;			#最大超时时间
+
+
+			网段声明：
+				# A slightly different configuration for an internal subnet.
+				subnet 192.168.1.0 netmask 255.255.255.0 {					#第一个网段声明，注意这里的网段必须包括DHCP服务器本机的IP地址
+				  range 192.168.1.10 192.168.1.100;							#网段的地址池
+				  #option domain-name-servers ns1.internal.example.org;		#与全局中的DNS设置相同，但是网段声明中的优先级高于全局
+				  #option domain-name "internal.example.org";
+				  option routers 192.168.1.1;								#网关（根据实际情况，有可能是路由器的IP，外网出口的IP）
+				  #option broadcast-address 10.5.5.31;						#广播地址，一般用不到
+				  default-lease-time 600;									#租约时间
+				  max-lease-time 7200;
+				}
+
+
+			主机声明：手动指定IP地址（为网段内某些特殊机器，实现静态IP地址）
+				host passacaglia {
+				  hardware ethernet 0:0:c0:5d:bd:95;			#网卡的MAC地址
+				  #filename "vmunix.passacaglia";				#引导文件
+				  server-name "toccata.fugue.com";				#某一台服务器的IP地址
+				}
+
+				host fantasia {								#道理同上面的一样
+				  hardware ethernet 08:00:07:26:c0:a5;		#MAC
+				  fixed-address fantasia.fugue.com;			#IP
+				}
+
+
+			超级作用域：为多个子网分配网络参数（划分共享网络）
+				shared-network 224-29 {
+				  subnet 10.17.224.0 netmask 255.255.255.0 {
+				    option routers rtr-224.example.org;
+				  }
+				  subnet 10.0.29.0 netmask 255.255.255.0 {
+				    option routers rtr-29.example.org;
+				  }
+				  pool {									#地址池 allow允许
+				    allow members of "foo";
+				    range 10.17.224.10 10.17.224.250;
+				  }
+				  pool {									#地址池 deny禁止
+				    deny members of "foo";
+				    range 10.0.29.10 10.0.29.230;
+				  }
+				}
+
+	4、配置完之后，开启dhcp服务：
+		service dhcpd start
+		或者
+		systemctl start dhcpd
+	5、修改客户端网卡为DHCP动态获取IP地址，并重启网卡
+		$ sed -i "s/static/dhcp" /etc/sysconfig/network-scripts/ifcfg-eth0
+		$ ifdown eth0 
+		$ ifup eth0 
+		$ ifconfig   #查看是否获取到
+	6、获取成功后，应该会在DHCP服务器端有一个/var/lib/dhcpd/目录下有一些配置信息的文件
+		 	# The format of this file is documented in the dhcpd.leases(5) manual page.
+			# This lease file was written by isc-dhcp-4.1.1-P1
+
+			server-duid "\000\001\000\001 \260;\214\000\014)&\216\261";
+
+			lease 192.168.1.10 {
+			  starts 4 2017/05/18 11:03:17;
+			  ends 4 2017/05/18 11:13:17;
+			  cltt 4 2017/05/18 11:03:17;
+			  binding state active;
+			  next binding state free;
+			  hardware ethernet 00:0c:29:81:af:2d;
+			  client-hostname "node";
+			}
+			~                                                                                           
+			                                                                                         
+			"/var/lib/dhcpd/dhcpd.leases" 14L, 420C   
+
+
+	7、指定IP地址给客户端，通过修改dhcp服务器的配置文件：
+		修改主机声明中：MAC地址为客户端的网卡地址，fixd-address：指定IP地址
+			host fantasia {								#道理同上面的一样
+				  hardware ethernet 08:00:07:26:c0:a5;		#MAC
+				  fixed-address 192.168.1.50;			#IP
+			}
+		获取指定客户端的MAC地址，因为之前已经给了IP地址
+		所以ping一下IP，然后使用arp -a查看缓存表中的MAC地址
+
+		然后重启dhcp服务
+		service dhcpd restart
+
+		客户端：
+			重启网卡，获取指定IP地址
+
+	8、通过超级作用域，为多个子网分配网络参数
+		(1)需要在dhcp的配置文件中注释掉主机声明和网段声明
+		(2)修改超级作用域信息：
+			shared-network 224-29 {
+			  subnet 192.168.1.0 netmask 255.255.255.0 {
+			        range 192.168.1.1 192.168.1.1;
+			  }
+			  subnet 192.168.2.0 netmask 255.255.255.0 {
+			        range 192.168.2.10 192.168.2.100;
+			  }
+			}
+			第一个作用域添加我们DHCP所在的网段信息
+			第二个作用域添加我们希望增加的子网信息
+		(3)重启dhcp服务
+
+
+	9、DHCP中继(中继必须是服务器，路由器无法实现)
+		实现的功能：跨网络分配网络参数
+
+		服务：dhcpd和dhcrelay
+		配置文件：/etc/sysconfig/dhcrelay
+		(1)创建一台服务器，配置成为路由器
+			在路由器上配置2张网卡，分别连接DHCP服务器和客户端
+			配置路由器IP地址，配置静态IP
+			配置完成后检查能ping通dhcp服务器和客户端
+
+			echo 1 > /proc/sys/net/ipv4/ip_forward
+			或者
+			vim /etc/sysctl.conf 中 ipv4.ip_forward的值修改为1 （CenOS7不适用）
+
+			使用 
+			$ sysctl -p 使配置文件生效
+			$ sysctl -a | grep ipv4.ip_forward 查看是否生效
+
+			安装dhcp
+			$ yum install dhcp 
+
+			修改中继配置文件：
+				INTERFACES="eth0 eth1" 		#表示中继的网卡名称是哪几块网卡
+				DHCPSERVERS="192.168.1.2"	#dhcp服务器的IP地址
+
+			启动中继服务：
+			$ service dhcrelay start 
+
+
+		(2)dhcp服务器上的操作：
+			创建默认网关：修改网卡配置文件或者添加默认路由
+			route add default gw 192.168.1.254
+
+			修改dhcp配置文件：在网段声明中添加客户端网段的子网信息，并注释主机声明和超级作用域
+
+				subnet 192.168.1.0 netmask 255.255.255.0 {
+				  range 192.168.1.2 192.168.1.2;
+				  #option domain-name-servers ns1.internal.example.org;
+				  #option domain-name "internal.example.org";
+				  option routers 192.168.1.254;
+				  #option broadcast-address 10.5.5.31;
+				  default-lease-time 600;
+				  max-lease-time 7200;
+				}
+
+				subnet 172.16.98.0 netmask 255.255.255.0 {
+				  range 172.16.98.10 172.16.98.100;
+				  #option domain-name-servers ns1.internal.example.org;
+				  #option domain-name "internal.example.org";
+				  option routers 172.16.98.254;
+				  #option broadcast-address 10.5.5.31;
+				  default-lease-time 600;
+				  max-lease-time 7200;
+				}
+
+			重启网络
+			重启dhcp服务
+		(3)重启客户端网络，如果获取到 172网段的IP地址，则成功
+
+
+
+
+
+

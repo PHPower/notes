@@ -1,0 +1,735 @@
+7.11课后作业(用户授权、日志、缓存、备份)
+
+
+'实验1：授权一个用户只对某个数据库的某张表的某个字段具有SELECT权限'
+	
+	> CREATE DATABASE mydb;
+	> use mydb;
+	> desc tb1;
+	> INSERT INTO tb1 VALUES(1,'maxie','M'),(2,'yang guo','M'),(3,'xiao long nv','F');
+	> SELECT * FROM tb1;
+	+------+-----------+--------+
+	| id   | name      | gender |
+	+------+-----------+--------+
+	|    1 | maxie     | M      |
+	|    2 | yang guo  | M      |
+	|    3 | xiao long | F      |
+	+------+-----------+--------+
+
+	> CREATE USER 'maxie'@'localhost' IDENTIFIED BY 'root@123';
+	> GRANT SELECT(id,name) ON mydb.tb1 TO 'maxie'@'localhost';
+	> FLUSH PRIVILEGES;
+
+	登陆：
+		$ mysql -umaxie -p
+		> SHOW DATABASES;
+		+--------------------+
+		| Database           |
+		+--------------------+
+		| information_schema |
+		| mydb               |
+		| test               |
+		+--------------------+
+		> use mydb;
+		> SELECT * FROM tb1;
+		ERROR 1142 (42000): SELECT command denied to user 'maxie'@'localhost' for table 'tb1'
+		> SELECT id,name FROM tb1;
+		+------+-----------+
+		| id   | name      |
+		+------+-----------+
+		|    1 | maxie     |
+		|    2 | yang guo  |
+		|    3 | xiao long |
+		+------+-----------+
+		3 rows in set (0.00 sec)
+
+
+
+'实验2：授权一个用户，指定其必须使用SSL连接数据库'
+	> GRANT SELECT ON mydb.tb1 TO 'testuser'@'localhost' REQUIRE SSL;
+
+
+
+
+
+
+
+'实验3：索引'
+	MariaDB [hellodb]> SELECT * FROM students WHERE StuID=14;
+	+-------+-------------+-----+--------+---------+-----------+
+	| StuID | Name        | Age | Gender | ClassID | TeacherID |
+	+-------+-------------+-----+--------+---------+-----------+
+	|    14 | Lu Wushuang |  17 | F      |       3 |      NULL |
+	+-------+-------------+-----+--------+---------+-----------+
+	1 row in set (0.00 sec)
+
+	MariaDB [hellodb]> EXPLAIN SELECT * FROM students WHERE StuID=14;
+	+------+-------------+----------+-------+---------------+---------+---------+-------+------+-------+
+	| id   | select_type | table    | type  | possible_keys | key     | key_len | ref   | rows | Extra |
+	+------+-------------+----------+-------+---------------+---------+---------+-------+------+-------+
+	|    1 | SIMPLE      | students | const | PRIMARY       | PRIMARY | 4       | const |    1 |       |
+	+------+-------------+----------+-------+---------------+---------+---------+-------+------+-------+
+	1 row in set (0.00 sec)
+
+	MariaDB [hellodb]> EXPLAIN SELECT * FROM students WHERE ClassID=2;
+	+------+-------------+----------+------+---------------+------+---------+------+------+-------------+
+	| id   | select_type | table    | type | possible_keys | key  | key_len | ref  | rows | Extra       |
+	+------+-------------+----------+------+---------------+------+---------+------+------+-------------+
+	|    1 | SIMPLE      | students | ALL  | NULL          | NULL | NULL    | NULL |   25 | Using where |
+	+------+-------------+----------+------+---------------+------+---------+------+------+-------------+
+	1 row in set (0.00 sec)
+
+	MariaDB [hellodb]>
+	MariaDB [hellodb]> EXPLAIN SELECT * FROM students WHERE StuID=4;
+	+------+-------------+----------+-------+---------------+---------+---------+-------+------+-------+
+	| id   | select_type | table    | type  | possible_keys | key     | key_len | ref   | rows | Extra |
+	+------+-------------+----------+-------+---------------+---------+---------+-------+------+-------+
+	|    1 | SIMPLE      | students | const | PRIMARY       | PRIMARY | 4       | const |    1 |       |
+	+------+-------------+----------+-------+---------------+---------+---------+-------+------+-------+
+	1 row in set (0.00 sec)
+
+	MariaDB [hellodb]> EXPLAIN SELECT * FROM students WHERE ClassID=2;
+	+------+-------------+----------+------+---------------+------+---------+------+------+-------------+
+	| id   | select_type | table    | type | possible_keys | key  | key_len | ref  | rows | Extra       |
+	+------+-------------+----------+------+---------------+------+---------+------+------+-------------+
+	|    1 | SIMPLE      | students | ALL  | NULL          | NULL | NULL    | NULL |   25 | Using where |
+	+------+-------------+----------+------+---------------+------+---------+------+------+-------------+
+	1 row in set (0.00 sec)
+
+	MariaDB [hellodb]> CREATE INDEX gender_and_name ON students(Gender,Name);
+	Query OK, 0 rows affected (0.03 sec)
+	Records: 0  Duplicates: 0  Warnings: 0
+
+	MariaDB [hellodb]> EXPLAIN SELECT * FROM students WHERE Gender='M' AND NAME LIKE 'X%';
+	+------+-------------+----------+-------+-----------------+-----------------+---------+------+------+-----------------------+
+	| id   | select_type | table    | type  | possible_keys   | key             | key_len | ref  | rows | Extra                 |
+	+------+-------------+----------+-------+-----------------+-----------------+---------+------+------+-----------------------+
+	|    1 | SIMPLE      | students | range | gender_and_name | gender_and_name | 153     | NULL |    3 | Using index condition |
+	+------+-------------+----------+-------+-----------------+-----------------+---------+------+------+-----------------------+
+	1 row in set (0.00 sec)
+
+	MariaDB [hellodb]> EXPLAIN SELECT * FROM students WHERE Gender='F';
+	+------+-------------+----------+------+-----------------+-----------------+---------+-------+------+-----------------------+
+	| id   | select_type | table    | type | possible_keys   | key             | key_len | ref   | rows | Extra                 |
+	+------+-------------+----------+------+-----------------+-----------------+---------+-------+------+-----------------------+
+	|    1 | SIMPLE      | students | ref  | gender_and_name | gender_and_name | 1       | const |   10 | Using index condition |
+	+------+-------------+----------+------+-----------------+-----------------+---------+-------+------+-----------------------+
+	1 row in set (0.00 sec)
+
+	MariaDB [hellodb]>
+	MariaDB [hellodb]> EXPLAIN SELECT * FROM students WHERE Name LIKE 'S%';
+	+------+-------------+----------+------+---------------+------+---------+------+------+-------------+
+	| id   | select_type | table    | type | possible_keys | key  | key_len | ref  | rows | Extra       |
+	+------+-------------+----------+------+---------------+------+---------+------+------+-------------+
+	|    1 | SIMPLE      | students | ALL  | NULL          | NULL | NULL    | NULL |   25 | Using where |
+	+------+-------------+----------+------+---------------+------+---------+------+------+-------------+
+	1 row in set (0.00 sec)
+
+	MariaDB [hellodb]> EXPLAIN SELECT * FROM students WHERE age > (SELECT avg(age) FROM students);
+	+------+-------------+----------+------+---------------+------+---------+------+------+-------------+
+	| id   | select_type | table    | type | possible_keys | key  | key_len | ref  | rows | Extra       |
+	+------+-------------+----------+------+---------------+------+---------+------+------+-------------+
+	|    1 | PRIMARY     | students | ALL  | NULL          | NULL | NULL    | NULL |   25 | Using where |
+	|    2 | SUBQUERY    | students | ALL  | NULL          | NULL | NULL    | NULL |   25 |             |
+	+------+-------------+----------+------+---------------+------+---------+------+------+-------------+
+	2 rows in set (0.00 sec)
+
+	MariaDB [hellodb]> CREATE INDEX age ON students(age);
+	Query OK, 0 rows affected (0.02 sec)
+	Records: 0  Duplicates: 0  Warnings: 0
+
+	MariaDB [hellodb]> EXPLAIN SELECT * FROM students WHERE age > (SELECT avg(age) FROM students);
+	+------+-------------+----------+-------+---------------+------+---------+------+------+-------------+
+	| id   | select_type | table    | type  | possible_keys | key  | key_len | ref  | rows | Extra       |
+	+------+-------------+----------+-------+---------------+------+---------+------+------+-------------+
+	|    1 | PRIMARY     | students | range | age           | age  | 1       | NULL |    5 | Using where |
+	|    2 | SUBQUERY    | students | index | NULL          | age  | 1       | NULL |   25 | Using index |
+	+------+-------------+----------+-------+---------------+------+---------+------+------+-------------+
+	2 rows in set (0.00 sec)
+
+	MariaDB [hellodb]> CREATE INDEX age ON students(avg(age));
+	ERROR 1064 (42000): You have an error in your SQL syntax; check the manual that corresponds to your MariaDB server version for the right syntax to use near 'age))' at line 1
+	MariaDB [hellodb]>
+	MariaDB [hellodb]> SHOW INDEXES FROM students;
+	+----------+------------+-----------------+--------------+-------------+-----------+-------------+----------+--------+------+------------+---------+---------------+
+	| Table    | Non_unique | Key_name        | Seq_in_index | Column_name | Collation | Cardinality | Sub_part | Packed | Null | Index_type | Comment | Index_comment |
+	+----------+------------+-----------------+--------------+-------------+-----------+-------------+----------+--------+------+------------+---------+---------------+
+	| students |          0 | PRIMARY         |            1 | StuID       | A         |          25 |     NULL | NULL   |      | BTREE      |         |               |
+	| students |          1 | gender_and_name |            1 | Gender      | A         |          25 |     NULL | NULL   |      | BTREE      |         |               |
+	| students |          1 | gender_and_name |            2 | Name        | A         |          25 |     NULL | NULL   |      | BTREE      |         |               |
+	| students |          1 | age             |            1 | Age         | A         |          25 |     NULL | NULL   |      | BTREE      |         |               |
+	+----------+------------+-----------------+--------------+-------------+-----------+-------------+----------+--------+------+------------+---------+---------------+
+	4 rows in set (0.00 sec)
+
+	MariaDB [hellodb]> EXPLAIN SELECT Name,Gender FROM students WHERE Gender='M' UNION SELECT Name,Gender FROM teachers WHERE Gender='M';
+	+------+--------------+------------+------+-----------------+-----------------+---------+-------+------+--------------------------+
+	| id   | select_type  | table      | type | possible_keys   | key             | key_len | ref   | rows | Extra                    |
+	+------+--------------+------------+------+-----------------+-----------------+---------+-------+------+--------------------------+
+	|    1 | PRIMARY      | students   | ref  | gender_and_name | gender_and_name | 1       | const |   15 | Using where; Using index |
+	|    2 | UNION        | teachers   | ALL  | NULL            | NULL            | NULL    | NULL  |    4 | Using where              |
+	| NULL | UNION RESULT | <union1,2> | ALL  | NULL            | NULL            | NULL    | NULL  | NULL |                          |
+	+------+--------------+------------+------+-----------------+-----------------+---------+-------+------+--------------------------+
+	3 rows in set (0.00 sec)
+
+	MariaDB [hellodb]> EXPLAIN SELECT Name,Gender FROM students WHERE Gender='M' UNION SELECT Name,Gender FROM teachers WHERE Gender='M'\G
+	*************************** 1. row ***************************
+	           id: 1
+	  select_type: PRIMARY
+	        table: students
+	         type: ref
+	possible_keys: gender_and_name
+	          key: gender_and_name
+	      key_len: 1
+	          ref: const
+	         rows: 15
+	        Extra: Using where; Using index
+	*************************** 2. row ***************************
+	           id: 2
+	  select_type: UNION
+	        table: teachers
+	         type: ALL
+	possible_keys: NULL
+	          key: NULL
+	      key_len: NULL
+	          ref: NULL
+	         rows: 4
+	        Extra: Using where
+	*************************** 3. row ***************************
+	           id: NULL
+	  select_type: UNION RESULT
+	        table: <union1,2>
+	         type: ALL
+	possible_keys: NULL
+	          key: NULL
+	      key_len: NULL
+	          ref: NULL
+	         rows: NULL
+	        Extra:
+	3 rows in set (0.00 sec)
+
+	MariaDB [hellodb]>
+	MariaDB [hellodb]> CREATE INDEX tearcher_gender ON teachers(Gender,Name);
+	Query OK, 0 rows affected (0.02 sec)
+	Records: 0  Duplicates: 0  Warnings: 0
+
+	MariaDB [hellodb]> EXPLAIN SELECT Name,Gender FROM students WHERE Gender='M' UNION SELECT Name,Gender FROM teachers WHERE Gender='M';
+	+------+--------------+------------+------+-----------------+-----------------+---------+-------+------+--------------------------+
+	| id   | select_type  | table      | type | possible_keys   | key             | key_len | ref   | rows | Extra                    |
+	+------+--------------+------------+------+-----------------+-----------------+---------+-------+------+--------------------------+
+	|    1 | PRIMARY      | students   | ref  | gender_and_name | gender_and_name | 1       | const |   15 | Using where; Using index |
+	|    2 | UNION        | teachers   | ref  | tearcher_gender | tearcher_gender | 2       | const |    2 | Using where; Using index |
+	| NULL | UNION RESULT | <union1,2> | ALL  | NULL            | NULL            | NULL    | NULL  | NULL |                          |
+	+------+--------------+------------+------+-----------------+-----------------+---------+-------+------+--------------------------+
+	3 rows in set (0.00 sec)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+'实验4：设置查询缓存的允许缓存的上限为2G，缓存大小为100M，并开启查询缓存'
+	MariaDB [hellodb]> SHOW GLOBAL VARIABLES LIKE 'query_cache%';
+	+------------------------------+---------+
+	| Variable_name                | Value   |
+	+------------------------------+---------+
+	| query_cache_limit            | 1048576 |
+	| query_cache_min_res_unit     | 4096    |
+	| query_cache_size             | 0       |
+	| query_cache_strip_comments   | OFF     |
+	| query_cache_type             | ON      |
+	| query_cache_wlock_invalidate | OFF     |
+	+------------------------------+---------+
+	6 rows in set (0.01 sec)
+
+	MariaDB [hellodb]> SET GLOBAL query_cache_limit=1024*1024*2;
+	Query OK, 0 rows affected (0.00 sec)
+
+	MariaDB [hellodb]> SHOW GLOBAL VARIABLES LIKE 'query_cache%';
+	+------------------------------+---------+
+	| Variable_name                | Value   |
+	+------------------------------+---------+
+	| query_cache_limit            | 2097152 |
+	| query_cache_min_res_unit     | 4096    |
+	| query_cache_size             | 0       |
+	| query_cache_strip_comments   | OFF     |
+	| query_cache_type             | ON      |
+	| query_cache_wlock_invalidate | OFF     |
+	+------------------------------+---------+
+	6 rows in set (0.01 sec)
+
+	MariaDB [hellodb]> SET GLOBAL query_cache_size=100*1024*1024;
+	Query OK, 0 rows affected (0.00 sec)
+
+	MariaDB [hellodb]> SHOW GLOBAL VARIABLES LIKE 'query_cache%';
+	+------------------------------+-----------+
+	| Variable_name                | Value     |
+	+------------------------------+-----------+
+	| query_cache_limit            | 2097152   |
+	| query_cache_min_res_unit     | 4096      |
+	| query_cache_size             | 104857600 |
+	| query_cache_strip_comments   | OFF       |
+	| query_cache_type             | ON        |
+	| query_cache_wlock_invalidate | OFF       |
+	+------------------------------+-----------+
+	6 rows in set (0.00 sec)
+
+	MariaDB [hellodb]> SHOW GLOBAL STATUS LIKE 'Qcache%';
+	+-------------------------+-----------+
+	| Variable_name           | Value     |
+	+-------------------------+-----------+
+	| Qcache_free_blocks      | 1         |
+	| Qcache_free_memory      | 104839808 |
+	| Qcache_hits             | 0         |
+	| Qcache_inserts          | 0         |
+	| Qcache_lowmem_prunes    | 0         |
+	| Qcache_not_cached       | 0         |
+	| Qcache_queries_in_cache | 0         |
+	| Qcache_total_blocks     | 1         |
+	+-------------------------+-----------+
+	8 rows in set (0.00 sec)
+
+	MariaDB [hellodb]> SELECT * FROM students WHERE StuID=1;
+	+-------+-------------+-----+--------+---------+-----------+
+	| StuID | Name        | Age | Gender | ClassID | TeacherID |
+	+-------+-------------+-----+--------+---------+-----------+
+	|     1 | Shi Zhongyu |  22 | M      |       2 |         3 |
+	+-------+-------------+-----+--------+---------+-----------+
+	1 row in set (0.00 sec)
+
+	MariaDB [hellodb]> SELECT * FROM students WHERE StuID=4;
+	+-------+-----------+-----+--------+---------+-----------+
+	| StuID | Name      | Age | Gender | ClassID | TeacherID |
+	+-------+-----------+-----+--------+---------+-----------+
+	|     4 | Ding Dian |  32 | M      |       4 |         4 |
+	+-------+-----------+-----+--------+---------+-----------+
+	1 row in set (0.00 sec)
+
+	MariaDB [hellodb]> SELECT * FROM students WHERE StuID=5;
+	+-------+-----------+-----+--------+---------+-----------+
+	| StuID | Name      | Age | Gender | ClassID | TeacherID |
+	+-------+-----------+-----+--------+---------+-----------+
+	|     5 | Yu Yutong |  26 | M      |       3 |         1 |
+	+-------+-----------+-----+--------+---------+-----------+
+	1 row in set (0.00 sec)
+
+	MariaDB [hellodb]> SELECT * FROM students WHERE StuID=1;
+	+-------+-------------+-----+--------+---------+-----------+
+	| StuID | Name        | Age | Gender | ClassID | TeacherID |
+	+-------+-------------+-----+--------+---------+-----------+
+	|     1 | Shi Zhongyu |  22 | M      |       2 |         3 |
+	+-------+-------------+-----+--------+---------+-----------+
+	1 row in set (0.00 sec)
+
+	MariaDB [hellodb]> SELECT * FROM students WHERE StuID=4;
+	+-------+-----------+-----+--------+---------+-----------+
+	| StuID | Name      | Age | Gender | ClassID | TeacherID |
+	+-------+-----------+-----+--------+---------+-----------+
+	|     4 | Ding Dian |  32 | M      |       4 |         4 |
+	+-------+-----------+-----+--------+---------+-----------+
+	1 row in set (0.00 sec)
+
+	MariaDB [hellodb]> SELECT * FROM students WHERE StuID=5;
+	+-------+-----------+-----+--------+---------+-----------+
+	| StuID | Name      | Age | Gender | ClassID | TeacherID |
+	+-------+-----------+-----+--------+---------+-----------+
+	|     5 | Yu Yutong |  26 | M      |       3 |         1 |
+	+-------+-----------+-----+--------+---------+-----------+
+	1 row in set (0.00 sec)
+
+	MariaDB [hellodb]> SELECT * FROM students WHERE StuID=1;
+	+-------+-------------+-----+--------+---------+-----------+
+	| StuID | Name        | Age | Gender | ClassID | TeacherID |
+	+-------+-------------+-----+--------+---------+-----------+
+	|     1 | Shi Zhongyu |  22 | M      |       2 |         3 |
+	+-------+-------------+-----+--------+---------+-----------+
+	1 row in set (0.00 sec)
+
+	MariaDB [hellodb]> SELECT * FROM students WHERE StuID=5;
+	+-------+-----------+-----+--------+---------+-----------+
+	| StuID | Name      | Age | Gender | ClassID | TeacherID |
+	+-------+-----------+-----+--------+---------+-----------+
+	|     5 | Yu Yutong |  26 | M      |       3 |         1 |
+	+-------+-----------+-----+--------+---------+-----------+
+	1 row in set (0.00 sec)
+
+	MariaDB [hellodb]>
+	MariaDB [hellodb]> SHOW GLOBAL STATUS LIKE 'Qcache%';
+	+-------------------------+-----------+
+	| Variable_name           | Value     |
+	+-------------------------+-----------+
+	| Qcache_free_blocks      | 1         |
+	| Qcache_free_memory      | 104836224 |
+	| Qcache_hits             | 5         |
+	| Qcache_inserts          | 3         |
+	| Qcache_lowmem_prunes    | 0         |
+	| Qcache_not_cached       | 0         |
+	| Qcache_queries_in_cache | 3         |
+	| Qcache_total_blocks     | 8         |
+	+-------------------------+-----------+
+	8 rows in set (0.00 sec)
+
+	MariaDB [hellodb]> SELECT * FROM students WHERE StuID=5;
+	+-------+-----------+-----+--------+---------+-----------+
+	| StuID | Name      | Age | Gender | ClassID | TeacherID |
+	+-------+-----------+-----+--------+---------+-----------+
+	|     5 | Yu Yutong |  26 | M      |       3 |         1 |
+	+-------+-----------+-----+--------+---------+-----------+
+	1 row in set (0.00 sec)
+
+	MariaDB [hellodb]> SHOW GLOBAL STATUS LIKE 'Qcache%';
+	+-------------------------+-----------+
+	| Variable_name           | Value     |
+	+-------------------------+-----------+
+	| Qcache_free_blocks      | 1         |
+	| Qcache_free_memory      | 104836224 |
+	| Qcache_hits             | 6         |
+	| Qcache_inserts          | 3         |
+	| Qcache_lowmem_prunes    | 0         |
+	| Qcache_not_cached       | 0         |
+	| Qcache_queries_in_cache | 3         |
+	| Qcache_total_blocks     | 8         |
+	+-------------------------+-----------+
+	8 rows in set (0.00 sec)
+
+
+
+
+
+
+
+'实验5：开启二进制日志'
+	$ vim /etc/my.cnf.d/server.conf
+	[server]
+	log_bin=mysql-bin 
+	$ systemctl restart mariadb.service 
+	$ mysql 
+	> SHOW GLOBAL VARIABLES LIKE '%log_bin%';
+	+---------------------------------+-------+
+	| Variable_name                   | Value |
+	+---------------------------------+-------+
+	| log_bin                         | ON    |
+	| log_bin_trust_function_creators | OFF   |
+	| sql_log_bin                     | ON    |
+	+---------------------------------+-------+
+	3 rows in set (0.01 sec)
+
+	> SHOW BINLOG EVENTS IN 'mysql-bin.000004' FROM 313 LIMIT 2;
+	+------------------+-----+------------+-----------+-------------+-------------------------------------------------------------+
+	| Log_name         | Pos | Event_type | Server_id | End_log_pos | Info                                                        |
+	+------------------+-----+------------+-----------+-------------+-------------------------------------------------------------+
+	| mysql-bin.000004 | 313 | Query      |         1 |         423 | use `mydb`; INSERT INTO tb1 VALUES (4,'zhang san feng','M') |
+	| mysql-bin.000004 | 423 | Xid        |         1 |         450 | COMMIT /* xid=324 */                                        |
+	+------------------+-----+------------+-----------+-------------+-------------------------------------------------------------+
+	2 rows in set (0.00 sec)
+
+
+
+
+
+'实验6：备份数据库，完全备份'
+	1、备份整个数据库
+		$ mysqldump -E -R --triggers --master-data=2 -F -l --single-transaction --all-databases > /tmp/all-fullback-$(date +%F).sql
+		$ mysql 
+		> SHOW MASTER LOGS;
+		+------------------+-----------+
+		| Log_name         | File_size |
+		+------------------+-----------+
+		| mysql-bin.000001 |     30352 |
+		| mysql-bin.000002 |   1038814 |
+		| mysql-bin.000003 |      9235 |
+		| mysql-bin.000004 |       696 |
+		| mysql-bin.000005 |       245 |
+		+------------------+-----------+
+		> use hellodb;
+		> DELETE FROM students WHERE StuID=1;
+		> DELETE FROM students WHERE StuID=5;
+		> DELETE FROM students WHERE StuID=10;
+		> DELETE FROM students WHERE StuID=15;
+		> DELETE FROM students WHERE StuID=20;
+		$ cp /var/lib/mysql/mysql-bin.000005 /tmp/
+		$ rm -rf /var/lib/mysql/*
+
+		
+		开始恢复：
+		$ systemctl stop mariadb.service 
+		$ systemctl start mariadb.service 
+		$ mysql 
+		> SET @@session.sql_log_bin=OFF;
+		> \. /tmp/alldb_fullbackup-2017-06-20.sql
+
+
+
+
+'实验7：备份数据库脚本'
+
+$ cat mysql-backup.sh
+#!/bin/bash
+# MYSQLDBUSERNAME是MySQL数据库的用户名，可自定义
+MYSQLDBUSERNAME=root
+
+# MYSQLDBPASSWORD是MySQL数据库的密码，可自定义
+MYSQLDBPASSWORD="root@123"
+
+# MYSQBASEDIR是MySQL数据库的安装目录，--prefix=$MYSQBASEDIR，可自定义
+MYSQBASEDIR=/usr
+
+# MYSQL是mysql命令的绝对路径，可自定义
+MYSQL=$MYSQBASEDIR/bin/mysql
+
+# MYSQLDUMP是mysqldump命令的绝对路径，可自定义
+MYSQLDUMP=$MYSQBASEDIR/bin/mysqldump
+
+# BACKDIR是数据库备份的存放地址，可以自定义修改成远程地址
+BACKDIR=/var/backup/mysqldb
+
+# 获取当前时间，格式为：年-月-日，用于生成以这种时间格式的目录名称
+DATEFORMATTYPE1=$(date +%Y-%m-%d)
+
+# 获取当前时间，格式为：年月日时分秒，用于生成以这种时间格式的文件名称
+DATEFORMATTYPE2=$(date +%Y%m%d%H%M%S)
+
+# 数据库数据目录
+MYSQDATADIR=/var/lib/mysql
+
+# 如果mysql命令存在并可执行，则继续，否则将MYSQL设定为mysql，默认路径下的mysql
+[ -x $MYSQL ] || MYSQL=mysql
+
+# 如果mysqldump命令存在并可执行，则继续，否则将MYSQLDUMP设定为mysqldump，默认路径下的mysqldump
+[ -x $MYSQLDUMP ] || MYSQLDUMP=mysqldump
+
+# 如果不存在备份目录则创建这个目录
+[ -d ${BACKDIR} ] || mkdir -p ${BACKDIR}
+[ -d ${BACKDIR}/${DATEFORMATTYPE1} ] || mkdir ${BACKDIR}/${DATEFORMATTYPE1}
+
+# 获取MySQL中有哪些数据库，根据mysqldatadir下的目录名字来确认，此处可以自定义，TODO
+DBLIST=`ls -p $MYSQDATADIR | grep / |tr -d /`
+
+# 从数据库列表中循环取出数据库名称，执行备份操作
+for DBNAME in $DBLIST
+    # mysqldump skip one table
+    # -- Warning: Skipping the data of table mysql.event. Specify the --events option explicitly.
+    # mysqldump --ignore-table=mysql.event
+    # http://serverfault.com/questions/376904/mysqldump-skip-one-table
+    # --routines，备份存储过程和函数
+    # --events，跳过mysql.event表
+    # --triggers，备份触发器
+    # --single-transaction，针对InnoDB，在单次事务中通过转储所有数据库表创建一个一致性的快照，此选项会导致自动锁表，因此不需要--lock-all-tables
+    # --flush-logs，在dump转储前刷新日志
+    # --ignore-table，忽略某个表，--ignore-table=database.table
+    # --master-data=2 ，如果启用MySQL复制功能，则可以添加这个选项
+    # 将dump出的sql语句用gzip压缩到一个以时间命名的文件
+    do ${MYSQLDUMP} --user=${MYSQLDBUSERNAME} --password=${MYSQLDBPASSWORD} --routines --events --triggers --single-transaction --flush-logs --ignore-table=mysql.event --databases ${DBNAME} | gzip > ${BACKDIR}/${DATEFORMATTYPE1}/${DBNAME}-backup-${DATEFORMATTYPE2}.sql.gz
+
+    # 检查执行结果，如果错误代码为0则输出成功，否则输出失败
+    [ $? -eq 0 ] && echo "${DBNAME} has been backuped successful" || echo "${DBNAME} has been backuped failed"
+
+    # 等待5s，可自定义
+    /bin/sleep 5
+done
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	#!/bin/bash
+	#Script:MySQL_Backup.sh
+	#Version:Release 2.0
+	#Author:766083824@qq.com
+	#Date:2016-4-14
+	#以下配置信息请自己修改
+	mysql_user="root" #MySQL备份用户
+	mysql_password="123.com" #MySQL备份用户的密码
+	mysql_host="localhost" #要备份的主机，一般为localhost
+	mysql_port="3306" #MySQL端口号，一般为3306
+	backup_db_arr=("wgl" "mysql" "") #要备份的数据库名称，多个用空格分开隔开 如("db1" "db2" "db3")
+	backup_location='/mnt'  #备份数据存放位置，末尾请不要带"/",此项可以保持默认，程序会自动创建文件夹
+	expire_backup_delete="ON" #是否开启过期备份删除 ON为开启 OFF为关闭
+	expire_days=30 #过期时间天数 默认为三天，此项只有在expire_backup_delete开启时有效
+	#以下配置请保持默认不要修改
+	backup_time=`date +%Y-%m%d-%H-%M`  #定义备份详细时间
+	backup_Ymd=`date +%Y-%m-%d` #定义备份目录中的年月日时间
+	backup_3ago=`date -d '3 days ago' +%Y%m%d` #3天之前的日期
+	backup_dir=$backup_location/$backup_Ymd  #备份文件夹全路径
+	welcome_msg="---------------Welcome to use MySQL backup tools!---------------" #欢迎语
+	#判断MYSQL是否启动,mysql没有启动则备份退出
+	mysql_ps=`ps -ef |grep mysql |wc -l`
+	mysql_listen=`netstat -an |grep LISTEN |grep $mysql_port|wc -l`
+	if [ [$mysql_ps == 0] -o [$mysql_listen == 0] ]; then
+	        echo "ERROR:MySQL is not running! backup stop!"
+	        exit
+	else
+	        echo $welcome_msg
+	fi
+#连接到mysql数据库，无法连接则备份退出
+mysql -h$mysql_host -P$mysql_port -u$mysql_user -p$mysql_password <<end
+use mysql;
+select host,user from user where user='root' and host='localhost';
+exit
+end
+
+	flag=`echo $?`
+	if [ $flag != "0" ]; then
+	        echo "ERROR:Can't connect mysql server! backup stop!"
+	        exit
+	else
+	        echo "MySQL connect ok! Please wait......"
+	        #判断有没有定义备份的数据库，如果定义则开始备份，否则退出备份
+	        if [ "$backup_db_arr" != "" ];then
+	                #dbnames=$(cut -d ',' -f1-5 $backup_database)
+	                #echo "arr is (${backup_db_arr[@]})"
+	                for dbname in ${backup_db_arr[@]}
+	                do
+	                               echo "database $dbname backup start..."
+	                        `mkdir -p $backup_dir`
+	                        `mysqldump -h$mysql_host -P$mysql_port -u$mysql_user --routines --events --triggers --single-transaction -p$mysql_password $dbname > $backup_dir/$dbname-$backup_time.sql`
+	                        #`mysqldump -h$mysql_host -P$mysql_port -u$mysql_user --routines --events --triggers --flush-logs --single-transaction -p$mysql_password $dbname > $backup_dir/$dbname-$backup_time.sql`
+	                        flag=`echo $?` #本选项可以重新生成MySQL的二进制日志文件"--flush-logs"
+	                        if [ $flag == "0" ];then
+	                                echo "database $dbname success backup to $backup_dir/$dbname-$backup_time.sql"
+	                        else
+	                                echo "database $dbname backup fail!"
+	                        fi
+	                              
+	                done
+	        else
+	                echo "ERROR:No database to backup! backup stop"
+	                exit
+	        fi
+	        #如果开启了删除过期备份，则进行删除操作
+	        if [ "$expire_backup_delete" == "ON" -a  "$backup_location" != "" ];then
+	                `find $backup_location/ -type d -o -type f -ctime +$expire_days -exec rm -rf {} \;`
+	        `find $backup_location/ -type d -empty -exec rm -rf {} \;`
+	                 echo "Expired backup data delete complete!"
+	        fi
+	        echo "All database backup success! Think you!"
+	        exit
+	fi
+
+
+
+
+
+
+
+
+
+
+
+
+'脚本二：'
+
+#!/bin/bash
+#Author absolutely.xu@gmail.com
+MAXIMUM_BACKUP_FILES=10              #最大备份文件数
+BACKUP_FOLDERNAME="database_backup"  #数据库备份文件的主目录
+DB_HOSTNAME="localhost"              #mysql所在主机的主机名
+DB_USERNAME="root"                   #mysql登录用户名
+DB_PASSWORD="123456"                 #mysql登录密码
+DATABASES=(
+            "openfire"
+            "csp"                    #备份的数据库名
+)
+#=========
+echo "Bash Database Backup Tool"
+#CURRENT_DATE=$(date +%F)
+CURRENT_DATE=$(date +%F)              #定义当前日期为变量
+BACKUP_FOLDER="${BACKUP_FOLDERNAME}_${CURRENT_DATE}" #存放数据库备份文件的目录
+mkdir $BACKUP_FOLDER #创建数据库备份文件目录
+#统计需要被备份的数据库
+count=0
+while [ "x${DATABASES[count]}" != "x" ];do
+    count=$(( count + 1 ))
+done
+echo "[+] ${count} databases will be backuped..."
+#循环这个数据库名称列表然后逐个备份这些数据库
+for DATABASE in ${DATABASES[@]};do
+    echo "[+] Mysql-Dumping: ${DATABASE}"
+    echo -n "   Began:  ";echo $(date)
+    if $(mysqldump -h ${DB_HOSTNAME} -u${DB_USERNAME} -p${DB_PASSWORD} ${DATABASE} > "${BACKUP_FOLDER}/${DATABASE}.sql");then
+        echo "  Dumped successfully!"
+    else
+        echo "  Failed dumping this database!"
+    fi
+        echo -n "   Finished: ";echo $(date)
+done
+echo
+echo "[+] Packaging and compressing the backup folder..."
+tar -cv ${BACKUP_FOLDER} | bzip2 > ${BACKUP_FOLDER}.tar.bz2 && rm -rf $BACKUP_FOLDER
+BACKUP_FILES_MADE=$(ls -l ${BACKUP_FOLDERNAME}*.tar.bz2 | wc -l)
+BACKUP_FILES_MADE=$(( $BACKUP_FILES_MADE - 0 )) 
+#把已经完成的备份文件数的结果转换成整数数字
+ 
+echo
+echo "[+] There are ${BACKUP_FILES_MADE} backup files actually."
+#判断如果已经完成的备份文件数比最大备份文件数要大，那么用已经备份的文件数减去最大备份文件数,打印要删除旧的备份文件
+if [ $BACKUP_FILES_MADE -gt $MAXIMUM_BACKUP_FILES ];then
+    REMOVE_FILES=$(( $BACKUP_FILES_MADE - $MAXIMUM_BACKUP_FILES ))
+echo "[+] Remove ${REMOVE_FILES} old backup files."
+#统计所有备份文件，把最新备份的文件存放在一个临时文件里，然后删除旧的文件，循环出临时文件的备份文件从临时目录里移到当前目录
+    ALL_BACKUP_FILES=($(ls -t ${BACKUP_FOLDERNAME}*.tar.bz2))
+    SAFE_BACKUP_FILES=("${ALL_BACKUP_FILES[@]:0:${MAXIMUM_BACKUP_FILES}}")
+echo "[+] Safeting the newest backup files and removing old files..."
+    FOLDER_SAFETY="_safety"
+if [ ! -d $FOLDER_SAFETY ]
+then mkdir $FOLDER_SAFETY
+                                                                                                                    
+fi
+for FILE in ${SAFE_BACKUP_FILES[@]};do
+                                                                                                                      
+    mv -i  ${FILE}  ${FOLDER_SAFETY}
+done
+    rm -rf ${BACKUP_FOLDERNAME}*.tar.bz2
+    mv  -i ${FOLDER_SAFETY}/* ./
+    rm -rf ${FOLDER_SAFETY}
+#以下显示备份的数据文件删除进度，一般脚本都是放在crontab里，所以我这里只是为了显示效果，可以不选择这个效果。
+     
+CHAR=''
+for ((i=0;$i<=100;i+=2))
+do  printf "Removing:[%-50s]%d%%\r" $CHAR $i
+        sleep 0.1
+CHAR=#$CHAR
+done
+    echo
+fi
+
+
+
+

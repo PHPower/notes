@@ -1,0 +1,182 @@
+7.4课后 tar包安装MySQL5.7.18
+
+
+下载tar包：
+	$ wget ftp://172.16.0.1/pub/Sources/7.x86_64/mysql/mysql-5.7.18-linux-glibc2.5-x86_64.tar.gz
+	$ tar -xf mysql-5.7.18-linux-glibc2.5-x86_64.tar.gz -C /usr/local
+	$ cd /usr/local
+	$ ln -sv mysql-5.7.18-linux-glibc2.5-x86_64/ mysql
+	$ cd mysql
+	$ useradd -r mysql
+	$ chown -R root.mysql ./*
+
+
+添加命令路径：
+	$ vim /etc/profile.d/mysql.sh
+	$ . /etc/profile.d/mysql.sh
+
+
+1、创建初始化之前的所需文件
+	[root@centos6 mysql]# mkdir -pv /data/mysql
+	mkdir: created directory '/data'
+	mkdir: created directory '/data/mysql'
+	
+	[root@centos6 mysql]# chown -R mysql.mysql /data/mysql
+	[root@centos6 mysql]# ll
+	total 52
+	drwxr-xr-x  2 root mysql  4096 Apr 24 11:21 bin
+	-rw-r--r--  1 root mysql 17987 Mar 18 15:45 COPYING
+	drwxr-xr-x  2 root mysql  4096 Apr 24 11:21 docs
+	drwxr-xr-x  3 root mysql  4096 Apr 24 11:21 include
+	drwxr-xr-x  5 root mysql  4096 Apr 24 11:21 lib
+	drwxr-xr-x  4 root mysql  4096 Apr 24 11:21 man
+	-rw-r--r--  1 root mysql  2478 Mar 18 15:45 README
+	drwxr-xr-x 28 root mysql  4096 Apr 24 11:21 share
+	drwxr-xr-x  2 root mysql  4096 Apr 24 11:21 support-files
+	
+	[root@centos6 mysql]# mkdir etc
+	
+	[root@centos6 mysql]# cp /etc/my.cnf ./etc/
+	
+	[root@centos6 mysql]# vim ./etc/my.cnf
+	[mysqld]
+	datadir=/data/mysql
+	socket=/tmp/mysql.sock
+	user=mysql
+	innodb_file_per_table=ON
+	# Disabling symbolic-links is recommended to prevent assorted security risks
+	symbolic-links=0
+
+	[mysqld_safe]
+	log-error=/usr/local/mysql/logs/error.log
+	pid-file=/data/mysql/mysqld.pid
+
+
+	[root@centos6 mysql]# mkdir logs
+
+	[root@centos6 mysql]# touch logs/error.log
+
+	[root@centos6 mysql]# chown -R mysql.mysql logs/
+
+
+
+
+2、拷贝启动脚本
+	[root@centos6 mysql]# cp support-files/mysql.server /etc/init.d/mysqld
+	[root@centos6 mysql]# ll /etc/init.d/mysqld
+	-rwxr-xr-x 1 root root 10576 Apr 24 11:51 /etc/init.d/mysqld
+	[root@centos6 mysql]# chkconfig --add mysql
+	error reading information on service mysql: No such file or directory
+
+	[root@centos6 mysql]# chkconfig --add mysqld
+	[root@centos6 mysql]# chkconfig --list mysqld
+	mysqld         	0:off	1:off	2:on	3:on	4:on	5:on	6:off
+	
+
+3、执行初始化数据库
+	[root@centos6 mysql]# mysql_install_db --user=mysql --datadir=/data/mysql/ --basedir=/usr/local/mysql
+	2017-04-24 11:52:46 [WARNING] mysql_install_db is deprecated. Please consider switching to mysqld --initialize
+	2017-04-24 11:52:48 [WARNING] The bootstrap log isnt empty:
+	2017-04-24 11:52:48 [WARNING] 2017-04-24T03:52:46.355719Z 0 [Warning] --bootstrap is deprecated. Please consider using --initialize instead
+	2017-04-24T03:52:46.356575Z 0 [Warning] Changed limits: max_open_files: 1024 (requested 5000)
+	2017-04-24T03:52:46.356589Z 0 [Warning] Changed limits: table_open_cache: 431 (requested 2000)
+
+4、登陆数据库：
+	$ mysql 
+
+	如果需要密码登陆，则执行：
+	[root@centos6 mysql]# mysql_secure_installation
+
+	Securing the MySQL server deployment.
+
+	Connecting to MySQL server using password in '/root/.mysql_secret'
+	The 'validate_password' plugin is installed on the server.
+	The subsequent steps will run with the existing configuration
+	of the plugin.
+	Using existing password for root.
+
+	Estimated strength of the password: 100
+	Change the password for root ? ((Press y|Y for Yes, any other key for No)) : y
+
+	New password:Mcy@958623				'这里密码必须要复杂，否则无法创建'
+
+	Re-enter new password:
+
+	Estimated strength of the password: 50
+	Do you wish to continue with the password provided?(Press y|Y for Yes, any other key for No) : dadwa
+
+	New password:
+
+	Re-enter new password:
+
+	Estimated strength of the password: 50
+	Do you wish to continue with the password provided?(Press y|Y for Yes, any other key for No) : y
+	 ... Failed! Error: Your password does not satisfy the current policy requirements
+
+	New password:
+
+	Re-enter new password:
+
+	Estimated strength of the password: 100
+	Do you wish to continue with the password provided?(Press y|Y for Yes, any other key for No) : y
+	By default, a MySQL installation has an anonymous user,
+	allowing anyone to log into MySQL without having to have
+	a user account created for them. This is intended only for
+	testing, and to make the installation go a bit smoother.
+	You should remove them before moving into a production
+	environment.
+
+	Remove anonymous users? (Press y|Y for Yes, any other key for No) : y
+	Success.
+
+
+	Normally, root should only be allowed to connect from
+	'localhost'. This ensures that someone cannot guess at
+	the root password from the network.
+
+	Disallow root login remotely? (Press y|Y for Yes, any other key for No) : n
+
+	 ... skipping.
+	By default, MySQL comes with a database named 'test' that
+	anyone can access. This is also intended only for testing,
+	and should be removed before moving into a production
+	environment.
+
+
+	Remove test database and access to it? (Press y|Y for Yes, any other key for No) : y
+	 - Dropping test database...
+	Success.
+
+	 - Removing privileges on test database...
+	Success.
+
+	Reloading the privilege tables will ensure that all changes
+	made so far will take effect immediately.
+
+	Reload privilege tables now? (Press y|Y for Yes, any other key for No) : y
+	Success.
+
+	All done!
+
+
+	[root@centos6 mysql]# mysql -uroot -p
+	Enter password:Mcy@958623
+	
+	Welcome to the MySQL monitor.  Commands end with ; or \g.
+	Your MySQL connection id is 6
+	Server version: 5.7.18 MySQL Community Server (GPL)
+
+	Copyright (c) 2000, 2017, Oracle and/or its affiliates. All rights reserved.
+
+	Oracle is a registered trademark of Oracle Corporation and/or its
+	affiliates. Other names may be trademarks of their respective
+	owners.
+
+	Type 'help;' or '\h' for help. Type '\c' to clear the current input statement.
+
+
+
+
+
+
+

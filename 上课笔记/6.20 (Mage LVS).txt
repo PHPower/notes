@@ -1,0 +1,633 @@
+6.20 (Mage LVS)
+
+'Linux Cluster：'
+	
+	Cluster：计算机集合，为解决某个特定问题组合起来形成的单个系统；
+
+	'Linux Cluster类型：'
+		LB：Load Balancing，负载均衡；(向外扩展)
+		HA：High Availiablity，高可用；(最少2个节点，反而2个节点会出现问题)
+			A(可用时间)=MTBF[平均无故障时间]/（MTBF[平均无故障时间]+MTTR[平均修复时间]）
+				(0,1)：90%, 95%, 99%, 99.5%,  99.9%, 99.99%(大多数网站达到这个标准就很高), 99.999%(主要的关键服务，卫星发射), 99.9999%
+		
+		HP：High Performance，高性能；'超算集群'(向外扩展)
+			'分割计算量'
+		
+			www.top500.org
+			
+		'分布式系统：'(向外扩展)
+			分布式存储：在元数据服务器(name node)上做数据索引，根据索引进行调度到存储服务器(data node)
+				冗余：做文件冗余(文件存两份)
+
+			分布式计算：把大任务切成小任务，每一台服务器处理几个小任务，处理完成后；再合并，再分割。。。最后处理完毕
+
+
+		
+	'系统扩展方式：'
+		Scale UP：向上扩展(性价比很低，制造能力有限)
+			用性能好的替代性能低的机器
+
+		Scale Out：向外扩展：主流解决办法(主机量越多，协调越难，性能提升可能遇到拐点)
+			'Cluster'：集群
+			用更多的主机，来均衡一台主机的请求以及任务
+			将任务分散处理
+
+
+
+
+'LB	Cluster：Load Balancing'
+	 
+	'LB Cluster的实现：'
+		硬件：
+			F5 Big-IP
+			Citrix Netscaler
+			A10 A10
+		软件：(开源)
+			lvs：Linux Virtual Server 中国 章文嵩
+			nginx
+			haproxy 					
+			ats：apache traffic server  雅虎公司共享给apache 
+			perlbal
+			pound
+			
+		'基于工作的协议层次划分：'
+			传输层（通用）：（DPORT）
+				lvs：
+				nginx：（stream）模拟四层调度
+				haproxy：（mode tcp）模拟四层调度
+
+			应用层（专用）：（自定义的请求模型分类）
+				'proxy server：'
+					http：nginx(http), httpd, haproxy(mode http), ...
+					
+					fastcgi：nginx, httpd, ...
+					
+					mysql：mysql-proxy, PorxySQL, ...
+					...
+					
+			站点指标：
+				PV：Page View
+				UV：Unique Vistor
+				IP：
+	
+		'会话保持：'
+			(1) session sticky：会话粘性(把一个会话绑定一个主机之上)
+				Source IP：用户IP
+				Cookie：识别用户身份ID(更加精准的识别用户)
+					FAT Cookie：保存用户浏览过的数据(保存在本地)
+					THIN Cookie：保存用户浏览站点的数据(保存在站点的服务器上的每个用户的session的进程的内存空间中)
+						记录用户的session，在服务器上对应用户的session进程创建内存空间保存数据
+
+			(2) session replication; 复制集群；不适合太大规模集群
+				session cluster
+			(3) session server：共享会话服务器(内存级别的服务器)
+
+
+
+		'单点故障：'single point of failure：SPoF	
+			解决办法：
+				1) 冗余
+				2) HA高可用
+		
+
+		'负载均衡调度器：'(更大的单点---单点故障-->冗余避免单点故障-->HA-->主调度器向冗余主机发送心跳信息)
+			由调度器决定用户请求分发给哪台服务器
+
+			'由IP+调度服务组成'
+
+			通过调度算法决定将下次请求发给谁：
+				'调度算法：'
+					1、round robin：轮询
+					2、weight round robin：加权轮询
+					3、least connection：最少连接调度
+					4、weight least connection：加权最少连接调度
+					5、
+
+		'高可用集群(High Availiablity'：
+			提升服务器可用性
+
+			故障转移(failover)：一旦主调用器失效，把资源转移到冗余主机上
+			故障(failback)：
+
+			防止在故障转移之后，主调用器未失效，抢冗余主机上的资源：
+				需要在转移之后，Kill掉主调用器(通过电源交换机，断掉主调用器的电源)
+
+
+
+
+
+
+
+
+	'lvs：Linux Virtual Server '
+		VS: Virtual Server
+		RS: Real Server
+
+		调度能力有限
+		
+		'在LVS内核级的并发：最大500w的并发'
+			一般也就是几十万，还是BAT的大公司
+			小公司一般用nginx
+
+			'lvs+nginx/haproxy 进行分级调度'
+
+		'lvs主要有三部分组成：'
+			负载调度器（load balancer），它是整个集群对外面的前端机，负责将客户的请求发送到一组 服务器上执行，而客户认为服务是来自一个IP地址上的。
+			它可以是用IP负载均衡技术的负载 调度器，也可以是基于内容请求分发的负载调度器，还可以是两者的结合。
+
+			服务器池（server pool），是一组真正执行客户请求的服务器，执行的服务有WEB、MAIL、 FTP和DNS等。 
+			
+			后端存储（backend storage），它为服务器池提供一个共享的存储区，这样很容易使得服务器池拥有相同的内容，提供相同的服务。
+
+		
+		作者：章文嵩；alibaba --> didi
+		
+		'l4：四层路由器，四层交换机；'
+			VS：根据请求报文的目标IP和目标协议及端口将其调度转发至某RealServer，根据'调度算法'来挑选RS；
+		
+
+		'iptables/netfilter：'
+			iptables：用户空间的管理工具；
+			netfilter：内核空间上的框架；
+				流入：PREROUTING --> INPUT 
+				流出：OUTPUT --> POSTROUTING
+				转发：PREROUTING --> FORWARD --> POSTROUTING
+				
+			DNAT：目标地址转换； PREROUTING；
+			SNAT：源地址转换；	 POSTROUTING；
+
+			'iptables与ipvs不要同时使用'
+			
+		
+		'lvs: ipvsadm/ipvs'
+			ipvsadm：用户空间的命令行工具，规则管理器，用于管理集群服务及相关的RealServer；
+			ipvs：工作于内核空间的netfilter的INPUT钩子之上的框架；
+		
+
+		'lvs集群类型中的术语：'
+			vs：Virtual Server / Director / Dispatcher / Balancer
+				'Director'
+
+			rs：Real Server / upstream server / backend server
+
+			CIP：Client IP
+			VIP: Virtual serve IP
+			RIP: Real server IP
+			DIP: Director IP
+			
+			CIP <--> VIP == DIP <--> RIP 
+			
+		
+		'lvs集群的类型：'
+			lvs-nat：修改请求报文的目标IP；多目标IP的DNAT；
+			lvs-dr：操纵封装新的MAC地址 --> MAC地址是后端RS的mac地址
+			lvs-tun：在原请求IP报文之外新加一个IP首部 --> 新加的IP首部是挑选出的RS的IP首部
+				IP隧道：IP运载IP
+
+			lvs-fullnat：修改请求报文的源和目标IP；(非标准类型)
+
+
+
+			'lvs-nat：(生产环境一般不会较多使用此模型)'
+				多目标IP的DNAT，通过将请求报文中的目标地址和目标端口修改为某挑出的RS的RIP和PORT实现转发；
+				
+				（1）RIP和DIP必须在同一个IP网络，且应该使用私网地址；RS的网关要指向DIP；
+				（2）请求报文和响应报文都必须经由Director转发；Director易于成为系统瓶颈；
+				（3）支持端口映射，可修改请求报文的目标PORT；
+				（4）vs必须是Linux系统，rs可以是任意系统；
+
+				集群节点跟directory必须在同一个IP网络中；
+				RIP通常是私有地址，仅用于各集群节点之间的通信；
+				director位于client和real server之间，并负责处理进出的所有通信
+				realserver必须将网关指向DIP；
+				支持端口映射
+				realserver可以使用任意OS
+				较大规模应用场景中，director易成为系统瓶颈
+
+				
+			'lvs-dr：'
+				Direct Routing，直接路由；
+				
+				通过为请求报文重新封装一个MAC首部进行转发，源MAC是DIP所在的接口的MAC，目标MAC是某挑选出的RS的RIP所在接口的MAC地址；源IP/PORT，以及目标IP/PORT均保持不变；
+				
+				Director和各RS都得配置使用VIP；
+				
+				(1) 确保前端路由器将目标IP为VIP的请求报文发往Director：
+					(a) 在前端网关做静态绑定；
+					(b) 在RS上使用arptables；
+					(c) 在RS上修改内核参数以限制arp通告及应答级别；
+						arp_announce
+						arp_ignore
+				(2) RS的RIP可以使用私网地址，也可以是公网地址；RIP与DIP在同一IP网络；RIP的网关不能指向DIP，以确保响应报文不会经由Director；
+				(3) RS跟Director要在同一个物理网络；
+				(4) 请求报文要经由Director，但响应不能经由Director，而是由RS直接发往Client；
+				(5) 不支持端口映射；
+				(6) 各RS必须有VIP地址(拒绝ARP广播)
+
+				集群节点跟directory必须在同一个物理网络中；
+				RIP可以使用公网地址，实现便捷的远程管理和监控
+				director仅负责处理入站请求，响应报文由realserver直接发往客户端
+				realserver不能将网关指向DIP
+				不支持端口映射
+
+
+				
+			'lvs-tun：'(很少使用)
+				转发方式：不修改请求报文的IP首部（源IP为CIP，目标IP为VIP），而是在原IP报文之外再封装一个IP首部（源IP是DIP，目标IP是RIP），将报文发往挑选出的目标RS；RS直接响应给客户端（源IP是VIP，目标IP是CIP）；
+				
+				(1) DIP, VIP, RIP都应该是公网地址；
+				(2) RS的网关不能，也不可能指向DIP；
+				(3) 请求报文要经由Director，但响应不能经由Director；
+				(4) 不支持端口映射；
+				(5) RS的OS得支持隧道功能；
+				(6) 各RS必须有VIP地址(无需拒绝ARP广播)
+
+				集群节点可以跨越互联网
+				RIP必须是公网地址(可路由地址)
+				director仅负责处理入站请求，响应报文由realserver直接发往客户端
+				realserver不能将网关指向director
+				只有支持隧道功能的OS才能用于realserevr
+				不支持端口映射
+
+				'MTU：最大传输单元'
+					1500默认
+
+
+				
+			'lvs-fullnat：'(非标准类型)
+				通过同时修改请求报文的源IP地址和目标IP地址进行转发；
+					CIP <--> DIP 
+					VIP <--> RIP 
+				
+				(1) VIP是公网地址，RIP和DIP是私网地址，且通常不在同一IP网络；因此，RIP的网关一般不会指向DIP；
+				(2) RS收到的请求报文源地址是DIP，因此，只能响应给DIP；但Director还要将其发往Client；
+				(3) 请求和响应报文都经由Director；
+				(4) 支持端口映射；
+				
+				注意：此类型默认不支持；需要向内核打补丁
+				
+				
+		'总结：'
+			lvs-nat, lvs-fullnat：请求和响应报文都经由Director；
+				lvs-nat：RIP的网关要指向DIP；
+				lvs-fullnat：RIP和DIP未必在同一IP网络，但要能通信；
+			lvs-dr, lvs-tun：请求报文要经由Director，但响应报文由RS直接发往Client；
+				lvs-dr：通过封装新的MAC首部实现，通过MAC网络转发；
+				lvs-tun：通过在原IP报文之外封装新的IP首部实现转发，支持远距离通信；
+		
+
+
+'要求：用自己的方式讲明白lvs的四种集群类型概念'
+
+	
+
+	'ipvs scheduler：'
+		根据其调度时是否考虑各RS当前的负载状态，可分为静态方法和动态方法两种：
+
+		长连接应该考虑负载、短连接其实无需考虑
+			
+			'静态方法：仅根据算法本身进行调度；'
+				RR：roundrobin，轮询；无状态调度。
+					当服务器的权值为零时，表示该服务器不可用而不 被调度。这样做的目的是将服务器切出服务（如屏蔽服务器故障和系统维护），同时与其他加权 算法保持一致。
+
+				WRR：Weighted RR，加权轮询；无状态调度。
+				SH：Source Hashing，实现session sticky，'源IP地址hash'；将来自于同一个IP地址的请求始终发往第一次挑中的RS，从而实现会话绑定；
+				DH：Destination Hashing；目标地址哈希，将发往同一个目标地址的请求始终转发至第一次挑中的RS，典型使用场景是'正向代理缓存场景中的负载均衡；'
+			
+
+			'动态方法：主要根据每RS当前的负载状态及调度算法进行调度；'
+				Overhead=负载值
+			
+				LC：least connections(最小连接调度)
+					Overhead=activeconns(活动连接)*256+inactiveconns(非活动连接)
+					谁的overhead小，挑谁
+
+					当各个服务器有相同的处理性能时，最小连接调度算法能把负载变化大的请求分布平滑到各个 服务器上，所有处理时间比较长的请求不可能被发送到同一台服务器上。
+					但是，当各个服务器 的处理能力不同时，该算法并不理想
+
+				WLC：Weighted LC(加权最小连接调度)  'lvs默认算法' 大多数情况下，WLC能使用大多数需求
+					Overhead=(activeconns*256+inactiveconns)/weight
+
+
+				SED：Shortest Expection Delay(最短预期延时调度)
+					Overhead=(activeconns+1)*256/weight
+					权重越大，选谁
+
+				NQ：Never Queue(不排队调度)
+					在请求没有的时候，分别平均分给每个RS，等每个RS都有了请求之后；再根据SED分配
+
+				'SED、NQ会增加调度器的负载'
+				
+				LBLC：Locality-Based LC，动态的DH算法；
+				LBLCR：LBLC with Replication，带复制功能的LBLC；
+		
+
+
+
+	
+	'ipvsadm/ipvs：'
+		集群和集群之上的各RS是分开管理的；
+			集群定义
+			RS定义
+	
+		ipvs：
+			~]# grep -i -C 10 "ipvs" /boot/config-VERSION-RELEASE.x86_64
+			
+				支持的协议：TCP， UDP， AH， ESP， AH_ESP,  SCTP；
+				
+			ipvs集群：
+				集群服务
+				服务上的RS
+				
+		'ipvsadm：'
+			程序包：ipvsadm
+				Unit File: ipvsadm.service
+				主程序：/usr/sbin/ipvsadm
+				规则保存工具：/usr/sbin/ipvsadm-save
+				规则重载工具：/usr/sbin/ipvsadm-restore
+				配置文件：/etc/sysconfig/ipvsadm-config
+			
+			
+			'ipvsadm命令：'
+				核心功能：
+					集群服务管理：增、删、改；
+					集群服务的RS管理：增、删、改；
+					查看：
+					
+				ipvsadm -A|E -t|u|f service-address [-s scheduler] [-p [timeout]] [-M netmask] [--pe persistence_engine] [-b sched-flags]
+				ipvsadm -D -t|u|f service-address
+				ipvsadm -C
+				ipvsadm -R
+				ipvsadm -S [-n]
+				ipvsadm -a|e -t|u|f service-address -r server-address [options]
+				ipvsadm -d -t|u|f service-address -r server-address
+				ipvsadm -L|l [options]
+				ipvsadm -Z [-t|u|f service-address]
+
+				
+				'管理集群服务：增、改、删；'
+					增、改：
+						ipvsadm -A|E -t|u|f service-address [-s scheduler] [-p [timeout]]
+						
+					删：
+						ipvsadm -D -t|u|f service-address
+						
+					service-address：
+						-t|u|f：
+							-t: TCP协议的端口，VIP:TCP_PORT
+							-u: UDP协议的端口，VIP:UDP_PORT
+							-f：firewall MARK，是一个数字；
+							
+					[-s scheduler]：指定集群的调度算法，默认为wlc；
+				
+
+
+
+				'管理集群上的RS：增、改、删；'
+					增、改：
+						ipvsadm -a|e  -t|u|f  service-address -r server-address [-g|i|m] [-w weight]
+				
+					删：
+						ipvsadm -d  -t|u|f  service-address -r server-address
+						
+					server-address：
+						rip[:port]  --> 除非使用NAT 端口映射 需要指定
+						
+					'选项：'
+						'lvs类型：'
+							-g: gateway, dr类型(默认模型)
+							-i: ipip, tun类型
+							-m: masquerade, nat类型
+							
+						-w weight：权重；定义服务器权重(如果scheduler不支持权重，此项无意义)
+				
+				
+				'清空定义的所有内容：'
+					ipvsadm -C：清空ipvs规则
+
+				
+				'查看：'
+					ipvsadm -L|l [options]
+						--numeric, -n ： numeric output of addresses and ports：数字格式；显示主机地址和端口号
+
+						--exact：expand numbers (display exact values)： 精确显示
+						
+						--connection， -c：output of current IPVS connections：显示当前连接数
+						
+						--stats：output of statistics information：统计数据信息
+
+						--rate ：output of rate information：输出速率信息
+							CPS：connections per second：每秒连接数
+							InPPS：每秒入站的报文个数
+							OutPPS：每秒出站的报文个数
+							InBPS：每秒入站的字节个数
+							OutBPS：每秒出站的字节个数
+
+						--timeout：tcp、tcpfin、udp的超时时间限定(可以修改)
+					
+
+				'保存和重载：'
+					ipvsadm -S = ipvsadm-save： 保存规则   ('如果stop ipvsadm，则会自动保存规则')
+						$ ipvsadm -S > /PATH/TO/SOMEFILE
+
+					ipvsadm -R = ipvsadm-restore ：载入此前的规则
+						$ ipvsadm -R < /PATH/FROM/SOMEFILE
+				
+				'清空计数器：'
+					ipvsadm -Z
+
+
+				'配置VS的Sorry Server'： 
+					1、安装一个nginx
+
+					2、配置index.html
+						$ cat /usr/share/nginx/html/index.html
+						<h1>Sorry server</h1>
+
+					3、添加一个realserver
+						$ ipvsadm -a -t 172.16.1.100:80 -r 172.16.1.100 -g
+
+					4、停掉之前的realserver，对sorry Server进行测试
+
+
+	'负载均衡集群设计时要注意的问题：'
+		(1) 是否需要会话保持； 动态站点
+		(2) 是否需要共享存储；看网站是否允许用户上传数据
+			共享存储：NAS， SAN， DS（分布式存储）
+			数据同步：
+
+		(3)各节点之间的时间偏差不应该超出 1s(一秒钟)
+		
+				'课外作业：rsync+inotify实现数据同步 '
+				
+	'lvs-nat：'
+			
+		设计要点：
+			(1) RIP与DIP在同一IP网络, RIP的网关要指向DIP；
+			(2) 支持端口映射；
+			(3) Director要打开核心转发功能；
+			
+
+		实践作业（博客）：负载均衡两个php应用（wordpress，discuzx）；
+			测试：(1) 是否需要会话保持；(2) 是否需要共享存储；
+
+
+
+	'lvs-dr：'
+		
+		dr模型中，各主机上均需要配置VIP，解决地址冲突的方式有三种：
+			(1) 在前端网关做静态绑定；
+			(2) 在各RS使用'arptables命令'；
+			(3) 在各RS修改内核参数，来限制arp响应和通告的级别；
+				'限制响应级别：arp_ignore'
+					0：默认值，表示可使用本地任意接口上配置的任意地址进行响应；
+					1: 仅在请求的目标IP配置在本地主机的接收到请求报文接口上时，才给予响应；
+					2: 
+					4-7: 保留
+					8: 总是不响应所有地址;
+
+				'限制通告级别：arp_announce' 
+					0：默认值，把本机上的所有接口的所有信息向每个接口上的网络进行通告；
+					1：尽量避免向非直接连接网络进行通告；
+					2：总是避免向非本网络通告；
+
+			(4)配置VIP在RS的lo网卡的别名上：
+				lo:0 
+				设置 arp_ignore:1
+					arp_announce:2
+
+		'实验：VIP/RIP/DIP在同一网段'
+			每个服务器都只有1个网卡
+
+			1、三台主机都在同一网段
+
+			2、
+
+
+
+		'实验：不在同一网段'
+			VIP与DIR/RIP不在一个网段
+
+		实践作业（博客）：负载均衡两个php应用（wordpress，discuzx）；
+			测试：(1) 是否需要会话保持；(2) 是否需要共享存储；
+			
+		RS的预配置脚本：
+			#!/bin/bash
+			#
+			vip=10.1.0.5
+			mask='255.255.255.255'
+
+			case $1 in
+			start)
+				echo 1 > /proc/sys/net/ipv4/conf/all/arp_ignore
+				echo 1 > /proc/sys/net/ipv4/conf/lo/arp_ignore
+				echo 2 > /proc/sys/net/ipv4/conf/all/arp_announce
+				echo 2 > /proc/sys/net/ipv4/conf/lo/arp_announce
+
+				ifconfig lo:0 $vip netmask $mask broadcast $vip up
+				#设定经由的设备
+				route add -host $vip dev lo:0 
+				;;
+			stop)
+				ifconfig lo:0 down
+
+				echo 0 > /proc/sys/net/ipv4/conf/all/arp_ignore
+				echo 0 > /proc/sys/net/ipv4/conf/lo/arp_ignore
+				echo 0 > /proc/sys/net/ipv4/conf/all/arp_announce
+				echo 0 > /proc/sys/net/ipv4/conf/lo/arp_announce
+
+				;;
+			*) 
+				echo "Usage $(basename $0) start|stop"
+				exit 1
+				;;
+			esac					
+
+		VS的配置脚本：
+			#!/bin/bash
+			#
+			vip='10.1.0.5'
+			iface='eno16777736:0'
+			mask='255.255.255.255'
+			port='80'
+			rs1='10.1.0.7'
+			rs2='10.1.0.8'
+			scheduler='wrr'
+			type='-g'
+
+			case $1 in
+			start)
+				ifconfig $iface $vip netmask $mask broadcast $vip up
+				iptables -F
+				
+				ipvsadm -A -t ${vip}:${port} -s $scheduler
+				ipvsadm -a -t ${vip}:${port} -r ${rs1} $type -w 1
+				ipvsadm -a -t ${vip}:${port} -r ${rs2} $type -w 1
+				;;
+			stop)
+				ipvsadm -C
+				ifconfig $iface down
+				;;
+			*)
+				echo "Usage $(basename $0) start|stop"
+				exit 1
+				;;
+			esac				
+
+		课外扩展作业：vip与dip/rip不在同一网段的实验环境设计及配置实现； 
+		
+		博客作业：lvs的详细应用
+			讲清楚类型、调度方法；并且给出nat和dr类型的设计拓扑及具体实现；
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+									
+
+
+
+
+

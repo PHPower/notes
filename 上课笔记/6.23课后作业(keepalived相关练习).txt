@@ -1,0 +1,921 @@
+6.23课后作业(keepalived相关联系)
+
+
+'实验拓扑网络：'
+
+	VS1 	172.16.3.10
+	VS2 	172.16.3.40
+
+	RS1 	172.16.3.20
+	RS2 	172.16.3.30
+
+	VIP1 	172.16.3.100 
+	VIP2 	172.16.3.200
+
+
+'所需要安装的安装包：'
+	httpd nginx ipvsadm keepalived
+
+'执行的脚本：'(双主)
+
+	#!/bin/bash
+	#
+	vip=172.16.3.100
+	vip1=172.16.3.200
+	mask=255.255.255.255
+
+	case $1 in
+	start)
+	    echo 1 > /proc/sys/net/ipv4/conf/all/arp_ignore
+	    echo 1 > /proc/sys/net/ipv4/conf/lo/arp_ignore
+	    echo 2 > /proc/sys/net/ipv4/conf/all/arp_announce
+	    echo 2 > /proc/sys/net/ipv4/conf/lo/arp_announce
+
+	    ifconfig lo:0 $vip netmask $mask broadcast $vip up
+	    route add -host $vip dev lo:0
+	    ifconfig lo:1 $vip1 netmask $mask broadcast $vip1 up
+	    route add -host $vip1 dev lo:1
+	    ;;
+	stop)
+	    ifconfig lo:0 down
+	    ifconfig lo:1 down
+
+	    echo 0 > /proc/sys/net/ipv4/conf/all/arp_ignore
+	    echo 0 > /proc/sys/net/ipv4/conf/lo/arp_ignore
+	    echo 0 > /proc/sys/net/ipv4/conf/all/arp_announce
+	    echo 0 > /proc/sys/net/ipv4/conf/lo/arp_announce
+
+	    ;;
+	*)
+	    echo "Usage $(basename $0) start|stop"
+	    exit 1
+	    ;;
+	esac
+
+
+
+
+
+
+
+'做以下实验的前提：'
+
+	1、时间同步
+		$ ntpdate 172.16.0.1
+	2、添加host信息、修改各主机名
+		$ vim /etc/hosts
+		172.16.3.10 vs1
+		172.16.3.60 vs2
+		172.16.3.20 node1
+		172.16.3.30 node2
+	3、配置4台节点无密码登陆：
+		$ ssh-keygen -t rsa 
+		$ ssh-copy-id -i .ssh/id_rsa.pub root@172.16.3.10
+
+		$ ssh-keygen -t rsa 
+		$ ssh-copy-id -i .ssh/id_rsa.pub root@172.16.3.20
+
+		$ ssh-keygen -t rsa 
+		$ ssh-copy-id -i .ssh/id_rsa.pub root@172.16.3.30
+
+		$ ssh-keygen -t rsa 
+		$ ssh-copy-id -i .ssh/id_rsa.pub root@172.16.3.60
+
+	4、配置vip到各RS节点也就是node节点：
+		使用脚本：
+		$ vim setparam.sh 
+		#!/bin/bash
+		#
+		vip=172.16.3.100
+		mask=255.255.255.255
+
+		case $1 in
+		start)
+		    echo 1 > /proc/sys/net/ipv4/conf/all/arp_ignore
+		    echo 1 > /proc/sys/net/ipv4/conf/lo/arp_ignore
+		    echo 2 > /proc/sys/net/ipv4/conf/all/arp_announce
+		    echo 2 > /proc/sys/net/ipv4/conf/lo/arp_announce
+
+		    ifconfig lo:0 $vip netmask $mask broadcast $vip up
+		    route add -host $vip dev lo:0
+		    ;;
+		stop)
+		    ifconfig lo:0 down
+
+		    echo 0 > /proc/sys/net/ipv4/conf/all/arp_ignore
+		    echo 0 > /proc/sys/net/ipv4/conf/lo/arp_ignore
+		    echo 0 > /proc/sys/net/ipv4/conf/all/arp_announce
+		    echo 0 > /proc/sys/net/ipv4/conf/lo/arp_announce
+
+		    ;;
+		*)
+		    echo "Usage $(basename $0) start|stop"
+		    exit 1
+		    ;;
+		esac
+		
+		执行脚本：
+		$ chmod +x setparam.sh 
+		
+		$ scp -p setparam.sh node1
+		$ scp -p setparam.sh node2
+		
+		$ bash -x setparam.sh
+
+	5、RS节点安装httpd/nginx，并创建测试页
+		$ yum -y install httpd nginx 
+		$ echo "Node1 Test Page  Node1" > /var/www/html/index.html
+		$ echo "Node2 Test Page  Node2" > /var/www/html/index.html
+		$ systemctl start httpd
+
+
+
+'实验：实现单虚拟路由器，主备功能的LVS调度器高可用Keepalivied'
+
+	1、安装keepalived
+		$ yum install keepalived
+		$ rpm -ql keepalived
+
+	2、修改keepalived配置文件
+		'RS1:'
+
+		$ vim /etc/keepalived/keepalived.conf
+		! Configuration File for keepalived
+
+		global_defs {
+		   notification_email {
+		     root@localhost
+		   }
+		   notification_email_from KAserver@localhost
+		   smtp_server 127.0.0.1
+		   smtp_connect_timeout 30
+		   router_id rs1
+		}
+
+		vrrp_instance VI_1 {
+		    state MASTER
+		    interface eno16777736
+		    virtual_router_id 66
+		    priority 100
+		    advert_int 1
+		    authentication {
+		        auth_type PASS
+		        auth_pass maxie95
+		    }
+		    virtual_ipaddress {
+		        172.16.3.100/16 dev eno16777736 label eno16777736:0
+		    }
+		}
+
+		virtual_server 172.16.3.100 80 {
+		    delay_loop 3
+		    lb_algo rr
+		    lb_kind DR
+		    #nat_mask 255.255.255.0
+		    protocol TCP
+
+		    real_server 172.16.3.20 80 {
+		        weight 1
+		        HTTP_GET {
+		            url {
+		              path /
+		              status_code 200
+		            }
+		            connect_timeout 3
+		            nb_get_retry 3
+		            delay_before_retry 3
+		        }
+		    }
+		    real_server 172.16.3.30 80 {
+		        weight 2
+		        HTTP_GET {
+		            url {
+		              path /
+		              status_code 200
+		            }
+		            connect_timeout 3
+		            nb_get_retry 3
+		            delay_before_retry 3
+		        }
+		    }
+		}
+
+
+		'RS2:'
+
+		$ vim /etc/keepalived/keepalived.conf
+		! Configuration File for keepalived
+
+		global_defs {
+		   notification_email {
+		     root@localhost
+		   }
+		   notification_email_from KAserver@localhost
+		   smtp_server 127.0.0.1
+		   smtp_connect_timeout 30
+		   router_id rs2
+		}
+
+		vrrp_instance VI_1 {
+		    state BACKUP
+		    interface eno16777736
+		    virtual_router_id 66
+		    priority 95
+		    advert_int 1
+		    authentication {
+		        auth_type PASS
+		        auth_pass maxie95
+		    }
+		    virtual_ipaddress {
+		        172.16.3.100/16 dev eno16777736 label eno16777736:0
+		    }
+		}
+
+		virtual_server 172.16.3.100 80 {
+		    delay_loop 3
+		    lb_algo rr
+		    lb_kind DR
+		    #nat_mask 255.255.255.0
+		    protocol TCP
+
+		    real_server 172.16.3.20 80 {
+		        weight 1
+		        HTTP_GET {
+		            url {
+		              path /
+		              status_code 200
+		            }
+		            connect_timeout 3
+		            nb_get_retry 3
+		            delay_before_retry 3
+		        }
+		    }
+		    real_server 172.16.3.30 80 {
+		        weight 2
+		        HTTP_GET {
+		            url {
+		              path /
+		              status_code 200
+		            }
+		            connect_timeout 3
+		            nb_get_retry 3
+		            delay_before_retry 3
+		        }
+		    }
+		}
+
+
+	3、启动服务，安装ipvsadm测试：
+		$ systemctl start keepalived.service 
+		$ yum install -y ipvsadm
+
+	4、客户端输入网址测试：
+		$ curl http://172.16.3.100
+
+	
+	
+		 
+
+
+
+
+'实验：双主模式的lvs负载均衡集群,DR负载均衡技术'(双主模型的ipvs高可用集群；)
+	RS配置脚本：
+	#!/bin/bash
+	#
+	vip=172.16.3.100
+	vip1=172.16.3.200
+	mask=255.255.255.255
+
+	case $1 in
+	start)
+	    echo 1 > /proc/sys/net/ipv4/conf/all/arp_ignore
+	    echo 1 > /proc/sys/net/ipv4/conf/lo/arp_ignore
+	    echo 2 > /proc/sys/net/ipv4/conf/all/arp_announce
+	    echo 2 > /proc/sys/net/ipv4/conf/lo/arp_announce
+
+	    ifconfig lo:0 $vip netmask $mask broadcast $vip up
+	    route add -host $vip dev lo:0
+	    ifconfig lo:1 $vip1 netmask $mask broadcast $vip1 up
+	    route add -host $vip1 dev lo:1
+	    ;;
+	stop)
+	    ifconfig lo:0 down
+	    ifconfig lo:1 down
+
+	    echo 0 > /proc/sys/net/ipv4/conf/all/arp_ignore
+	    echo 0 > /proc/sys/net/ipv4/conf/lo/arp_ignore
+	    echo 0 > /proc/sys/net/ipv4/conf/all/arp_announce
+	    echo 0 > /proc/sys/net/ipv4/conf/lo/arp_announce
+
+	    ;;
+	*)
+	    echo "Usage $(basename $0) start|stop"
+	    exit 1
+	    ;;
+	esac
+
+	1、在上一个实验的基础上，再加一个VIP在各RS上：
+		执行上述脚本即可
+
+	2、在VS1、VS2上添加一个vrrp_intance和virtual_server
+		'VS1:'
+			vrrp_instance VI_2 {
+			    state BACKUP
+			    interface eno16777736
+			    virtual_router_id 77
+			    priority 95
+			    advert_int 1
+			    authentication {
+			        auth_type PASS
+			        auth_pass maxie19
+			    }
+			    virtual_ipaddress {
+				172.16.3.200/16	dev eno16777736 label eno16777736:1
+			    }
+			}
+
+			virtual_server 172.16.3.200 80 {
+			    delay_loop 3
+			    lb_algo rr
+			    lb_kind DR
+			    #nat_mask 255.255.255.0
+			    protocol TCP
+
+			    sorry_server 127.0.0.1 80
+
+			    real_server 172.16.3.20 80 {
+			        weight 1
+			        HTTP_GET {
+			            url {
+			              path /
+				      status_code 200
+			            }
+			            connect_timeout 3
+			            nb_get_retry 3
+			            delay_before_retry 3
+			        }
+			    }
+			    real_server 172.16.3.30 80 {
+			        weight 2
+			        HTTP_GET {
+			            url {
+			              path /
+				      status_code 200
+			            }
+			            connect_timeout 3
+			            nb_get_retry 3
+			            delay_before_retry 3
+			        }
+			    }
+			}
+
+
+		'VS2'
+			vrrp_instance VI_2 {
+			    state MASTER
+			    interface eno16777736
+			    virtual_router_id 77
+			    priority 100
+			    advert_int 1
+			    authentication {
+			        auth_type PASS
+			        auth_pass maxie19
+			    }
+			    virtual_ipaddress {
+				172.16.3.200/16	dev eno16777736 label eno16777736:1
+			    }
+			}
+
+			virtual_server 172.16.3.200 80 {
+			    delay_loop 3
+			    lb_algo rr
+			    lb_kind DR
+			    #nat_mask 255.255.255.0
+			    protocol TCP
+
+			    sorry_server 127.0.0.1 80
+
+			    real_server 172.16.3.20 80 {
+			        weight 1
+			        HTTP_GET {
+			            url {
+			              path /
+			              status_code 200
+			            }
+			            connect_timeout 3
+			            nb_get_retry 3
+			            delay_before_retry 3
+			        }
+			    }
+			    real_server 172.16.3.30 80 {
+			        weight 2
+			        HTTP_GET {
+			            url {
+			              path /
+			              status_code 200
+			            }
+			            connect_timeout 3
+			            nb_get_retry 3
+			            delay_before_retry 3
+			        }
+			    }
+			}
+
+	3、重启服务
+		$ systemctl restart keepalived.service 
+		$ systemctl status keepalived
+		$ ipvsadm -ln 
+		IP Virtual Server version 1.2.1 (size=4096)
+		Prot LocalAddress:Port Scheduler Flags
+		  -> RemoteAddress:Port           Forward Weight ActiveConn InActConn
+		TCP  172.16.3.100:80 rr
+		  -> 172.16.3.20:80               Route   1      0          0
+		  -> 172.16.3.30:80               Route   2      0          0
+		TCP  172.16.3.200:80 rr
+		  -> 172.16.3.20:80               Route   1      0          0
+		  -> 172.16.3.30:80               Route   2      0          0
+
+
+
+
+
+
+
+'双主模型的nginx proxy高可用集群'
+	VIP1:172.16.3.100
+	VIP2:172.16.3.200
+
+	VS1： 
+		IP-1：172.16.3.10
+		IP-2：192.168.1.10
+
+	VS2： 
+		IP-1：172.16.3.40
+		IP-2：192.168.1.20
+
+	RS1:
+		IP: 192.168.1.30/24
+
+	RS2:
+		IP: 192.168.1.40/24
+
+
+
+	1、VS初始化：
+		$ ntpdate 172.16.0.1
+		$ vim /etc/chrony.conf 
+		# Use public servers from the pool.ntp.org project.
+		# Please consider joining the pool (http://www.pool.ntp.org/join.html).
+		#server 0.centos.pool.ntp.org iburst
+		#server 1.centos.pool.ntp.org iburst
+		#server 2.centos.pool.ntp.org iburst
+		#server 3.centos.pool.ntp.org iburst
+		server 172.16.0.1 iburst 		'#设定server地址'
+
+		# Ignore stratum in source selection.
+		stratumweight 0
+
+		# Record the rate at which the system clock gains/losses time.
+		driftfile /var/lib/chrony/drift
+
+		# Enable kernel RTC synchronization.
+		rtcsync
+
+		# In first three updates step the system clock instead of slew
+		# if the adjustment is larger than 10 seconds.
+		makestep 10 3
+
+		# Allow NTP client access from local network.
+		allow 192.168/16				'允许内网用户到此服务器同步时间'
+
+		# Listen for commands only on localhost.
+		bindcmdaddress 127.0.0.1
+		bindcmdaddress ::1
+
+		# Serve time even if not synchronized to any NTP server.
+		local stratum 10				'无论此服务器时间是否正确，一律允许同步'
+
+		$ yum -y install nginx keepalived
+
+	2、RS初始化：
+		$ vim /etc/chrony.conf 
+		server 192.168.1.10
+		$ systemctl restart chronyd.service 
+		$ yum -y install httpd
+		$ echo "RS1 Node1 192.168.1.30" > /var/www/html/index.html
+
+		RS2：
+		$ echo "RS2 Node2 192.168.1.40" > /var/www/html/index.html
+
+		$ systemctl start httpd 
+
+	3、VS验证RS网页：
+		$ curl http://192.168.1.30
+		$ curl http://192.168.1.40
+
+	4、VS开始配置nginx负载均衡：
+		$ vim /etc/nginx/nginx.conf
+		在http块中添加：
+		upstream websrvs {
+			server 	192.168.1.30:80;
+			server  192.168.1.40:80;
+		}
+
+		在server的location / {}中添加
+		server {
+			location / {
+				proxy_pass	http://websrvs;
+			}
+		}
+
+		$ nginx -t 
+		$ systemctl start nginx 
+
+		把配置文件发送到另一台VS：(发送之后，直接在VS2上启动nginx)
+		$ scp /etc/nginx/nginx.conf root@172.16.3.40:/etc/nginx 
+
+	5、打开网页测试
+		$ curl http://172.16.3.10
+		RS1 Node1 192.168.1.30
+		$ curl http://172.16.3.10
+		RS2 Node2 192.168.1.40
+
+		$ curl http://172.16.3.40
+
+	6、开始在VS上配置keepalived：('主备模式')
+		'编辑配置文件'
+
+		$ vim /etc/keepalived/keepalived.conf 
+		! Configuration File for keepalived
+
+		global_defs {
+		   notification_email {
+		     root@localhost
+		   }
+		   notification_email_from KA@localhost
+		   smtp_server 127.0.0.1
+		   smtp_connect_timeout 30
+		   router_id vs1
+		   vrrp_mcast_group4 224.16.3.100
+		}
+
+		vrrp_script chk_down {
+		    script "[[ -f /etc/keepalived/down ]] && exit 1 || exit 0"
+		    interval 3
+		    weight -10
+		    fall 3
+		    rise 3
+		}
+
+		vrrp_instance VI_1 {
+		    state MASTER
+		    interface eno16777736
+		    virtual_router_id 51
+		    priority 100
+		    advert_int 2
+		    authentication {
+		        auth_type PASS
+		        auth_pass maxie95
+		    }
+		    virtual_ipaddress {
+		        172.16.3.100/16 dev eno16777736 label eno16777736:0
+		    }
+
+		    track_script {
+		        chk_down
+		    }
+
+		    notify_master "/etc/keepalived/notify.sh master"
+		    notify_backup "/etc/keepalived/notify.sh backup"
+		    notify_fault "/etc/keepalived/notify.sh fault"
+		}
+
+
+		'添加通知脚本'
+
+		$ vim /etc/keepalived/notify.sh
+		#!/bin/bash
+		#
+		contact="root@localhost"
+
+		notify() {
+		        local mailsubject="$(hostname) to be $1, VIP is folating"
+		        local mailbody="$(date + '$F $T'): vrrp transition, $(hostname) changed to be $1"
+		        echo "$mailbody" | mail -s "$mailsubject" $contact
+		}
+
+		case $1 in
+		master)
+		        systemctl start nginx
+		        notify master
+		        ;;
+		backup)
+		        systemctl start nginx
+		        notify backup
+		        ;;
+		fault)
+		        notify fault
+		        ;;
+		*)
+		        echo "Usage: $(basename $0) {master|backup|fault}"
+		        exit 1
+		        ;;
+		esac
+
+		$ chmod +x /etc/keepalived/notify.sh 
+		$ scp -p /etc/keepalived/* root@172.16.3.40:/etc/keepalived/
+		$ systemctl start keepalived.service
+
+
+		'VS2:'
+
+		$ vim /etc/keepalived/keepalived.conf
+		! Configuration File for keepalived
+
+		global_defs {
+		   notification_email {
+		     root@localhost
+		   }
+		   notification_email_from KA@localhost
+		   smtp_server 127.0.0.1
+		   smtp_connect_timeout 30
+		   router_id vs2 									'修改这里为VS2的主机名'
+		   vrrp_mcast_group4 224.16.3.100
+		}
+
+		vrrp_script chk_down {
+		    script "[[ -f /etc/keepalived/down ]] && exit 1 || exit 0"
+		    interval 3
+		    weight -10
+		    fall 3
+		    rise 3
+		}
+
+		vrrp_instance VI_1 {
+		    state BACKUP
+		    interface eno16777736
+		    virtual_router_id 51
+		    priority 98
+		    advert_int 2
+		    authentication {
+		        auth_type PASS
+		        auth_pass maxie95
+		    }
+		    virtual_ipaddress {
+		        172.16.3.100/16  dev eno16777736 label eno16777736:0
+		    }
+
+		    track_script {
+		        chk_down
+		    }
+
+		    notify_master "/etc/keepalived/notify.sh master"
+		    notify_backup "/etc/keepalived/notify.sh backup"
+		    notify_fault "/etc/keepalived/notify.sh fault"
+		}
+
+		$ systemctl start keepalived.service 
+
+	7、输入vip进行测试：
+		# maxie @ maxie in ~ [14:07:04]
+		$ curl http://172.16.3.100
+		RS1 Node1 192.168.1.30
+
+		# maxie @ maxie in ~ [14:07:06]
+		$ curl http://172.16.3.100
+		RS2 Node2 192.168.1.40
+
+	8、开始配置nginx负载均衡器进程的状态检查:
+		$ vim /etc/keepalived/keepalived.conf 
+		在vrrp_script chk_down的 下面添加另一条 脚本：
+
+		vrrp_script chk_ngx {
+			script "killall -0 nginx && exit 0 || exit 1"
+			interval 3
+			weight -10
+			fall 3
+			rise 3
+		}
+
+		在vrrp_intance V1_1 {}中添加
+		
+		track_script {
+			chk_down 
+			chk_ngx
+		}
+
+	9、'配置双主模式的keepalived + nginx负载均衡'
+
+		'VS1:'
+		$ vim /etc/keepalived/keepalived.conf 
+		vrrp_instance VI_2 {
+			state BACKUP
+			interface eno16777736
+			virtual_router_id 61
+			priority 98
+			advert_int 2
+			authentication {
+				auth_type PASS 
+				auth_pass maxie19
+			}
+			virtual_ipaddress {
+				172.16.3.200/16 dev eno16777736 label eno16777736:1
+			}
+
+			track_script {
+				chk_down 
+				chk_ngx
+			}
+
+			notify_master "/etc/keepalived/notify.sh master"
+			notify_bakcup "/etc/keepalived/notify.sh backup"
+			notify_fault "/etc/keepalived/notify.sh fault"
+		}
+
+
+
+		'VS2:'
+		$ vim /etc/keepalived/keepalived.conf
+		vrrp_instance VI_2 {
+			state MASTER
+			interface eno16777736
+			virtual_router_id 61
+			priority 100
+			advert_int 2
+			authentication {
+				auth_type PASS 
+				auth_pass maxie19
+			}
+			virtual_ipaddress {
+				172.16.3.200/16 dev eno16777736 label eno16777736:1
+			}
+
+			track_script {
+				chk_down 
+				chk_ngx
+			}
+
+			notify_master "/etc/keepalived/notify.sh master"
+			notify_bakcup "/etc/keepalived/notify.sh backup"
+			notify_fault "/etc/keepalived/notify.sh fault"
+		}
+
+	10、重启服务，测试
+		$ systemctl restart keepalived.service 
+
+		# maxie @ maxie in ~ [15:02:55]
+		$ curl http://172.16.3.200
+		RS1 Node1 192.168.1.30
+
+		# maxie @ maxie in ~ [15:13:06]
+		$ curl http://172.16.3.200
+		RS2 Node2 192.168.1.40
+
+		# maxie @ maxie in ~ [15:13:07]
+		$ curl http://172.16.3.100
+		RS2 Node2 192.168.1.40
+
+		# maxie @ maxie in ~ [15:13:08]
+		$ curl http://172.16.3.100
+		RS1 Node1 192.168.1.30
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+完整配置文件：
+cat /etc/keepalived/keepalived.conf
+! Configuration File for keepalived
+
+global_defs {
+   notification_email {
+     root@localhost
+   }
+   notification_email_from KA@localhost
+   smtp_server 127.0.0.1
+   smtp_connect_timeout 30
+   router_id vs1
+   vrrp_mcast_group4 224.16.3.100
+}
+
+vrrp_script chk_down {
+    script "[[ -f /etc/keepalived/down ]] && exit 1 || exit 0"
+    interval 3
+    weight -10
+    fall 3
+    rise 3
+}
+
+vrrp_script chk_ngx {
+    script "killall -0 nginx && exit 0 || exit 1"
+    interval 4
+    weight -10
+    fall 4
+    rise 4
+}
+
+vrrp_instance VI_1 {
+    state MASTER
+    interface eno16777736
+    virtual_router_id 51
+    priority 100
+    advert_int 2
+    authentication {
+        auth_type PASS
+        auth_pass maxie95
+    }
+    virtual_ipaddress {
+	172.16.3.100/16 dev eno16777736 label eno16777736:0
+    }
+
+    track_script {
+	chk_down
+	chk_ngx
+    }
+
+    notify_master "/etc/keepalived/notify.sh master"
+    notify_backup "/etc/keepalived/notify.sh backup"
+    notify_fault "/etc/keepalived/notify.sh fault"
+}
+
+vrrp_instance VI_2 {
+    state BACKUP
+    interface eno16777736
+    virtual_router_id 61
+    priority 98
+    advert_int 2
+    authentication {
+        auth_type PASS
+        auth_pass maxie19
+    }
+    virtual_ipaddress {
+	172.16.3.200/16 dev eno16777736 label eno16777736:1
+    }
+
+    track_script {
+	chk_down
+	chk_ngx
+    }
+
+    notify_master "/etc/keepalived/notify.sh master"
+    notify_backup "/etc/keepalived/notify.sh backup"
+    notify_fault "/etc/keepalived/notify.sh fault"
+}
+
+
+
+
+
+'notify脚本'
+
+cat /etc/keepalived/notify.sh
+#!/bin/bash
+#
+contact="root@localhost"
+
+notify() {
+	local mailsubject="$(hostname) to be $1, VIP is folating"
+	local mailbody="$(date + '$F $T'): vrrp transition, $(hostname) changed to be $1"
+	echo "$mailbody" | mail -s "$mailsubject" $contact
+}
+
+case $1 in
+master)
+	systemctl start nginx
+	notify master
+	;;
+backup)
+	systemctl start nginx
+	notify backup
+	;;
+fault)
+	notify fault
+	;;
+*)
+	echo "Usage: $(basename $0) {master|backup|fault}"
+	exit 1
+	;;
+esac
+
+
+
+
+
+
+
+
+
+
+
+
+	

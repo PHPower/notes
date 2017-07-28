@@ -1,0 +1,333 @@
+7.6课后练习(Ansible)
+
+
+'练习题：'
+
+
+'1、使用yml配置文件，执行拷贝文件的功能：'
+
+	$ vim copy.yml
+	---
+
+	- hosts: web
+	  remote_user: root
+
+	  tasks:
+	    - name: coyp file
+	      copy: src=/etc/issue dest=/tmp/my.txt owner=maxiecloud backup=yes mode=0660
+
+	$ ansible-playbook nginx.yml
+
+	PLAY [web] *********************************************************************
+
+	TASK [setup] *******************************************************************
+	ok: [172.16.4.10]
+	ok: [172.16.1.70]
+	ok: [172.16.1.20]
+	ok: [172.16.1.100]
+
+	TASK [coyp file] ***************************************************************
+	changed: [172.16.4.10]
+	changed: [172.16.1.70]
+	changed: [172.16.1.20]
+	changed: [172.16.1.100]
+
+	PLAY RECAP *********************************************************************
+	172.16.1.100               : ok=2    changed=1    unreachable=0    failed=0
+	172.16.1.20                : ok=2    changed=1    unreachable=0    failed=0
+	172.16.1.70                : ok=2    changed=1    unreachable=0    failed=0
+	172.16.4.10                : ok=2    changed=1    unreachable=0    failed=0
+
+	$ ansible web -m shell -a 'ls -l /tmp/*.txt'
+	172.16.4.10 | SUCCESS | rc=0 >>
+	-rw-rw---- 1 maxiecloud root 79 Apr 24 19:51 /tmp/my.txt
+
+	172.16.1.20 | SUCCESS | rc=0 >>
+	-rw-rw---- 1 maxiecloud root 79 Jun 21 02:21 /tmp/my.txt
+
+	172.16.1.70 | SUCCESS | rc=0 >>
+	-rw-rw---- 1 maxiecloud root 79 Jun 21 02:22 /tmp/my.txt
+
+	172.16.1.100 | SUCCESS | rc=0 >>
+	-rw-rw---- 1 maxiecloud root 79 Jun 20 17:50 /tmp/my.txt
+
+
+
+
+'2、使用yml配置文件，启动&安装HTTPD：'
+
+	$ cat httpd.yml
+	---
+
+	- hosts: web
+	  remote_user: root
+	  tasks:
+	  - name: "remove appache"
+	    command: yum remove -y -q httpd httpd-devel
+	  - name: "install apache"
+	    command: yum install -y -q httpd httpd-devel
+	  - name: "stop nginx"
+	    service: name=nginx state=stopped
+	  - name: "restart httpd"
+	    service: name=httpd state=restarted
+
+	$ ansible-playbook  httpd.yml
+
+	$ ansible web -m shell -a 'ss -tnlp | grep httpd'
+
+
+
+'3、使用yml，创建用户，并配置其属性'
+	$ ansible-playbook adduser.yml
+	
+	$ cat adduser.yml
+	---
+	- hosts: web
+	  remote_user: root
+
+	  tasks:
+	    - name: useradd maxie1
+	      user: name=maxie1 home=/home/maxie1 shell=/bin/bash uid=1200
+	    - name: useradd maxie2
+	      user: name=maxie2 home=/home/maxie2 shell=/bin/bash uid=1201
+
+
+
+'4、使用YML配置文件，使用变量 -m setup，并在yml中引用变量'
+	
+	$ ansible web -m setup  | grep processor_vcpus
+
+	$ cat nginx.yml
+	---
+
+	- hosts: web
+	  remote_user: root
+
+	  tasks:
+	    - name: install nginx
+	      command: yum install -y -q nginx
+	    - name: install httpd
+	      command: yum install -y -q httpd
+	    - name: nginx processor
+	      template: src=/root/ansible-yml/nginx.conf.j2 dest=/etc/nginx/nginx.conf
+	    - name: stop httpd
+	      service: name=httpd state=stopped
+	    - name: start nginx
+	      service: name=nginx state=started
+	    - name: grep nginx
+	      shell: ss -tnlp | grep nginx
+
+
+'5、使用变量配置nginx中虚拟主机的监听端口号'
+
+	$ vim /etc/ansible/hosts
+	[web]
+	172.16.1.100 webport=8080 server_name=www1.maxie.com
+	172.16.1.70 webport=8081 server_name=www2.maxie.com
+	172.16.1.20 webport=8082 server_name=www3.maxie.com
+
+	$ vim ansible-yml/maxie.conf.j2
+	server {
+	        listen {{ webport }};
+	        server_name {{ server_name }};
+	        root    /data/web/;
+	        location / {
+	                root    /data/web/;
+	                index   index.html;
+	        }
+	}
+
+	$ vim nginx.yml
+	---
+
+	- hosts: web
+	  remote_user: root
+
+	  tasks:
+	    - name: install nginx
+	      command: yum install -y -q nginx
+	    - name: install httpd
+	      command: yum install -y -q httpd
+	    - name: nginx processor
+	      template: src=/root/ansible-yml/nginx.conf.j2 dest=/etc/nginx/nginx.conf
+	    - name: stop httpd
+	      service: name=httpd state=stopped
+	    - name: start nginx
+	      service: name=nginx state=started
+	    - name: grep nginx
+	      shell: ss -tnlp | grep nginx
+
+
+
+'6、拷贝文件'
+	$ ansible web -m copy -a 'src=/root/run.sh dest=/tmp/run.log mode=0644 owner=maxiecloud group=maxie'
+	172.16.1.20 | SUCCESS => {
+	    "changed": true,
+	    "checksum": "3db2a3caf8cb908a4d65498d36aa4ed61c51805b",
+	    "dest": "/tmp/run.log",
+	    "gid": 1001,
+	    "group": "maxie",
+	    "md5sum": "0a5d748304075fa4270ef9bf204c0d3c",
+	    "mode": "0644",
+	    "owner": "maxiecloud",
+	    "size": 67,
+	    "src": "/root/.ansible/tmp/ansible-tmp-1497960111.75-22164914052150/source",
+	    "state": "file",
+	    "uid": 1008
+	}
+	172.16.1.70 | SUCCESS => {
+	    "changed": true,
+	    "checksum": "3db2a3caf8cb908a4d65498d36aa4ed61c51805b",
+	    "dest": "/tmp/run.log",
+	    "gid": 1001,
+	    "group": "maxie",
+	    "md5sum": "0a5d748304075fa4270ef9bf204c0d3c",
+	    "mode": "0644",
+	    "owner": "maxiecloud",
+	    "size": 67,
+	    "src": "/root/.ansible/tmp/ansible-tmp-1497960111.72-96236782629755/source",
+	    "state": "file",
+	    "uid": 1008
+	}
+	172.16.1.100 | SUCCESS => {
+	    "changed": true,
+	    "checksum": "3db2a3caf8cb908a4d65498d36aa4ed61c51805b",
+	    "dest": "/tmp/run.log",
+	    "gid": 1001,
+	    "group": "maxie",
+	    "md5sum": "0a5d748304075fa4270ef9bf204c0d3c",
+	    "mode": "0644",
+	    "owner": "maxiecloud",
+	    "size": 67,
+	    "src": "/root/.ansible/tmp/ansible-tmp-1497960111.82-151814359068767/source",
+	    "state": "file",
+	    "uid": 1008
+	}
+
+
+
+
+
+'7、roles实验'
+
+	1、在/etc/ansible/roles目录下创建：
+		$ mkdir nginx/{tasks,files,vars,templates,handlers}
+
+	2、在tasks目录下创建各个任务yml文件：
+		$ vim nginx/tasks/init.yml 
+		---
+		 - name: init nginx
+		   copy: src=README dest=/etc/nginx/conf.d
+
+		 - name: init nginx.conf
+		   template: src=maxie.conf.j2 dest=/etc/nginx/conf.d/maxie.conf
+		   notify: restart nginx
+
+		$ vim nginx/tasks/install.yml
+		---
+		  - name: install nginx
+		    yum: name=nginx state=installed
+
+	3、在files和template目录下 创建我们之前设置要拷贝的文件：
+		$ vim nginx/files/README
+		Just For ReadMe
+
+		$ vim nginx/templates/maxie.conf.j2
+		server {
+		        listen {{ webport }};
+		        server_name {{ server_name }};
+		        root    /data/web/;
+		        location / {
+		                root    /data/web/;
+		                index   index.html;
+		        }
+		}
+
+	4、在handler下创建main.yml 
+		$ vim nginx/handlers/main.yml
+		---
+
+		- name: restart nginx
+		  service: name=nginx state=restarted
+
+	5、创建变量的mail.yml
+		$ vim nginx/vars/mail.yml 
+		server_name: www.maxie.com
+		webport: 8080
+
+	6、创建tasks的main.yml 
+		$ vim nginx/tasks/main.yml 
+		---
+
+		- include: install.yml
+		- include: init.yml
+
+	7、创建主yml
+		$ cd /etc/ansible
+		$ vim nginx.yml 
+		---
+
+		- hosts: web
+		  remote_user: root
+		  roles:
+		  - nginx
+
+	8、测试
+		$ ansible-playbook nginx.yml
+
+		PLAY [web] *********************************************************************
+
+		TASK [setup] *******************************************************************
+		ok: [172.16.1.70]
+		ok: [172.16.1.21]
+		ok: [172.16.1.100]
+
+		TASK [nginx : install nginx] ***************************************************
+		ok: [172.16.1.21]
+		ok: [172.16.1.70]
+		ok: [172.16.1.100]
+
+		TASK [nginx : init nginx] ******************************************************
+		ok: [172.16.1.21]
+		ok: [172.16.1.70]
+		ok: [172.16.1.100]
+
+		TASK [nginx : init nginx.conf] *************************************************
+		changed: [172.16.1.70]
+		changed: [172.16.1.21]
+		changed: [172.16.1.100]
+
+		RUNNING HANDLER [nginx : restart nginx] ****************************************
+		changed: [172.16.1.70]
+		changed: [172.16.1.21]
+		changed: [172.16.1.100]
+
+		PLAY RECAP *********************************************************************
+		172.16.1.100               : ok=5    changed=2    unreachable=0    failed=0
+		172.16.1.21                : ok=5    changed=2    unreachable=0    failed=0
+		172.16.1.70                : ok=5    changed=2    unreachable=0    failed=0
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

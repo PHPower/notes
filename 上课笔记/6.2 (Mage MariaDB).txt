@@ -1,0 +1,1816 @@
+6.2 (Mage MariaDB详解)
+
+
+回顾：
+	lamp
+		amp组合方式：
+			client --> (httpd protocol) -->  httpd + php module --> php-mysql --> mysqld 
+			client --> httpd protocol --> httpd --> fastcgi protocol --> fpg(php application server)
+
+!!!	'实验:'部署wordpress老版本，使用ab压测，在压测过程中，更新wordpress版本;观察ab命令运行状态
+
+
+	快速部署amp:
+		CentOS7:
+			Modules:程序包，httpd,php,php-mysql,mariadb-server
+				启动的服务：systemctl start mariadb.server httpd.service
+			Fastcig:程序包，httpd,php-fpm,php-mysql,mariadb-server
+				启动的服务：systemctl start mariadb.service php-fpm.service httpd.service
+
+		CentOS6：
+			Modules:程序包，httpd,php,php-mysql,mysql-server
+				启动的服务：service mysqld start ,service httpd start 
+
+		DoucumentRoot: /var/www/html
+			在生产环境中，需要自定义；
+				可能是一个挂载的磁盘；
+				也可能是在此目录/磁盘上安装mysql，并把DoucumentRoot放在此目录下；方便迁移
+
+
+
+'db.engines.com '：
+			数据库排名网站
+
+
+'lamp(01)'
+
+	mariadb(mysql):
+
+		数据管理模型：层次模型、网状模型、关系模型
+
+		数据分类：非结构化数据、半结构化数据、结构化数据
+			半结构化数据：实体的属性不一样
+				自带标签，自己定义对象的属性(MongoDB)
+
+
+
+
+
+			'关系模型'：
+				数据库：把一个方案、一个项目中的表组合起来，就是数据库
+				二维关系：
+					'表：'row，column	（最重要的属性，其他属性都是围绕'表'）
+					索引：index（便于用户快速查找内容，加速读性能，写操作性能下降）
+					视图：view（虚表，把真正的表里的几个字段的值，虚化成一个表，基表改变，虚表也会变）
+
+				一个列：描述一个维度的属性
+				一个行：
+
+
+				'SQL接口：'structured query language
+					类似于OS的shell接口;也提供编程功能
+
+					ANSI(美国国家标准委员会)：SQL标准，SQL-86,SQL-89,SQL-92,SQL-99,SQL-03,...
+						PL-SQL，T-SQL
+
+					'DDL：Data Defined Language (数据定义语言)'
+						CREATE，ALTER，DROP，SHOW
+
+					'DML：Data Manapulating Language (数据操纵语言)   操作表中的数据'
+						INSERT，DELETE，UPDATE，SELECT
+
+					'SQL代码：'
+						存储过程：procedure
+						存储函数：function；有返回值的
+						触发器：trigger
+						事件调度器：event scheduler(周期性任务计划)
+
+						例程：routine
+
+
+				'用户权限：'
+					用户：用户名和密码；
+					权限：管理类、数据库、表、字段、程序类(是否能调用存储过程、存储函数)
+
+
+
+			'DBMS'：数据库管理系统；DataBase Management System 
+				RDBMS：关系型数据库管理系统
+
+				'MySQL：单线程，多线程(开源的关系型数据库)'
+					插件式存储引擎：存储引擎也成为表类型
+					用户连接：通过线程来实现；
+						线程池；
+
+					AliSQL：MySQL的衍生版；
+
+
+				PostgreSQL：最全的关系型数据库；PGSQL
+
+				SQLite：SQLite is a C library that implements an SQL database engine.
+					简单的数据库，但只存储在磁盘文件上，但可以使用SQL语句查询
+						手机的通讯录使用
+
+
+
+			
+			'事务(Transaction)：'组织多个操作为一个整体，要么全部都执行成功，要么全部失败回滚；不允许存在中间状态
+				“回滚”， rollback
+				
+				Bob:8000, 8000-2000
+				Alice:5000, 5000+2000
+				
+				'一个存储系统是否支持事务，测试标准：'
+				!!!	'ACID：'
+						A：原子性；
+						C：一致性；
+						I：隔离性；隔离级别越高，并发性越少；
+						D：持久性；
+				
+				SQL接口：分析器和优化器
+				
+				'存储引擎：'非常重要
+					>SHOW ENGINES; 		#查看数据库默认引擎
+					MySQL是插件式存储引擎：
+						MySQL5.5之后的默认引擎是：InnoDB
+						5.5之前的是：MyISAM
+
+
+			
+
+			'数据库：数据集合'
+				表：为了满足范式设计要求，将一个数据集分拆为多个；
+				
+				
+				'约束：constraint，向数据表插入的数据要遵守的限制规则；'
+					主键：一个或多个字段的组合，填入主键中的数据，必须不同于已存在的数据；而且'不能为空；'
+						能够唯一标识一行数据的字段；
+						一个表只能有一个primary key;
+
+					外键：一个表中某字段中能插入的数据，'取决于另外一张表的主键中的数据'；
+
+
+					唯一键：一个或多个字段的组合，填入唯一键中的数据，必须不同于已存在的数据；'可以为空'；
+						一个表可存在多个Unique Key;
+
+					检查性约束：取决于表达式的要求；
+						自定义表达式来限制;
+				
+				
+
+				索引：将表中的某一个或某些字段抽取出来，单独将其组织一个独特的数据结构中；
+					'常用的索引类型：'
+						B+ Tree树型：Balance Tree(适用于排序查找,Mysql默认使用) 			#大话数据类型
+						hash：key value结构（不适合做排序，适合做精确查找）
+							MEMORY数据库引擎支持hash
+						
+					注意：'有助于读请求，但不利于写请求；'
+					
+				
+				'关系运算：'
+					选择：挑选出符合条件的行；挑选一部分行的信息
+					投影：挑选出符合需要的列；选择字段信息
+					连接：将多张表关联起来；
+						
+				
+				数据抽象：
+					物理层：决定数据的存储格式，即如何将数据组织成为物理文件；
+					逻辑层：描述DB存储什么数据，以及数据间存在什么样的关系；
+					视图层：描述DB中的部分数据；
+					
+				
+				关系模型的分类：
+					关系模型
+					实体-关系模型
+					基于对象的关系模型
+					半结构化关系模型
+
+
+
+'MariaDB(mysql)：'
+	
+	'可用版本：'
+		MySQL：
+			MariaDB
+			Percona-Server：二次发行版
+			AliSQL
+			TiDB:rust语言，全面兼容MySQL协议
+
+			
+	Unireg
+	
+	MySQL AB  --> MySQL
+		Solaris：二进制版本；
+		
+		www.mysql.com：
+			Community：社区版
+			Enterprise：企业版
+
+		
+	MariaDB: www.mariadb.org；同样也有社区、企业版
+	
+	'MariaDB的特性：'(适用于MySQL)
+		插件式存储引擎：存储管理器有多种实现版本，彼此间的功能和特性可能略有区别；用户可根据需要灵活选择； 
+		 
+		存储引擎也称为“表类型”；
+		
+		(1) 更多的存储引擎；
+			MyISAM：不支持事务，表级锁，崩溃后不保证安全恢复；
+			MyISAM --> Aria
+			InnoDB --> XtraDB(Percona二次开发版本) ：支持事务，行级锁，外键，热备(企业版)；
+
+		(2) 诸多扩展和新特性；
+		(3) 提供了较多的测试组件；
+		(4) truly open source；
+		
+	MySQL的发行机制：
+		Enterprise：提供了更丰富的功能；
+		Community：	社区版
+
+
+				
+	'安装方式：'
+		(1) rpm包；
+			(a) 由OS的发行商提供；
+			(b) 程序官方提供；www.mariadb.org
+		(2) 源码包；
+		(3) 通用二进制格式的程序包；（绿色包）
+		
+		'通用二进制格式安装MariaDB：'
+			(1) 准备数据目录；
+				以/mydata/data目录为例；
+			(2) 安装配置mariadb						
+				$ useradd  -r  mysql
+				$ tar xf  mariadb-VERSION.tar.xz  -C  /usr/local
+				$ cd /usr/local
+				$ ln  -sv  mariadb-VERSION  mysql
+				$ cd  /usr/local/mysql
+				$ chown  -R  root:mysql  ./*
+				$ scripts/mysql_install_db  --user=mysql  -datadir=/mydata/data
+				$ cp  support-files/mysql.server   /etc/init.d/mysqld
+				$ chkconfig   --add  mysqld
+			
+			(3) 提供配置文件
+				ini格式的配置文件；各程序均可通过此配置文件获取配置信息；
+					[program_name]
+									
+				OS Vendor提供mariadb rpm包安装的服务的配置文件查找次序：
+					/etc/mysql/my.cnf  --> /etc/my.cnf  --> --default-extra-file=/PATH/TO/CONF_FILE  --> ~/.my.cnf
+					
+				通用二进制格式安装的服务程序其配置文件查找次序：
+					/etc/my.cnf  --> /etc/mysql/my.cnf  --> --default-extra-file=/PATH/TO/CONF_FILE  --> ~/.my.cnf
+					
+				获取其读取次序的方法：
+					mysqld  --verbose  --help
+					
+				# cp  support-files/my-large.cnf  /etc/my.cnf
+				
+				添加三个选项：
+					datadir = /mydata/data
+					innodb_file_per_table = ON
+					skip_name_resolve = ON
+					
+			(4) 启动服务
+				# service  mysqld  start
+
+
+
+	'MariaDB程序的组成：'
+		C：Client --> mysql protocol --> mysql Server 
+			mysql：CLI交互式客户端程序；
+			mysqldump：备份工具；
+			mysqladmin：管理工具；
+			mysqlbinlog：日志工具
+			...
+		S：Server
+			mysqld
+			mysqld_safe：建议运行服务端程序；
+			mysqld_multi：多实例；
+			
+			监听三类套接字地址：
+				IPv4 | IPv6 , 3306/tcp
+				Unix Sock：/var/lib/mysql/mysql.sock（rpm安装后的地址）, /tmp/mysql.sock（二进制安装的默认地址）
+					C <--> S: localhost, 127.0.0.1（只有使用前面这两个地址，才会实现本机通信，unix sock)
+	
+		
+	'配置文件：ini风格，用一个文件为多个程序提供配置；片段化配置 /etc/my.cnf.d/'
+		[mysql]
+		[mysqld]
+		[mysqld_safe]
+		[server]
+		[client]
+		[mysqldump]
+
+		mysql的各类程序启动都读取不止一个配置文件；按顺序读取，且最后读取的为最终生效；
+			$ my_print_defaults 	#命令查看
+			Default options are read from the following files in the given order:
+			/etc/mysql/my.cnf /etc/my.cnf ~/.my.cnf
+
+
+			/etc/my.cnf + /etc/my.cnf.d/*.cnf ：大多数的配置文件存放位置
+
+
+	'命令行交互式客户端程序：mysql'
+		mysql 
+			mysql [OPTIONS] [database]
+			
+			'常用选项：'
+				-u,--user=username：用户名，默认为root；
+				-h, --host=name：远程主机（即mysql服务器）地址，默认为localhost; '
+					客户端连接服务端时，服务端会反解客户端的IP为主机名；'所以要关闭此功能，skip_name_resolve=ON
+				
+				-p, --password[=PASSWORD]：USERNAME所表示的用户的密码； 默认为空；
+				
+					注意：mysql的用户账号由两部分组成：'USERNAME'@'HOST'; 其中HOST用于限制此用户可通过哪些远程主机连接当前的mysql服务；
+						HOST的表示方式，支持使用通配符：
+							%：匹配任意长度的任意字符；
+								172.16.%.%,  172.16.0.0/16
+							_：匹配任意单个字符；
+
+				-P, --port=#：mysql服务器监听的端口；默认为3306/tcp；
+
+				-S, --socket=/PATH/TO/mysql.sock：套接字文件路径(编译安装之后可能用到)
+						
+				-D, --database=db_name：连接到服务器端之后，设定其处指明的数据库为默认数据库；
+					$ mysql -Dmysql  #登陆后，直接进入到mysql这个数据库
+				
+				-e, --execute='SQL COMMAND;'：连接至服务器并让其执行此命令后直接返回；并不进入mysql命令行
+					$ mysql -uroot -proot@123 -e 'show databases'
+				
+
+			'命令：'
+				客户端命令：本地执行；客户端命令一般使用小写
+					mysql> help
+						\u db_name：设定哪个库为默认数据库
+						\q：退出；
+						\d CHAR：设定新的语句结束符；
+						\g：语句结束标记；和;分号 的功能
+						\G：语句结束标记，结果竖排方式显式；（垂直显示）
+						\s：查看数据库状态
+						\c：类似于 ctrl + c 功能
+						\!SHELL-COMMAND：在mysql中使用shell命令
+						\.：类似于shell中Source命令，装载并执行sql脚本； 
+							> \. /tmp/test.sql  		#执行sql脚本(此脚本必须让mysql这个用户能够读取此脚本)
+
+
+				服务端命令：通过mysql连接发往服务器执行并取回结果(SQL语句)；'服务端命令一般使用大写'(数据库名称可能区分大小写)
+					DDL， DML， DCL 
+						'主要学习：'
+							Account Management
+  							Administration
+							Data Definition
+							Data Manipulation
+							Data Types
+							SHOW命令
+						
+					注意：每个语句必须有语句结束符，默认为分号(;)
+
+
+					获取帮助：
+						> help contents
+						> help '命令类别'
+				
+
+
+			'数据类型：'
+
+				表：行和列
+					创建表：定义表中的字段；
+					
+				定义字段时，关键的一步即为'确定其数据类型'；
+					用于确定：数据存储格式、能参与运算种类、可表示的有效的数据范围；
+					
+
+				字符型：字符集(字符的表示方法) 
+					码表：在字符和二进制数字之间'建立映射关系；'
+					
+					'查看mysql支持的字符集：'
+						MariaDB [(none)]> show character set;
+								collation：排序规则
+
+
+						+----------+-----------------------------+---------------------+--------+
+						| Charset  | Description                 | Default collation   | Maxlen |
+						+----------+-----------------------------+---------------------+--------+
+					
+					'查看mysql字符集的排序规则：'
+							MariaDB [(none)]> show collation;
+						+--------------------------+----------+-----+---------+----------+---------+
+						| Collation                | Charset  | Id  | Default | Compiled | Sortlen |
+						+--------------------------+----------+-----+---------+----------+---------+
+
+
+
+				'种类：' mysql> show data type;
+					'字符型：'
+						定长字符型：(空间立即分配)
+							CHAR(#)：不区分字符大小写
+							BINARY(#)：区分字符大小写；'保存为二进制格式'；
+						
+						变长字符型：(更节约空间，但对性能会降低)
+							VARCHAR(#)： 多占一个或两个字符空间（字符串结束标记）;可以超过255个字符时，需要使用## 表示，但不能超过65,535)
+							VARBINARY(#)： 
+						
+						'对象存储：(存储过长的字符)；最大都是65,535默认'
+							TEXT：文本格式（不区分字符大小写）；
+								TINYTEXT:255 (28 - 1) characters
+								MEDIUMTEXT:16,777,215 (224 - 1) characters.
+								LONGTEXT:4,294,967,295 or 4GB (232 - 1)
+								
+
+							BLOB：二进制大对象（区分字符大小写）
+								TINYBLOB:255 (28 - 1) bytes.
+								MEDIUMBLOB:16,777,215 (224 - 1) bytes.
+								LONGBLOB:4,294,967,295 or 4GB (232 - 1) bytes.
+						
+						内置类型：(mysql内置的类型)
+							SET：集合；只能是这集合内的组合
+							'ENUM：枚举类型'；只能填入我们指定好的几个字符；
+
+							一般填入其实是索引，而非我们指定好的字符的或字符的组合；
+					
+
+					'数值型：'
+						精确数值型：
+							INT（TINYINT 8位二进制，SMALLINT ，MEDIUMINT，INT，BIGINT）;
+								UNSIGNED：无符号；（从正整数开始）
+							DECIMAL：十进制小数，精确十进制(金融行业使用较多) 
+						
+						近似数值型：
+							FLOAT
+							DOBULE
+
+
+					'日期时间型：'(仅仅表现为日期类型)
+						日期型：DATE;'1000-01-01' to '9999-12-31'
+						时间型：TIME;'-838:59:59' to '838:59:59'
+						日期时间型：DATETIME;
+						时间戳：TIMESTAMP;'1970-01-01 00:00:01' UTC to '2038-01-19 03:14:07' UTC.
+						年份：YEAR(2), YEAR(4);
+						
+				
+				'字段数据修饰符：'
+					UNSIGNED：无符号；
+					NULL：为空
+					NOT NULL：非空；
+					DEFAULT  value：默认值；
+						数值不能加引号
+					AUTO_INCREMENT：自动增长（默认填入）
+					
+					'约束：'
+						PRIMARY KEY：主键；唯一非空；
+						UNIQUE KEY: ；唯一键；唯一，可为空
+						FOREIGN KEY：外键； 	
+					
+
+
+		'服务器端命令：'
+			DDL：数据定义语言，主要用于管理数据库组件，'例如数据库、表、索引、视图、用户、存储过程'
+				CREATE、ALTER、DROP
+			DML：数据操纵语言，主要用管理表中的数据，'实现数据的增、删、改、查；'
+				INSERT， DELETE， UPDATE， SELECT
+				
+			获取命令帮助：
+				mysql> help  KEYWORD
+				
+
+			'数据库管理：(DDL)'Data Definition 
+				创建：
+					CREATE  {DATABASE | SCHEMA}  [IF NOT EXISTS]  db_name;
+						[DEFAULT]  CHARACTER SET [=] charset_name	#定义默认字符集
+						[DEFAULT]  COLLATE [=] collation_name 		#定义排序规则
+						
+					查看支持的所有字符集：SHOW CHARACTER SET 
+					查看支持的所有排序规则：SHOW  COLLATION
+
+					在/var/lib/mysql/目录下使用mysql用户创建一个目录；其实也是创建数据库；这个目录继承了默认的字符集和排序规则
+						'不建议这么创建数据库'
+						'数据库区分大小写：'
+							根据操作系统是否区分大小写；
+					
+
+				修改：
+					ALTER {DATABASE | SCHEMA}  [db_name]
+						[DEFAULT]  CHARACTER SET [=] charset_name
+						[DEFAULT]  COLLATE [=] collation_name
+
+						mysql> ALTER DATABASE maxie_db CHARACTER SET = 'utf8';
+						
+				删除：
+					DROP {DATABASE | SCHEMA} [IF EXISTS] db_name
+						mysql> DROP DATABASE maxie_db;
+					
+
+				查看：
+					SHOW DATABASES LIKE  '';  			''表示通配
+						mysql> SHOW DATABASES LIKE '%db';  	#查询以db结尾的数据库
+
+
+				查看WARNING:
+					SHOW WARNINGS;
+
+						
+			
+
+			'表管理：'
+
+				'创建：'
+					CREATE TABLE  [IF NOT EXISTS]  [db_name.]tbl_name  (create_defination)  [table_options]
+
+					CREATE [TEMPORARY] TABLE [IF NOT EXISTS] tbl_name { LIKE old_tbl_name | (LIKE old_tbl_name) }
+						'创建一张表，并以另一张表的表结构创建(但是创建的表里并没有内容)'
+
+					
+					'create_defination:(创建的定义) 也就是指定字段和字段类型、键、索引'，字段间以逗号分隔
+						字段：col_name  column_definition  字段名  字段类型(修饰符)
+						键：
+
+							PRIMARY KEY (col1, col2, ...) 主键
+							UNIQUE KEY  (col1, col2,...)  唯一约束
+							FOREIGN KEY (column) 		  外键
+						索引：
+							INDEX | KEY [index_name]  (col1, col2,...)
+
+						'column_definition：'
+							AUTO_INCREMENT：自动增长（默认填入）；一般主键使用
+								注意设置自动增长时，同时要设置无符号：UNSIGNED
+							DEFAULT ：设置默认值，如果这个字段什么都没有填写，则使用默认值
+								DEFAULT 'Male' ：类似这样
+					
+
+					'table_options：表选项		#help create table;查看帮助'
+						表选项可以有多个，可以用逗号分隔，也可以不使用逗号
+
+						ENGINE [=] engine_name ：定义存储引擎
+						CHARACTER SET [=] charset_name
+						CLLATE [=] collation_name
+
+				
+
+					创建一张表：
+						mysql> CREATE TABLE tb2 (id SMALLINT UNSIGNED NOT NULL AUTO_INCREMENT UNIQUE KEY,name VARCHAR(60) NOT NULL);
+						mysql> CREATE TABLE tb2 (id SMALLINT UNSIGNED NOT NULL AUTO_INCREMENT ,name VARCHAR(60) NOT NULL, UNIQUE KEY(id));		
+								#UNIQUE KEY可以单独定义，主键外键都可以;但是必须有括号，也是就指定KEY的值
+								UNSIGNED：必须跟在字符类型的设置之后，因为是设置字符类型的；
+						mysql> CREATE TABLE tb3 (classid TINYINT UNSIGNED PRIMARY KEY, classname VARCHAR(10) NOT NULL) ENGINE = 'MyISAM';
+
+					查看表结构：
+						mysql> DESC tb2;
+						
+					查看数据库支持的所有存储引擎类型：
+						mysql> SHOW  ENGINES;
+						MariaDB [mydb]> SHOW TABLE STATUS WHERE ENGINE='InnoDB'\G
+						
+					查看某表的状态信息：
+						mysql> SHOW  TABLES  STATUS  [LIKE  'tbl_name'] [WHERE clause];
+						mysql> SHOW TABLE STATUS WHERE NAME LIKE 'tb1%';	#查看以tb1开头的表的存储引擎
+						
+
+
+
+				'修改：'
+					ALTER [ONLINE | OFFLINE] [IGNORE] TABLE tbl_name  [alter_specification [, alter_specification] ...]
+					
+					'alter_specification:'
+						字段：
+							添加：ADD  [COLUMN]  col_name  data_type  [FIRST | AFTER col_name ]
+							删除：DROP  [COLUMN] col_name 
+							修改：
+								CHANGE [COLUMN] old_col_name new_col_name column_definition  [FIRST|AFTER col_name]	
+									改的是字段的定义以及字段数据类型
+
+								MODIFY [COLUMN] col_name column_definition  [FIRST | AFTER col_name]
+									改的是字段的定义,也就是字段的类型之类的
+
+								
+								'实例：'mysql> ALTER TABLE tb3 CHANGE id stuid SMALLINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY;
+									   mysql> ALTER TABLE tb3 MODIFT id teaid;
+
+						键：
+							添加：ADD  {PRIMARY|UNIQUE|FOREIGN}  KEY (col1, col2,...)
+							删除：
+								主键：DROP PRIMARY KEY
+								外键：DROP FOREIGN KEY fk_symbol
+						索引：
+							添加：ADD {INDEX|KEY} [index_name]  (col1, col2,...)
+							删除：DROP {INDEX|KEY}  index_name
+
+							mysql> ALTER TABLE tb_name DROP INDEX index_name 
+
+						表选项：
+							ENGINE [=] engine_name
+							AFTER col_name ：排在某个字段后（定义字段时，在两个字段间插入字段时使用）
+
+						表重命名：
+							RENAME TABLE tb_name [TO|AS] new_tb_name
+
+						
+					'查看表上的索引的信息：'
+						mysql> SHOW INDEXES FROM tbl_name;
+
+					'查看表是如何创建的：'
+						mysql > SHOW CREATE TABLE tb_name;
+
+					
+
+				'删除：'
+					DROP  TABLE  [IF EXISTS]   tbl_name [, tbl_name] ...
+					
+
+					表的引用方式：
+						tbl_name
+						db_name.tbl_name
+			
+				
+					第二种创建方式：
+						复制表结构；
+
+						CREATE TABLE tb_name LIKE other_table_name;
+
+						mysql> CREATE TABLE tb7 LIKE mysql.user;   #根据mysql.user这张表来创建
+						
+				
+					第三种创建方式：
+						复制表数据；
+
+						CREATE TABLE tb_name SELECT clause;
+
+						mysql> CREATE TABLE tb8 SELECT Host,User,Passowrd FROM mysql.user; 
+							复制另一张表的数据创建另一张表；但并不会复制表中的字段的定义（主键，非空之类的定义）
+
+
+
+
+
+			'索引管理：'
+				索引是特殊的数据结构；
+				
+				索引：要有索引名称；
+				
+				创建：
+					CREATE  [UNIQUE|FULLTEXT|SPATIAL] INDEX  index_name  [BTREE|HASH]  ON tbl_name (col1, col2,,...)
+						在哪个表上的哪个字段创建索引，可以指定多个字段为联合索引
+						UNIQUE：唯一索引(最常用的)
+						FULLTEXT：全文索引
+						SPATIAL：空间索引
+
+				删除：
+					DROP  INDEX index_name ON tbl_name
+
+				查看：
+					SHOW {INDEX | INDEXES | KEYS} {FROM | IN} tbl_name [{FROM | IN} db_name] [WHERE expr]
+
+				'索引类型：'
+					聚集索引：找到了索引，就等于找到了数据
+					非聚集索引：找到了索引，索引会指向数据在哪里。
+					主键索引、辅助索引
+					稠密索引、稀疏索引：是否索引了每一个数据项
+					BTREE(B+):平衡树，左前缀索引；只索引前n个字节
+						HASH:
+						R TREE：空间索引
+						FULLTEXT：全文索引
+
+				EXPLAIN：分析查询语句的执行路径
+
+
+
+
+
+			'视图管理：'
+
+				创建： 
+					CREATE VIEW view_name [(column_list)] AS select_statement
+
+				修改： 
+					ALTER VIEW view_name [(column_list)] AS select_statement
+
+				删除：
+					DROP VIEW [IF EXISTS] view_name[,view_name]....
+ 
+
+
+				实例：
+					MariaDB [mydb]> CREATE TABLE tb3 SELECT Host,User,Password from mysql.user;
+					Query OK, 7 rows affected (0.00 sec)
+					Records: 7  Duplicates: 0  Warnings: 0
+
+					MariaDB [mydb]> SELECT * FROM tb3;
+					+------------+------+-------------------------------------------+
+					| Host       | User | Password                                  |
+					+------------+------+-------------------------------------------+
+					| localhost  | root | *A00C34073A26B40AB4307650BFB9309D6BFA6999 |
+					| mysql-test | root |                                           |
+					| 127.0.0.1  | root |                                           |
+					| ::1        | root |                                           |
+					| localhost  |      |                                           |
+					| mysql-test |      |                                           |
+					| %          | root | *A00C34073A26B40AB4307650BFB9309D6BFA6999 |
+					+------------+------+-------------------------------------------+
+					7 rows in set (0.00 sec)
+
+					MariaDB [mydb]> CREATE VIEW user AS SELECT Host,User FROM tb3;
+					Query OK, 0 rows affected (0.01 sec)
+
+					MariaDB [mydb]> SELECT * FROM user;
+					+------------+------+
+					| Host       | User |
+					+------------+------+
+					| localhost  | root |
+					| mysql-test | root |
+					| 127.0.0.1  | root |
+					| ::1        | root |
+					| localhost  |      |
+					| mysql-test |      |
+					| %          | root |
+					+------------+------+
+					7 rows in set (0.00 sec)
+			
+
+
+			
+			'练习：'
+				1、创建数据库hidb，默认 字符集'utf8';
+					MariaDB [mydb]> CREATE DATABASE hidb CHARACTER SET 'utf8';
+
+				2、创建表students，拥有以下字段；
+					stuid ，整数，自动增长；
+					name 
+					gender
+					birthday
+					class 
+
+					MariaDB [mydb]> use hidb;
+					MariaDB [mydb]> CREATE TABLE students (stuid TINYINT UNSIGNED AUTO_INCREMENT PRIMARY KEY ,name VARCHAR(30),gender ENUM('F','M'),birthday DATE,class VARCHAR(20));
+
+				3、将student的class字段修改为classid;
+					MariaDB [hidb]> ALTER TABLE students CHANGE class classid VARCHAR(20) NULL;
+
+				4、为name字段添加索引：
+					MariaDB [hidb]> CREATE UNIQUE INDEX name ON students(name);
+					MariaDB [hidb]> SHOW INDEXES FROM students;
+
+
+				MariaDB [hidb]> desc students;
+				+----------+---------------------+------+-----+---------+----------------+
+				| Field    | Type                | Null | Key | Default | Extra          |
+				+----------+---------------------+------+-----+---------+----------------+
+				| stuid    | tinyint(3) unsigned | NO   | PRI | NULL    | auto_increment |
+				| name     | varchar(30)         | YES  | UNI | NULL    |                |
+				| gender   | enum('F','M')       | YES  |     | NULL    |                |
+				| birthday | date                | YES  |     | NULL    |                |
+				| classid  | varchar(20)         | YES  |     | NULL    |                |
+				+----------+---------------------+------+-----+---------+----------------+
+				5 rows in set (0.00 sec)
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+		'DML：INSERT， DELETE， UPDATE， SELECT'
+			mysql> help Data Manipulation
+
+				
+			'INSERT INTO：'
+				INSERT  [INTO]  tbl_name  [(col1,...)]  {VALUES|VALUE}  (val1, ...),(...),...
+					(val1, ...),(...),...：可以插入多行数据
+				
+				注意：
+					字符型：引号；
+					数值型：不能用引号；
+
+				REPLACE  INTO：相当于INSERT INTO
+					但是REPLACE可以覆盖源数据
+					
+				'实例：'
+					MariaDB [hidb]> INSERT INTO students VALUES(1,'tom','M','1995-09-30','1');
+					Query OK, 1 row affected (0.01 sec)
+
+					MariaDB [hidb]> select * from students;
+					+-------+------+--------+------------+---------+
+					| stuid | name | gender | birthday   | classid |
+					+-------+------+--------+------------+---------+
+					|     1 | tom  | M      | 1995-09-30 | 1       |
+					+-------+------+--------+------------+---------+
+					1 row in set (0.00 sec)
+
+					'插入多行数据：'
+					MariaDB [hidb]> INSERT INTO students(name,gender) VALUES('Guo Jing','M'),('Ding','M');
+					Query OK, 2 rows affected (0.01 sec)
+					Records: 2  Duplicates: 0  Warnings: 0
+
+					MariaDB [hidb]> SELECT * FROM students;
+					+-------+----------+--------+------------+---------+
+					| stuid | name     | gender | birthday   | classid |
+					+-------+----------+--------+------------+---------+
+					|     1 | tom      | M      | 1995-09-30 | 1       |
+					|     2 | Guo Jing | M      | NULL       | NULL    |
+					|     3 | Ding     | M      | NULL       | NULL    |
+					+-------+----------+--------+------------+---------+
+					3 rows in set (0.00 sec)
+
+
+					'创建表时，定义默认值：'
+					MariaDB [mydb]> CREATE TABLE tb4 (id INT UNSIGNED AUTO_INCREMENT,
+				    -> name CHAR(30) NOT NULL,
+				    -> age TINYINT(3) UNSIGNED,
+				    -> gender ENUM('F','M') NOT NULL DEFAULT 'M',
+				    -> PRIMARY KEY (id)
+				    -> );
+				    MariaDB [mydb]> DESC tb4;
+					+--------+---------------------+------+-----+---------+----------------+
+					| Field  | Type                | Null | Key | Default | Extra          |
+					+--------+---------------------+------+-----+---------+----------------+
+					| id     | int(10) unsigned    | NO   | PRI | NULL    | auto_increment |
+					| name   | char(30)            | NO   |     | NULL    |                |
+					| age    | tinyint(3) unsigned | YES  |     | NULL    |                |
+					| gender | enum('F','M')       | NO   |     | M       |                |
+					+--------+---------------------+------+-----+---------+----------------+
+					4 rows in set (0.00 sec)
+					MariaDB [mydb]> INSERT INTO tb4 (name,age) VALUES('tom',20);
+					Query OK, 1 row affected (0.02 sec)
+
+					MariaDB [mydb]> INSERT INTO tb4 (name,age,gender) VALUES('jerry',30,'F');
+					Query OK, 1 row affected (0.02 sec)
+
+					MariaDB [mydb]> SELECT * FROM tb4;
+					+----+-------+------+--------+
+					| id | name  | age  | gender |
+					+----+-------+------+--------+
+					|  1 | tom   |   20 | M      |
+					|  2 | jerry |   30 | F      |
+					+----+-------+------+--------+
+					2 rows in set (0.00 sec)
+
+
+
+
+			'SELECT：'
+
+				Query Cache：缓存查询的执行结果；
+					key：查询语句的hash值
+					value：查询语句的执行结果
+
+					SQL语句的编写方式：
+						SELECT name FROM tb2;
+						select name from tb2;
+
+
+				'查询执行路径：'
+					请求 --> 查询缓存
+					请求 --> 查询缓存 --> 解析器 --> 预处理器 --> 优化器(有可能会重写查询语句) ——-> 查询执行引擎(调用存储引擎的API) --> 存储引擎 --> 缓存 --> 响应(构建响应报文)
+
+				SELECT语句的执行流程：
+					FROM --> WHERE --> GROUP BY --> HAVING --> ORDER BY --> SELECT --> LIMIT 
+
+				(1) SELECT  *  FROM  tbl_name[,tb2,tb3];	!!!!此操作在生产环境中非常危险，慎用!!!!!
+					返回指定表的的所有数据，可以多表查询
+
+				(2) SELECT  col1, col2, ...  FROM  tbl_name;
+					显示时，字段可以显示为别名；
+						col_name  AS  col_alias
+
+					mysql> SELECT name AS student_name,gender FROM students;
+
+				(3)  SELECT  col1, ...  FROM tbl_name  WHERE clause; 
+					'WHERE clause：用于指明挑选条件；'实现"选择"功能
+						col_name 操作符 value：
+							age > 30; 
+	    						
+						比较操作符:
+							>, <, >=, <=, ==, !=
+
+							BETWEEN ...  AND ...
+							LIKE 'PATTERN'
+								通配符：
+									%：任意长度的任意字符；
+									_：任意单个字符；
+							RLIKE  'PATTERN'
+								正则表达式对字符串做模式匹配；
+							IS NULL
+							IS NOT NULL
+							
+						逻辑操作符：
+							and、or、not、xor
+							与   或   非  异或
+
+						算数操作符：
+							+ 、- 、* 、/ 、%
+
+							mysql> SELECT name,gender FROM students WHERE stuid>2;
+							mysql> SELECT name,gender FROM students WHERE gender='M';
+							mysql> SELECT * FROM students 
+
+							mysql> SELECT * FROM sutdents WHERE classid IN (1,2,3);
+							mysql> SELECT * FROM students WHERE name LIKE 'd%';		#d开头的行
+							mysql> SELECT * FROM sutdents WHERE name RLIKE '^D';	#D开头的数据以正则表达式查看
+
+
+
+							MariaDB [mydb]> SELECT * FROM tb4 WHERE age > 20 AND age < 40;
+							+----+------------+------+--------+
+							| id | name       | age  | gender |
+							+----+------------+------+--------+
+							|  2 | jerry      |   30 | F      |
+							|  6 | zhangsan   |   35 | F      |
+							|  7 | luoyonghao |   39 | M      |
+							+----+------------+------+--------+
+							3 rows in set (0.00 sec)
+
+							MariaDB [mydb]> SELECT * FROM tb4 WHERE age BETWEEN 20 AND 40;
+							+----+------------+------+--------+
+							| id | name       | age  | gender |
+							+----+------------+------+--------+
+							|  1 | tom        |   20 | M      |
+							|  2 | jerry      |   30 | F      |
+							|  3 | maxie      |   40 | F      |
+							|  6 | zhangsan   |   35 | F      |
+							|  7 | luoyonghao |   39 | M      |
+							+----+------------+------+--------+
+							5 rows in set (0.00 sec)
+
+							MariaDB [mydb]> SELECT * FROM tb4 WHERE age IN (20,30,13);
+							+----+----------+------+--------+
+							| id | name     | age  | gender |
+							+----+----------+------+--------+
+							|  1 | tom      |   20 | M      |
+							|  2 | jerry    |   30 | F      |
+							|  4 | liyang   |   13 | F      |
+							|  5 | zhangsan |   13 | F      |
+							+----+----------+------+--------+
+							4 rows in set (0.00 sec)
+
+							MariaDB [mydb]> SELECT * FROM tb4 WHERE NOT name LIKE "%o%";
+							+----+----------+------+--------+
+							| id | name     | age  | gender |
+							+----+----------+------+--------+
+							|  2 | jerry    |   30 | F      |
+							|  3 | maxie    |   40 | F      |
+							|  4 | liyang   |   13 | F      |
+							|  5 | zhangsan |   13 | F      |
+							|  6 | zhangsan |   35 | F      |
+							+----+----------+------+--------+
+							5 rows in set (0.00 sec)
+
+
+				(4) SELECT col1, ... FROM tbl_name  [WHERE clause]  ORDER BY  col_name, col_name2, ...  [ASC|DESC];
+					ASC: 升序；默认升序
+					DESC： 降序；
+
+						mysql> SELECT * FROM sutdents ORDER BY name;
+						mysql> SELECT * FROM sutdents ORDER BY name DESC;
+
+				(5)去重查询：
+					SELECT DISTINCT col_name FROM tb_name;
+						对于某个字段查询时，去重
+
+
+				(6)分组查询：目的是为了聚合
+					
+					GROUP BY：根据指定字段把查询的结果进行"分组"以用于"聚合"运算；
+
+						count(), sum(), avg(),  max(), min() ：聚合函数
+						总数      总和   平均值  最大值  最小值
+					
+					HAVING：对聚合后结果做条件过滤
+
+					ORDER BY ：根据指定的字段把查询的结果进行排序
+						升序：ASC
+						降序：DESC
+
+					LIMIT：对输出结果进行数量限制
+						LIMIT {[offset,] row_count | row_count OFFSET offset}
+
+
+					mysql> SELECT count(*) AS 'name of line',gender FROM students GROUP BY gender;
+
+					MariaDB [mydb]> SELECT gender,avg(age) FROM tb4 GROUP BY gender HAVING  avg(age) > 20;
+					+--------+----------+
+					| gender | avg(age) |
+					+--------+----------+
+					| F      |  26.2000 |
+					| M      |  29.5000 |
+					+--------+----------+
+					2 rows in set (0.00 sec)
+
+					MariaDB [mydb]> SELECT gender,avg(age) FROM tb4 GROUP BY gender HAVING  avg(age) > 28;
+					+--------+----------+
+					| gender | avg(age) |
+					+--------+----------+
+					| M      |  29.5000 |
+					+--------+----------+
+					1 row in set (0.00 sec)
+
+					MariaDB [mydb]> SELECT name,gender,age FROM tb4 HAVING age > 20;
+					+------------+--------+------+
+					| name       | gender | age  |
+					+------------+--------+------+
+					| jerry      | F      |   30 |
+					| maxie      | F      |   40 |
+					| zhangsan   | F      |   35 |
+					| luoyonghao | M      |   39 |
+					+------------+--------+------+
+					4 rows in set (0.00 sec)
+
+
+
+
+			'多表查询：'
+				连接操作：
+					交叉连接：笛卡尔乘积；
+					内连接：
+						等值连接：让表之间的字段以等值的方式建立连接；
+						不等值连接：
+						自然连接
+						自连接
+					外连接：
+						左外连接：
+							FROM tb1 LEFT JOIN tb2 ON tb1.col = tb2.col 
+						右外连接：
+							FROM tb1 RIGHT JOIN tb2 ON tb1.col = tb2.col 
+
+					'等值连接查询实例：'
+						MariaDB [hellodb]> SELECT * FROM students,classes WHERE students.ClassID=classes.ClassID;
+						+-------+---------------+-----+--------+---------+-----------+---------+----------------+----------+
+						| StuID | Name          | Age | Gender | ClassID | TeacherID | ClassID | Class          | NumOfStu |
+						+-------+---------------+-----+--------+---------+-----------+---------+----------------+----------+
+						|     1 | Shi Zhongyu   |  22 | M      |       2 |         3 |       2 | Emei Pai       |        7 |
+						|     2 | Shi Potian    |  22 | M      |       1 |         7 |       1 | Shaolin Pai    |       10 |
+						|     3 | Xie Yanke     |  53 | M      |       2 |        16 |       2 | Emei Pai       |        7 |
+						|     4 | Ding Dian     |  32 | M      |       4 |         4 |       4 | Wudang Pai     |       12 |
+						|     5 | Yu Yutong     |  26 | M      |       3 |         1 |       3 | QingCheng Pai  |       11 |
+						|     6 | Shi Qing      |  46 | M      |       5 |      NULL |       5 | Riyue Shenjiao |       31 |
+						|     7 | Xi Ren        |  19 | F      |       3 |      NULL |       3 | QingCheng Pai  |       11 |
+						|     8 | Lin Daiyu     |  17 | F      |       7 |      NULL |       7 | Ming Jiao      |       27 |
+						|     9 | Ren Yingying  |  20 | F      |       6 |      NULL |       6 | Lianshan Pai   |       27 |
+						|    10 | Yue Lingshan  |  19 | F      |       3 |      NULL |       3 | QingCheng Pai  |       11 |
+						|    11 | Yuan Chengzhi |  23 | M      |       6 |      NULL |       6 | Lianshan Pai   |       27 |
+						|    12 | Wen Qingqing  |  19 | F      |       1 |      NULL |       1 | Shaolin Pai    |       10 |
+						|    13 | Tian Boguang  |  33 | M      |       2 |      NULL |       2 | Emei Pai       |        7 |
+						|    14 | Lu Wushuang   |  17 | F      |       3 |      NULL |       3 | QingCheng Pai  |       11 |
+						|    15 | Duan Yu       |  19 | M      |       4 |      NULL |       4 | Wudang Pai     |       12 |
+						|    16 | Xu Zhu        |  21 | M      |       1 |      NULL |       1 | Shaolin Pai    |       10 |
+						|    17 | Lin Chong     |  25 | M      |       4 |      NULL |       4 | Wudang Pai     |       12 |
+						|    18 | Hua Rong      |  23 | M      |       7 |      NULL |       7 | Ming Jiao      |       27 |
+						|    19 | Xue Baochai   |  18 | F      |       6 |      NULL |       6 | Lianshan Pai   |       27 |
+						|    20 | Diao Chan     |  19 | F      |       7 |      NULL |       7 | Ming Jiao      |       27 |
+						|    21 | Huang Yueying |  22 | F      |       6 |      NULL |       6 | Lianshan Pai   |       27 |
+						|    22 | Xiao Qiao     |  20 | F      |       1 |      NULL |       1 | Shaolin Pai    |       10 |
+						|    23 | Ma Chao       |  23 | M      |       4 |      NULL |       4 | Wudang Pai     |       12 |
+						+-------+---------------+-----+--------+---------+-----------+---------+----------------+----------+
+						23 rows in set (0.00 sec)
+
+						MariaDB [hellodb]> SELECT * FROM students,classes WHERE students.ClassID=classes.ClassID AND StuID=4;
+						+-------+-----------+-----+--------+---------+-----------+---------+------------+----------+
+						| StuID | Name      | Age | Gender | ClassID | TeacherID | ClassID | Class      | NumOfStu |
+						+-------+-----------+-----+--------+---------+-----------+---------+------------+----------+
+						|     4 | Ding Dian |  32 | M      |       4 |         4 |       4 | Wudang Pai |       12 |
+						+-------+-----------+-----+--------+---------+-----------+---------+------------+----------+
+						1 row in set (0.00 sec)
+
+							
+
+
+			'子查询：在查询中嵌套查询；' 
+					
+				用于WHERE子句中的子查询；
+					(1) 用于比较表达式中的子查询：子查询仅能返回单个值； 
+					(2) 用于IN中的子查询：子查询可以返回一个列表值； 
+					(3) 用于EXISTS中的子查询：
+				用于FROM子句中的子查询；
+					SELECT tb_alias.col1, ... FROM (SELECT clause) AS tb_alias WHERE clause; 
+					
+			'联合查询：将多个查询语句的执行结果相合并；'
+				UNION 
+					SELECT clause UNION SELECT cluase；
+
+
+
+
+					
+			DELETE：'精确到行删除'，也可以删除整张表('必须使用where，否则将会对整行操作')
+				DELETE   FROM  tbl_name  [WHERE where_condition]  [ORDER BY ...]  [LIMIT row_count]
+					'必须跟上WHERE条件，否则则会删除整张表'‘
+
+				(1) DELETE  FROM  tbl_name  WHERE where_condition 
+				(2) DELETE  FROM  tbl_name  [ORDER BY ...]  [LIMIT row_count]
+				
+				mysql> DELETE FROM sutdents WHERE stuid=3;
+				mysql> DELETE FROM students ORDER BY age LIMIT 100;
+					根据年龄排序，删除年龄最小的100个
+					或者
+				mysql> DELETE FROM students ORDER BY DESC age LIMIT 100;
+					删除年龄最大的100个
+
+			
+
+
+			UPDATE：'修改指定字段的值'('必须使用where，否则将会整列字段的值操作')
+				UPDATE [LOW_PRIORITY] [IGNORE] table_reference  SET col_name1=value1 [, col_name2=value2] ... [WHERE where_condition]  [ORDER BY ...] [LIMIT row_count]
+				
+				mysql> UPDATE sutdents SET classid=2 where stuid=2;
+
+				实例：年龄最大的五个人的工资在原有的基础上加5000
+					MariaDB [mydb]> ALTER TABLE tb4 ADD money MEDIUMINT UNSIGNED NOT NULL;
+					Query OK, 7 rows affected (0.02 sec)
+					Records: 7  Duplicates: 0  Warnings: 0
+
+					MariaDB [mydb]> SELECT * FROM tb4;
+					+----+------------+------+--------+-------+
+					| id | name       | age  | gender | money |
+					+----+------------+------+--------+-------+
+					|  1 | tom        |   20 | M      |     0 |
+					|  2 | jerry      |   91 | F      |     0 |
+					|  3 | maxie      |   40 | F      |     0 |
+					|  4 | liyang     |   13 | F      |     0 |
+					|  5 | zhangsan   |   13 | F      |     0 |
+					|  6 | zhangsan   |   35 | F      |     0 |
+					|  7 | luoyonghao |   39 | M      |     0 |
+					+----+------------+------+--------+-------+
+					7 rows in set (0.00 sec)
+
+					MariaDB [mydb]> SELECT * FROM tb4 ORDER BY age DESC LIMIT 4;
+					+----+------------+------+--------+-------+
+					| id | name       | age  | gender | money |
+					+----+------------+------+--------+-------+
+					|  2 | jerry      |   91 | F      |     0 |
+					|  3 | maxie      |   40 | F      |     0 |
+					|  7 | luoyonghao |   39 | M      |     0 |
+					|  6 | zhangsan   |   35 | F      |     0 |
+					+----+------------+------+--------+-------+
+					4 rows in set (0.00 sec)
+
+					MariaDB [mydb]> UPDATE tb4 SET money=money+5000 ORDER BY age DESC LIMIT 4;
+					Query OK, 4 rows affected (0.02 sec)
+					Rows matched: 4  Changed: 4  Warnings: 0
+
+					MariaDB [mydb]> SELECT * FROM tb4;
+					+----+------------+------+--------+-------+
+					| id | name       | age  | gender | money |
+					+----+------------+------+--------+-------+
+					|  1 | tom        |   20 | M      |     0 |
+					|  2 | jerry      |   91 | F      |  5000 |
+					|  3 | maxie      |   40 | F      |  5000 |
+					|  4 | liyang     |   13 | F      |     0 |
+					|  5 | zhangsan   |   13 | F      |     0 |
+					|  6 | zhangsan   |   35 | F      |  5000 |
+					|  7 | luoyonghao |   39 | M      |  5000 |
+					+----+------------+------+--------+-------+
+					7 rows in set (0.00 sec)
+
+
+		!!!!!!'注意：可以使用sql_safe_updates变量阻止不带条件更新操作'!!!!!!!
+				MariaDB [mydb]> SHOW SESSION VARIABLES LIKE 'sql%';
+				+--------------------------+----------------------+
+				| Variable_name            | Value                |
+				+--------------------------+----------------------+
+				| sql_auto_is_null         | OFF                  |
+				| sql_big_selects          | ON                   |
+				| sql_big_tables           | OFF                  |
+				| sql_buffer_result        | OFF                  |
+				| sql_log_bin              | ON                   |
+				| sql_log_off              | OFF                  |
+				| sql_low_priority_updates | OFF                  |
+				| sql_max_join_size        | 18446744073709551615 |
+				| sql_mode                 |                      |
+				| sql_notes                | ON                   |
+				| sql_quote_show_create    | ON                   |
+				| sql_safe_updates         | OFF                  |
+				| sql_select_limit         | 18446744073709551615 |
+				| sql_slave_skip_counter   | 0                    |
+				| sql_warnings             | OFF                  |
+				+--------------------------+----------------------+
+				15 rows in set (0.00 sec)
+
+				MariaDB [mydb]> SET SESSION sql_safe_updates=1;
+				Query OK, 0 rows affected (0.00 sec)
+
+				MariaDB [mydb]> SHOW SESSION VARIABLES LIKE 'sql%';
+				+--------------------------+----------------------+
+				| Variable_name            | Value                |
+				+--------------------------+----------------------+
+				| sql_auto_is_null         | OFF                  |
+				| sql_big_selects          | ON                   |
+				| sql_big_tables           | OFF                  |
+				| sql_buffer_result        | OFF                  |
+				| sql_log_bin              | ON                   |
+				| sql_log_off              | OFF                  |
+				| sql_low_priority_updates | OFF                  |
+				| sql_max_join_size        | 18446744073709551615 |
+				| sql_mode                 |                      |
+				| sql_notes                | ON                   |
+				| sql_quote_show_create    | ON                   |
+				| sql_safe_updates         | ON                   |
+				| sql_select_limit         | 18446744073709551615 |
+				| sql_slave_skip_counter   | 0                    |
+				| sql_warnings             | OFF                  |
+				+--------------------------+----------------------+
+				15 rows in set (0.00 sec)
+
+
+			'TRUNCATE：清空表中所有数据'
+				MariaDB [mydb]> help TRUNCATE TABLE;
+				Name: 'TRUNCATE TABLE'
+				Description:
+				Syntax:
+				TRUNCATE [TABLE] tbl_name
+
+				TRUNCATE TABLE empties a table completely. It requires the DROP
+				privilege.
+
+
+
+	'用户账号及权限管理：'
+				
+		用户账号：'username'@'host'
+			host：此用户访问当前mysql服务器时，允许其通过哪些主机远程创建连接；
+				表示方式：IP，网络地址、主机名、通配符(%和_)；
+				
+			禁止检查主机名：/etc/my.cnf
+				[mysqld]
+				skip_name_resolve = ON
+				
+		'创建用户账号：'
+			CREATE  USER   'username'@'host'  [IDENTIFIED BY  'password'];
+			
+			mysql>CREATE USER 'tom'@'172.16.%.%' IDENTIFIED BY 'root@123';
+
+
+		'删除用户账号：'
+			DROP USER  'user'@'host' [, user@host] ...
+
+			mysql> DROP USER 'tom'@'172.16.%.%';
+		
+
+		'授权：'授权时，如果用户不存在，则自动创建用户
+
+			权限级别：管理权限、数据库、表、字段、存储例程；
+			
+			GRANT  priv_type,...  ON  [object_type]  db_name.tbl_name  TO  'user'@'host'  [IDENTIFIED BY  'password'];
+				
+				priv_type： ALL  [PRIVILEGES] 权限列表
+				'db_name.tbl_name：'
+					*.*：所有库的所有表；
+					db_name.*：指定库的所有表；
+					db_name.tbl_name：指定库的特定表；
+					db_name.routine_name：指定库上的存储过程或存储函数；
+				
+				[object_type]
+					TABLE
+					FUNCTION
+					PROCEDURE
+
+				实例：
+					mysql> GRANT ALL ON hidb.* TO 'tom'@'172.16.%.%' IDENTIFIED BY 'root@123';
+					mysql> GRANT ALL ON mysql.user TO 'tom'@'172.16.%.%';
+
+
+			'查看指定用户所获得的授权：'
+				SHOW GRANTS FOR  'user'@'host'
+				
+				SHOW GRANTS FOR CURRENT_USER;
+
+				SHOW GRANTS; 查看用户自己的所有权限
+				
+			'回收权限：'
+				REVOKE  priv_type, ...  ON  db_name.tbl_name  FROM  'user'@'host';
+				
+				mysql> REVOKE DELETE,UPDATE ON mysql.user FROM 'tom'@'172.16.%.%';
+
+
+			注意：MariaDB服务进程启动时，会读取mysql库的所有授权表至内存中；
+				(1) GRANT或REVOKE命令等执行的权限操作会保存于表中，MariaDB此时一般会自动重读授权表，权限修改会立即生效；
+				(2) 其它方式实现的权限修改，要想生效，必须手动运行FLUSH PRIVILEGES命令方可；
+			
+			'刷新授权表：'
+				mysql> FLUSH PRIVILEGES;
+
+	
+
+	'mariadb缓存：'
+		使用以下命令：
+
+		MariaDB [mydb]> SHOW GLOBAL VARIABLES LIKE '%cache%';
+		+-------------------------------+----------------------+
+		| Variable_name                 | Value                |
+		+-------------------------------+----------------------+
+		| aria_pagecache_age_threshold  | 300                  |
+		| aria_pagecache_buffer_size    | 134217728            |
+		| aria_pagecache_division_limit | 100                  |
+		| binlog_cache_size             | 32768                |
+		| binlog_stmt_cache_size        | 32768                |
+		| have_query_cache              | YES                  |
+		| join_cache_level              | 2                    |
+		| key_cache_age_threshold       | 300                  |
+		| key_cache_block_size          | 1024                 |
+		| key_cache_division_limit      | 100                  |
+		| key_cache_segments            | 0                    |
+		| max_binlog_cache_size         | 18446744073709547520 |
+		| max_binlog_stmt_cache_size    | 18446744073709547520 |
+		| metadata_locks_cache_size     | 1024                 |
+		| query_cache_limit             | 1048576              |
+		| query_cache_min_res_unit      | 4096                 |
+		| query_cache_size              | 0                    |
+		| query_cache_strip_comments    | OFF                  |
+		| query_cache_type              | ON                   |
+		| query_cache_wlock_invalidate  | OFF                  |
+		| stored_program_cache          | 256                  |
+		| table_definition_cache        | 400                  |
+		| table_open_cache              | 400                  |
+		| thread_cache_size             | 0                    |
+		+-------------------------------+----------------------+
+		24 rows in set (0.00 sec)
+
+
+
+
+
+	'练习题:'
+		前提，授权tom@172.16.%.%用户对hidb数据库上students表有所有访问权限；而后通过Tom用户完成以下操作
+
+		1、将birthday改为age;
+		2、向students中插入100行数据：
+			用户为stu1-stud100;
+			性别随机为:M或F
+			出生日期：空
+			年龄为:18-100之间的随机数
+		3、以性别为分组，显示每组的平均年龄；
+		4、显示年龄大于40的用户；
+		
+
+		1.答案
+			mysql> GRANT ALL PRIVILEGES ON hidb.* TO 'tom'@'172.16.%.%' IDENTIFIED BY 'root@123';
+
+			$ mysql -utom -h172.16.1.61 -proot@123
+			mysql> ALTER TABLE hidb.students CHANGE birthday age INT(3) NOT NULL;
+
+
+		2.	编写shell脚本执行第二题：
+				[root@centos6-test ~]# cat insert.sh
+				#!/bin/bash
+				#
+				#将插入数据的命令定义为函数
+				insert_data() {
+					mysql -utom -h172.16.1.20 -proot@123 -e "INSERT INTO hidb.students(name,gender,age)  VALUES("$1","$2",$3)"
+				}
+
+				#生成随机的性别
+				random_sex() {
+					declare -a gender
+					gender=("M" "F")
+					index=$[$RANDOM%2]
+					echo ${gender[$index]}
+				}
+
+				#生成随机的18-100年龄
+				random_age() {
+					echo $[RANDOM%81+18]
+				}
+
+				for i in {1..5};do
+					#NAME=
+					#SEX=`random_sex`
+					AGE=`random_age`
+					insert_data "\"stu$i\"" \"`random_sex`\" $AGE
+				done
+
+		3.答案
+			mysql> select avg(age) AS "AVG of age",gender from students group by gender;
+			+------------+--------+
+			| AVG of age | gender |
+			+------------+--------+
+			|    56.6078 | F      |
+			|    48.8367 | M      |
+			+------------+--------+
+			2 rows in set (0.00 sec)
+
+		4.答案
+			mysql> select * from students where age > 40 order by age;
+			+-------+--------+--------+-----+---------+
+			| stuid | name   | gender | age | classid |
+			+-------+--------+--------+-----+---------+
+			|    79 | stu71  | F      |  41 | NULL    |
+			|    54 | stu46  | M      |  41 | NULL    |
+			|    63 | stu55  | M      |  41 | NULL    |
+			|    95 | stu87  | F      |  41 | NULL    |
+			|    16 | stu8   | M      |  42 | NULL    |
+			|    30 | stu22  | F      |  42 | NULL    |
+			|    38 | stu30  | F      |  43 | NULL    |
+			|    34 | stu26  | M      |  44 | NULL    |
+			|    75 | stu67  | M      |  44 | NULL    |
+			|    81 | stu73  | F      |  46 | NULL    |
+			|    48 | stu40  | F      |  46 | NULL    |
+			|    96 | stu88  | M      |  46 | NULL    |
+			...........
+			...........
+			|     4 | stu1   | F      |  90 | NULL    |
+			|    99 | stu91  | M      |  91 | NULL    |
+			|    46 | stu38  | F      |  91 | NULL    |
+			|    89 | stu81  | F      |  94 | NULL    |
+			|    51 | stu43  | M      |  95 | NULL    |
+			|    77 | stu69  | F      |  97 | NULL    |
+			|    74 | stu66  | F      |  97 | NULL    |
+			|   106 | stu98  | F      |  97 | NULL    |
+			+-------+--------+--------+-----+---------+
+			67 rows in set (0.00 sec)
+
+
+
+	'加固mysql服务器，在安装完成后，运行mysql_secure_installation命令；'
+
+
+		
+	图形管理组件：
+		phpMyAdmin
+			运行于lamp；
+		Navicat
+		Mysql-Front
+		ToadForMySQL
+		SQLyog
+
+
+
+
+'MySQL实验：'使用hellodb.sql 
+	1、从ftp下载：
+		$lftp 172.16.0.1
+		cd /pub/Files/
+		mget hellodb.sql
+	2、修改sql脚本中的默认数据库引擎：
+		$ sed -i 's@ENGINE=MyISAM@ENGINE=InnodDB@g' hellodb.sql
+	3、执行sql脚本
+		$ chown mysql.mysql hellodb.sql 
+		$ mysql -uroot 
+		> \. /root/hellodb.sql
+
+
+练习：导入hellodb.sql生成数据库
+	(1) 在students表中，查询年龄大于25岁，且为男性的同学的名字和年龄；
+	(2) 以ClassID为分组依据，显示每组的平均年龄；
+	(3) 显示第2题中平均年龄大于30的分组及平均年龄；
+	(4) 显示以L开头的名字的同学的信息；
+	(5) 显示TeacherID非空的同学的相关信息；
+	(6) 以年龄排序后，显示年龄最大的前10位同学的信息；
+	(7) 查询年龄大于等于20岁，小于等于25岁的同学的信息；用三种方法；
+
+			
+练习：导入hellodb.sql，以下操作在students表上执行
+	1、以ClassID分组，显示每班的同学的人数；
+	2、以Gender分组，显示其年龄之和；
+	3、以ClassID分组，显示其平均年龄大于25的班级；
+	4、以Gender分组，显示各组中年龄大于25的学员的年龄之和；
+
+
+练习：导入hellodb.sql，完成以下题目：
+	1、显示前5位同学的姓名、课程及成绩；
+	2、显示其成绩高于80的同学的名称及课程；
+	3、求前8位同学每位同学自己两门课的平均成绩，并按降序排列；
+	4、显示每门课程课程名称及学习了这门课的同学的个数；
+
+
+思考：
+	1、如何显示其年龄大于平均年龄的同学的名字？
+	2、如何显示其学习的课程为第1、2，4或第7门课的同学的名字？
+	3、如何显示其成员数最少为3个的班级的同学中年龄大于同班同学平均年龄的同学？
+	4、统计各班级中年龄大于全校同学平均年龄的同学。	
+
+
+
+
+
+
+
+
+
+
+'lamp(3)'
+
+	httpd+php结合方式
+		module:php 
+		fastcgi:php-fpm
+
+	php 在仓库的各种模块：
+		php-mbstring：字体
+		php-mcrypt：加密解密
+
+	php-fpm:
+		CentOS 6：
+			PHP-5.3.2-：默认不支持fpm机制；需要自行打补丁并编译安装；
+			httpd-2.2：默认不支持fcgi协议，需要自行编译此模块；
+			
+			解决方案：编译安装httpd-2.4, php-5.3.3+；
+		
+		CentOS 7：
+			httpd-2.4：rpm包默认编译支持了fcgi模块；
+			php-fpm包：专用于将php运行于fpm模式；
+
+			'MariaDB配置：'
+
+				编辑mysql配置文件：/etc/my.cnf.d/server.conf
+					skip_name_resolve=ON 
+					innodb_file_per_table=ON 
+
+				运行以下MYSQL初始化命令：
+					mysql_secure_installation
+
+			
+			'配置文件：'
+				服务配置文件：/etc/php-fpm.conf,  /etc/php-fpm.d/*.conf
+				php环境配置文件：/etc/php.ini, /etc/php.d/*.ini 
+				
+				'连接池：'
+					pm = static|dynamic 	'动态与静态'
+						static：固定数量的子进程；pm.max_children；
+						dynamic：子进程数据以动态模式管理；
+							pm.start_servers
+							pm.min_spare_servers
+							pm.max_spare_servers  	#最大空闲数
+							;pm.max_requests = 500  #每个子进程响应多少个请求后结束子进程
+				
+
+
+
+
+				配置/etc/php-fpm.d/www.conf配置文件:
+					修改其中：
+						listen = *:9000 #监听本机IP地址上的所有9000端口
+						listen.allowed_clients = IP  #授权连接，允许哪台机器访问（如果都在一台服务器上，则无需修改）
+						pm.max_children：最大固定数量的子进程
+						pm.status_path = /pm-status #fpm的状态页
+						ping.path = /ping 	#状态监测
+						ping.response = pong #状态监测
+						php_value[session.save_handler] = files 
+						php_value[session.save_path] = /var/lib/php/session	
+							
+
+				创建session目录，并确保运行php-fpm进程的用户对此目录有读写权限；
+					$ mkdir  /var/lib/php/session
+					$ chown apache.apache /var/lib/php/session							
+							
+				(1) 配置httpd，添加/etc/httpd/conf.d/fcgi.conf配置文件，内容类似：
+				
+					DirectoryIndex index.php
+					ProxyRequests Off  				#关闭正向代理
+					ProxyPassMatch ^/(.*\.php)$  fcgi://127.0.0.1:9000/var/www/html/$1	  #如果用户请求的网页是php，则反代给127.0.0.1:9000/var/www/html/$1	 $1是：(.*\.php)
+				
+				(2) '如果有虚拟主机，则配置此项'，没有则只配置(1)
+					虚拟主机配置
+
+
+					DirectoryIndex index.php
+
+					<VirtualHost *:80>
+						ServerName www.b.net
+						DocumentRoot /apps/vhosts/b.net
+						ProxyRequests Off
+						ProxyPassMatch ^/(.*\.php)$  fcgi://127.0.0.1:9000/apps/vhosts/b.net/$1
+						ProxyPassMatch ^/(ping|pmstatus).*)$ fcgi://127.0.0.1:9000/   #测试与状态接口都配置于此
+						<Directory "/apps/vhosts/b.net">
+							Options None
+							AllowOverride None
+							Require all granted
+						</Directory>
+					</VirtualHost>		   		
+
+	xcache：php的加速器
+	
+		epel源中			
+			程序包：php-xcache
+
+			yum install php-xcache
+
+		配置文件：
+			rpm -ql php-xcache
+
+			/etc/php.d/php-xcache.ini 
+
+		安装后重启php-fpm
+			systemctl restart php-fpm.service 
+
+			
+		编译安装xache的方法：
+			$ yum install php-devel
+			$ cd  xcache-3.2.0
+			$ phpize
+			$ ./configure --enable-xcache  --with-php-config=/usr/bin/php-config
+			$ make && make install
+			$ cp  xcache.ini  /etc/php.d/
+			
+
+
+
+
+'实验：在一台服务器上安装php-fpm，mysql，httpd'
+	
+	1、安装php-fpm：
+		$ yum install php-fpm
+	2、配置php-fpm：
+
+
+
+
+
+'实验：在三台服务器上配置httpd，php-fpm，mysql'
+
+	1、先在mysql主机上安装mysql以及配置mysql的root用户的密码(IP:172.16.1.110)
+		$ yum install mariadb-server 
+		$ vim /etc/my.cnf.d/server.cnf 
+		在[server]下添加：
+			skip_name_resolve=ON 
+			innodb_file_per_table=ON 
+		启动mysql：
+		$ systemctl start mariadb
+		$ mysql 
+		> CREATE DATABASE mydb;
+		> CREATE DATABASE wordpress;
+		> CREATE DATABASE discuz_db;
+		> CREATE DATABASE phpwind_db;
+		> GRANT ALL PRIVILEGES ON *.* TO 'root'@'172.16.1.110' IDENTIFIED BY 'root@123';
+		> GRANT ALL PRIVILEGES ON wordpress.* TO 'wordpress'@'172.16.1.110' IDENTIFIED BY 'root@123';
+		> GRANT ALL PRIVILEGES ON wordpress.* TO 'wordpress'@'172.16.1.120' IDENTIFIED BY 'root@123';
+		> GRANT ALL PRIVILEGES ON wordpress.* TO 'wordpress'@'172.16.1.130' IDENTIFIED BY 'root@123';
+		> GRANT ALL PRIVILEGES ON discuz_db.* TO 'discuz'@'172.16.1.110' IDENTIFIED BY 'root@123';
+		> GRANT ALL PRIVILEGES ON discuz_db.* TO 'discuz'@'172.16.1.120' IDENTIFIED BY 'root@123';
+		> GRANT ALL PRIVILEGES ON discuz_db.* TO 'discuz'@'172.16.1.130' IDENTIFIED BY 'root@123';
+		> GRANT ALL PRIVILEGES ON phpwind_db.* TO 'phpwind'@'172.16.1.110' IDENTIFIED BY 'root@123';
+		> GRANT ALL PRIVILEGES ON phpwind_db.* TO 'phpwind'@'172.16.1.120' IDENTIFIED BY 'root@123';
+		> GRANT ALL PRIVILEGES ON phpwind_db.* TO 'phpwind'@'172.16.1.130' IDENTIFIED BY 'root@123';
+		> FLUSH PRIVILEGES;
+		> exit;
+
+		启动mariaDB
+		$ systemctl start mariadb.service 
+
+	2、配置php-fpm：(IP:172.16.1.130)
+		$ yum install php-fpm php-mysql  #安装php fastcgi 与 连接数据库的模块
+
+		编辑php-fpm的配置文件：
+		$ vim /etc/php-fpm.d/www.conf 
+		#这里的监听地址改为本机的对外IP地址
+		listen = 172.16.1.130:9000
+		#这里允许请求的客户端地址为我们的HTTPD服务器IP地址：
+		listen.allowed_clients = 172.16.1.120
+
+		#取消这项的注释；状态信息查看
+		pm.status_path = /status
+
+		#取消这项的注释；网络状态信息查看
+		ping.path = /ping
+		ping.response = pong
+
+		#这里的地址为默认；一般会没有这个目录，需要我们编辑完配置文件然后创建
+		chdir = /var/www
+
+		#这里的目录需要我们创建，并修改目录的属主属组
+		php_value[session.save_path] = /var/lib/php/session
+
+		创建我们配置文件中缺少的目录，并更改其属主属组
+		$ mkdir -pv /var/lib/php/session 
+		$ chown -R apache.apache /var/lib/php/session 
+
+		$ mkdir -pv /var/www/html #这里的地址其实是我们在httpd一会配置的反向代理的地址
+		$ chown -R apache.apache /var/www/
+
+		启动php-fpm：
+		$ systemctl start php-fpm
+		
+
+
+	3、配置httpd：(IP:172.16.1.120)
+$ yum install httpd 
+
+编辑httpd的配置文件，并创建虚拟主机配置文件：
+$ vim /etc/httpd/conf/httpd.conf
+#取消这里的注释，并修改为我们HTTPD的IP地址：
+ServerName 172.16.1.120:80
+
+编辑虚拟主机配置文件： 
+$ vim /etc/httpd/conf.d/virual.conf 
+
+DirectoryIndex index.php
+<VirtualHost *:80>
+    ServerName 172.16.1.120
+    DocumentRoot "/var/www/html/"  
+    ProxyRequests Off
+    ProxyPassMatch ^/(.*\.php)$ fcgi://172.16.1.130:9000/var/www/html/$1 timeout=1800   #这里的IP地址是我们的php-fpm主机地址，路径也必须在php主机上存在，如果不存在则无法查找到资源
+    ProxyPassMatch ^/(ping|status).*$ fcgi://172.16.1.130:9000/ 
+    <Directory "/var/www/html/">   
+        Options None
+        AllowOverride None
+        Require all granted
+    </Directory>
+</VirtualHost>
+
+		创建index.php文件： 
+		$ vim /var/www/html/index.php 
+			<?php 
+				phpinfo();
+			?>
+
+		'在php-fpm主机上的操作：'
+			$ vim /var/www/html/index.php 
+			<?php 
+				phpinfo();
+			?>
+
+			$ systemctl restart php-fpm 
+
+
+		回到httpd服务器上：
+		$ systemctl start httpd 
+
+	4、打开浏览器访问httpd://172.16.1.120/index.php 
+
+	php-fpm与httpd主机之前好像是这样的关系：
+		只要是动态资源，这两台主机上都必须得有，得存在。
+		而且在php-fpm上映射的目录是在虚拟主机中配置的目录
+
+
+	5、配置phpMyAdmin:
+
+		!!!!!!在php与httpd两台主机上都要下载并解压phpMyAdmin的压缩包：!!!!!!!!
+
+
+		$ unzip phpMyAdmin-4.0.10.20-all-languages.zip 
+		$ mv phpMyAdmin-4.0.10.20-all-languages pma
+		$ mv pma /var/www/html/
+		$ cd /var/www/html 
+		$ chown -R apache.apache pma
+		$ yum install php-mbstring 
+		$ vim  /var/www/html/pma/config.inc.php #编辑第一个配置文件：修改mysql的地址
+		$cfg['Servers'][$i]['host'] = '172.16.1.110';
+
+		$ vim /var/www/html/pma/libraries/config.defalut.php   #编辑phpMyAdmin的配置文件；修改mysql数据库的地址；默认为localhost
+		#修改localhost为我们的mysql数据库地址:172.16.1.110
+		$cfg['Servers'][$i]['host'] = '172.16.1.110';
+
+		#编辑phpmyadmin默认的配置文件
+		$ cp /var/www/html/pma/config.sample.inc.php /var/www/html/pma/config.inc.php 
+		$ vim /var/www/html/pma/config.inc.php 
+		#在''中填入一段随机字符串即可
+		$cfg['blowfish_secret'] = 'adawdad32k2rjf2f2hh8b7c6d'; /* YOU MUST FILL IN THIS FOR COOKIE AUTH! */
+
+		配置完成后保存退出。
+
+			'在mysql服务器上配置：'(如果无法在phpmyadmin登陆数据库时，使用以下步骤)
+				> GRANT ALL PRIVILEGES ON *.* TO 'root'@'172.16.1.110' IDENTIFIED BY 'root@123';
+				> GRANT ALL PRIVILEGES ON *.* TO 'root'@'172.16.1.120' IDENTIFIED BY 'root@123';
+				> GRANT ALL PRIVILEGES ON *.* TO 'root'@'172.16.1.130' IDENTIFIED BY 'root@123';
+				> FLUSH PRIVILEGES;
+
+		重启各种服务：
+			mysql服务器：
+			$ systemctl restart mariadb.service 
+
+			php-fpm服务器：
+			$ systemctl restart mariadb.service
+			$ systemctl restart php-fpm.service
+
+			httpd服务器：
+			$ systemctl restart httpd.service 
+
+		打开网页访问phpMyAdmin网址：
+
+			httpd://172.16.1.120/pma/index.php 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

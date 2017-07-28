@@ -1,0 +1,137 @@
+bash脚本编程(信号捕捉)
+
+
+'信号捕捉：'
+	
+	trap 命令：
+		通过部署陷阱，捕获信号
+
+		'不能捕捉Terminal和kill信号'
+
+		语法：
+			trap [-lp] [[参数] 信号声明 ...]
+			trap 'COMMAND' SIGNALS
+				这里COMMAND，也可以直接调用函数
+
+		选项：
+			-l：列出所有信号
+				如需查每个信号的详细意义：
+					man 7 signal
+			-p：
+
+		常可以进行步骤的信号：	
+			1) SIGHUP: 无须关闭进程而让其重读配置文件
+			2) SIGINT: 中止正在运行的进程；相当于'Ctrl+c'
+			3) SIGQUIT:相当于'ctrl+\'
+				
+				'ctrl + \:
+					表示退出 交互式命令的 界面（如bc命令，mail 命令）'
+
+		实例：
+			#!/bin/bash
+			# Author: Maxie
+			# Date: 2017-05-17-21:40:07
+			# Description:trap signal test
+
+			trap 'echo "Quit"; exit' INT
+
+			for i in {1..254};do
+			    ping -W 1 -c1 172.16.$i.1
+			done
+
+		[root@centos7 signal-shell]# cat 2-trap.sh
+		#!/bin/bash
+		# Author: Maxie
+		# Date: 2017-05-17-22:01:46
+		# Description:
+
+		declare -a hostmpfiles
+
+		mytrap() {
+		    echo "Quit"
+		    rm -f ${hostmpfiles[@]}
+		    exit 1
+		}
+
+		trap 'mytrap' INT
+
+		for i in {1..10}; do
+		    tmpfile=$(mktemp /tmp/ping.XXXXXX)
+		    if ping -W 1 -c 1 172.16.$i.1 &> /dev/null;then
+		        echo "172.16.$i.1 is up" | tee $tmpfile
+		    else
+		        echo "172.16.$i.1 is down" | tee $tmpfile
+		    fi
+		    hostmpfiles[${#hostmpfiles[*]}]=$tmpfile
+		done
+
+		rm -f ${hostmpfiles[@]}
+
+
+'bash中使用ACSII颜色'
+	\033[31m：颜色开始
+		##m：前景色
+			左侧#：
+				3：前景色
+				4：背景色
+			右侧#：颜色种类
+				1，2，3，4，5，6，7
+		#m：控制字体特效
+			1，2，3，4，5，6，7
+			加粗，闪烁
+
+	\033[0m：颜色结束
+
+		多种控制符，可组合使用，彼此间用分号分隔开
+
+
+	如果修改了终端的颜色，可能会出现BUG，
+	如何修复？
+		在颜色之前加上'\[\033[31m\][\t\u@\h\W]\$\[\033[0m\] ' 例如这样既可
+
+
+
+
+'dialog：对话框'
+	可实现窗口化编程
+	yum install dialog
+
+		语法：
+			dialog --clear
+	    	dialog --create-rc file
+	    	dialog --print-maxsize
+	    	dialog common-options box-options
+
+	    实例：
+	    	$ dialog --msgbox TEXT Height Width
+	    	$ dialog --msgbox hello 17 30
+
+	如何获取用户选择或键入的内容？
+		默认，其输出信息被定向到了'错误输出流'；
+
+	a=$(dialog) 这样是无法获取到用户的输入信息，因为捕获的是标准输出，而非错误输出
+
+	所以要使用：
+		dialog --stdout 
+
+	如果脚本要使用 dialog，则必须安装了dialog
+
+
+
+
+	
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

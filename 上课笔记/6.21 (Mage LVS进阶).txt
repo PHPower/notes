@@ -1,0 +1,376 @@
+6.21 (Mage LVS进阶)
+
+回顾：
+	lvs：四层路由器
+	lvs-type：
+		nat/dr/tun/fullnat
+
+		nat/fullnat：请求和响应报文都经由director
+			nat：仅修改请求报文的目标IP，和端口
+			fullnat：修改请求报文的源和目标IP，和端口
+		dr/tun：仅请求报文经由director
+			dr：dip所属的网路接口与各RS的RIP所属的网络接口要在同一个物理网络
+				dip和rip也可以都是公网地址，vip必须是公网地址
+				rip的接口默认是响应报文的流出接口
+				每一个RS主机都需要配置vip、RS必须设置不接受arp广播(arptables命令或者设置内核参数：arp_announce=2 arp_ignore=1)
+					vip配置在非请求报文入站的网卡接口上即可(lo，或者其他非入站请求网卡即可)
+
+			tun：
+
+
+
+
+	课外扩展作业：vip与dip/rip不在同一网段的实验环境设计及配置实现； 
+	
+	博客作业：lvs的详细应用
+		讲清楚类型、调度方法；并且给出nat和dr类型的设计拓扑及具体实现；
+
+
+
+?????	'代理+ssl：'
+			在前端调度器进行ssl会话卸载，调度器和RS使用http协议
+			CA解析的域名是VIP的域名
+			http：安装 mod_ssl，使其支持ssl
+				编辑/etc/httpd/conf.d/ssl文件内的域名以及key和crt的目录位置
+			启动http
+
+			使用curl验证https：需要有ca的证书
+				curl --cacert /PATH/TO/cacert.pem https://域名
+
+'实验：配置代理nginx解ssl，与后端RS通过http协议进行通信'
+	1、两台RS配置安装http与mod_ssl、和测试页的创建
+		$ yum install -y httpd mod_ssl 
+		$ echo "RS1" > /var/www/html/index.html
+		$ echo "RS2" > /var/www/html/index.html
+		$ mkdir -pv /etc/httpd/ssl
+
+	2、VS配置CA认证以及生成自签证书：
+		$ cd /etc/pki/CA
+		$ (umask 077;openssl genrsa -out /private/cakey.pem 2048)
+		$ openssl req -x509 -new -key cakey.pem -out cacert.pem -days 3650
+		$ touch index.txt
+		$ echo 01 > serial
+
+		$ (umask 077;openssl genrsa -out http.key 2048)
+		$ openssl req -new -key http.key -out http.csr -days 3650
+		$ openssl ca -in http.csr -out http.crt 
+
+	3、将制作好的http证书以及私钥发送给RS：
+		$ scp /etc/pki/CA/http.* root@172.16.3.20:/etc/httpd/ssl
+
+		$ scp /etc/pki/CA/http.* root@172.16.3.30:/etc/httpd/ssl
+
+	4、编辑RS上ssl.conf配置文件：
+		$ vim /etc/httpd/conf.d/ssl.conf
+		ServerName www.maxie.com 443
+		证书位置 /etc/httpd/ssl/http.crt 
+		私钥位置 /etc/httpd/ssl/http.key 
+
+	5、启动RS上http服务，并测试https页面
+		$ systemctl start httpd 
+		$ ss -tnl 
+
+		'VS主机操作：'
+		$ vim /etc/hosts
+		172.16.3.20 www.maxie.com
+		$ curl --cacert /etc/pki/CA/cacert.pem https://www.maxe.com
+		RS1
+
+		$ vim /etc/hosts 
+		172.16.3.30 www.maxie.com 
+		$ curl --cacert /etc/pki/CA/cacert.pem https://www.maxe.com
+		RS2
+
+	6、通过FWM可以绑定443和80一起为一个集群进行管理
+
+
+
+
+
+'FWM：FireWall Mark '
+	实现功能：把多个服务当成一个服务，或者定义多个RIP绑定一起
+	
+	netfilter：
+		target: MARK, This  target  is  used  to set the Netfilter mark value associated with the packet.
+		
+			--set-mark value
+		
+		'在iptables的mangle表上进行配置：必须在PREROUTING上进行修改'
+			$ iptables -t mangle -A PREROUTING -d VIP地址 -p tcp -m multiport --dports 80,443 -j MARK --set-mark 3	#set-mark后随便给一个数字，以后会使用
+
+
+	借助于防火墙标记来分类报文，而后基于标记定义集群服务；可将多个不同的应用使用同一个集群服务进行调度；
+	
+	'打标记方法（在Director主机）：'
+		# iptables -t mangle -A PREROUTING -d $vip -p $proto --dport $port -j MARK --set-mark NUMBER 
+		
+	'基于标记定义集群服务：'
+		# ipvsadm -A -f NUMBER [options]
+		或者
+		$ ipvsadm -A -f 3 -s wrr
+		$ ipvsadm -a -f 3 -r RIP:1 -g 1
+		$ ipvsadm -a -f 3 -r RIP:2 -g 2
+
+	'配置完成之后需要在测试的主机上进行添加host解析：'
+		$ vim /etc/hosts
+		VIP 	www.maxie.com
+
+
+
+'实验：配置FWM'
+	1、配置网卡别名
+	vs主机： 
+		$ ifconfig eno16777736 172.16.3.100 netmask 255.255.255.255 broadcast 172.16.3.100 up
+	RS1:
+		$ ifconfig eno16777736 172.16.3.100 netmask 255.255.255.255 broadcast 172.16.3.100 up
+	RS2:
+		$ ifconfig eno16777736 172.16.3.100 netmask 255.255.255.255 broadcast 172.16.3.100 up
+
+	2、RS主机配置vip网卡别名不接受arp广播：
+		(1)编写脚本：
+		$ vim set-rs.sh
+		#!/bin/bash
+		#
+		vip=172.16.3.100
+		mask=255.255.255.255
+
+		case $1 in
+		start)
+		    echo 1 > /proc/sys/net/ipv4/conf/all/arp_ignore
+		    echo 1 > /proc/sys/net/ipv4/conf/lo/arp_ignore
+		    echo 2 > /proc/sys/net/ipv4/conf/all/arp_announce
+		    echo 2 > /proc/sys/net/ipv4/conf/lo/arp_announce
+
+		    ifconfig lo:0 $vip netmask $mask broadcast $vip up
+		    route add -host $vip dev lo:0
+		    ;;
+		stop)
+		    ifconfig lo:0 down
+
+		    echo 0 > /proc/sys/net/ipv4/conf/all/arp_ignore
+		    echo 0 > /proc/sys/net/ipv4/conf/lo/arp_ignore
+		    echo 0 > /proc/sys/net/ipv4/conf/all/arp_announce
+		    echo 0 > /proc/sys/net/ipv4/conf/lo/arp_announce
+
+		    ;;
+		*)
+		    echo "Usage $(basename $0) start|stop"
+		    exit 1
+		    ;;
+		esac
+
+		(2)执行脚本：(两台都执行)
+		$ bash -x set-rs.sh start 
+
+		(3)查看
+		[root@node2 ~]# ifconfig
+		eno16777736: flags=4163<UP,BROADCAST,RUNNING,MULTICAST>  mtu 1500
+		        inet 172.16.3.30  netmask 255.255.0.0  broadcast 172.16.255.255
+		        inet6 fe80::20c:29ff:fe7e:d37c  prefixlen 64  scopeid 0x20<link>
+		        ether 00:0c:29:7e:d3:7c  txqueuelen 1000  (Ethernet)
+		        RX packets 29398  bytes 28021610 (26.7 MiB)
+		        RX errors 0  dropped 10  overruns 0  frame 0
+		        TX packets 2935  bytes 270276 (263.9 KiB)
+		        TX errors 0  dropped 0 overruns 0  carrier 0  collisions 0
+
+		lo: flags=73<UP,LOOPBACK,RUNNING>  mtu 65536
+		        inet 127.0.0.1  netmask 255.0.0.0
+		        inet6 ::1  prefixlen 128  scopeid 0x10<host>
+		        loop  txqueuelen 0  (Local Loopback)
+		        RX packets 112  bytes 9744 (9.5 KiB)
+		        RX errors 0  dropped 0  overruns 0  frame 0
+		        TX packets 112  bytes 9744 (9.5 KiB)
+		        TX errors 0  dropped 0 overruns 0  carrier 0  collisions 0
+
+		lo:0: flags=73<UP,LOOPBACK,RUNNING>  mtu 65536
+		        inet 172.16.3.100  netmask 255.255.255.255
+		        loop  txqueuelen 0  (Local Loopback)
+
+	3、配置fwm
+		$ iptables -t mangle -A PREROUTING -d 172.16.3.100 -p tcp -m multiport 80,8080 -j MARK --set-mark 6
+		$ iptables -t mangle -A PREROUTING -d 172.16.3.100 -p tcp -m multiport --dports 80,8080 -j MARK --set-mark 6
+		$ iptables -vnL -t mangle
+		$ yum install -y ipvsadm
+		$ ipvsadm -ln
+		$ ipvsadm -A -f 6 -s wrr
+		$ ipvsadm -a -f 6 -r 172.16.3.20 -g
+		$ ipvsadm -a -f 6 -r 172.16.3.30 -g
+
+		
+
+
+
+
+'lvs persistence：持久连接'
+	
+	持久连接模板：实现无论使用任何调度算法，在一段时间内，能够实现将来自同一个地址的请求始终发往同一个RS；
+	
+		ipvsadm -A|E -t|u|f service-address [-s scheduler] [-p [timeout]]
+		
+	[-p [timeout]]：设置持久连接的时间
+		默认360s --> 6分钟
+
+		'但是持久连接会导致负载均衡会失衡'
+			但是可以使用卸载会话(ssl会话卸载)
+
+	port Affinity：
+		每端口持久：每个端口对应定义为一个集群服务，每集群服务单独调度；
+		每防火墙标记持久：基于防火墙标记定义集群服务；可实现将多个端口上的应用统一调度，即所谓的port Affinity；
+			$ ipvsadm -A -f 3 -s rr -p 
+
+		每客户端持久：基于0端口定义集群服务，即将客户端对所有应用的请求统统调度至后端主机，必须定义为持久模式；
+			$ ipvsadm -A -t VIP:0 -s rr -p 	#如果为0端口，则必须使用-p选项
+			$
+
+
+'考虑：'
+	(1)Director不可用，整个系统将不可用；SPoF
+		解决方案：
+			高可用
+				keepalived：高可用解决方案(对director进行冗余的操作)
+				heartbeat/corosync
+
+	(2)某RS不可用时，Director依然会调度请求至此RS
+		解决方案：对各RS的健康状态做检查，失败时禁用，成功时启用；
+			keepalived
+			heartbeat/corosync
+			ldirectord：只对后端机器做健康检查
+
+		检测方式：
+			(a)网络层检测
+			(b)传输层检测，端口检测
+			(c)应用层检测，请求某关键资源
+
+			ok <--> failure
+
+
+
+
+'健康状态监测：'
+	1、ping命令(网络层检测)：会出现误差
+		只能探测机器是否在线，而非主机上的服务是否存活
+
+	2、传输层检测：
+		使用端口扫描工具(tcp ping/udp ping)
+		但是端口在线，不一定服务所需资源是可用的
+
+	3、应用层探测:(资源层)
+		(1)资源响应码200
+			但是可能网页响应码被修改
+		(2)内容探测：
+			必须是我们探测时指定的
+
+		例如：php-fpm的 ping / pong 探测机制
+
+
+	'层次越低越省资源，越高检查越细；越高越对服务器压力越大；也会导致日志记录信息出问题'
+
+
+	soft state：软状态 
+
+	hard state：当软状态超过我们设定的次数时，转换到 硬状态
+
+
+	根据时间戳的范围(10次请求 7次成功 认为服务器状态OK，低于7次，认为failure)
+		ok --> ok --> problem --> ok --> problem --> ok --> problem --> ok --> ok --> problem
+
+
+
+
+	'ldirectord：'
+		Daemon to monitor remote services and control Linux Virtual Server. ldirectord is a daemon to monitor and administer real servers in a cluster of load balanced virtual servers. ldirectord typically is started from heartbeat but can also be run from the command line.
+
+		后端服务器健康检查
+
+		'需要安装在 director上'
+			第三方，需要到官网下载 http://pkgs.org/ 搜索ldirectord;
+				http://rpmfind.net 搜索即可
+
+			或者 wget ftp://pub/Sources/6.x86_64/corosync/ldirectord-3.9.5-5.1.x86_64.rpm
+
+			注意：如果配置了VIP，可能会出现ping不通172.16.0.1的情况，需要禁用VIP并重启network
+
+		配置示例：
+			checktimeout=3						#超时时长
+			checkinterval=1						#检查间隔时长
+			fallback=127.0.0.1:80				# sorry server当realserver都挂了使用此服务器
+			autoreload=yes						#自动加载
+			logfile="/var/log/ldirectord.log"	#日志文件
+			logfile="local0"					#设置rsyslog的facility
+			quiescent=no 						#静默模式
+			virtual=5 							#
+				real=172.16.0.7:80 gate 2		#realserver配置 gate dr类型
+				real=172.16.0.8:80 gate 1 		#
+				fallback=127.0.0.1:80 gate 		#
+				service=http 					#应用层协议
+				protocol=tcp 					#协议，如果要使用此项，server=http需要注释掉
+				scheduler=wrr 					#lvs调度算法
+				checktype=negotiate  			#检测方式
+				checkport=80 					#向80端口发请求 可以自定义一个虚拟主机，向虚拟主机请求资源
+				request="index.html" 			#请求哪个页面，必须开启
+				receive="CentOS"		 		#页面内容
+				virtualhost=www.x.y.z			#向某个虚拟主机请求
+				persistent=600					#持久连接
+		
+		开启vip端口
+
+		启动ldirectord：
+			$ systemctl start ldirectord 
+
+		禁用RS服务器，测试Sorry server
+			$ curl http://VIP地址
+
+
+		配置基于FWM的配置：
+				virtual=FWM_NUMBER
+					protocol=fwm
+
+					其他配置与上面无异
+
+
+
+		'实验：'
+			使用ldriector生成规则，实现2台RS wordpress会话持久连接  nfs mysql
+				RS 做 AP
+			实现健康状态检查
+
+			wordpress文件放在RS上，只有upload放在NFS上
+
+
+			'发布新版本：'
+				将1台标记为 weight 0 ，发布，上线
+				将另一台进行同样操作
+
+				等待60s --> 长连接模式使用60s
+				等待1s --> 短连接http
+
+				'回滚：(基于软链接)'
+					发布新版本时，使用ln -s 创建符号链接
+					回滚时，将老版本 ln -s 到访问的软连接上
+
+
+			持续集成、持续发布、持续部署
+
+
+
+
+博客作业：lvs的详细应用
+	讲清楚类型、调度方法；并且给出nat和dr类型的设计拓扑及具体实现；
+			
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

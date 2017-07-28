@@ -1,0 +1,150 @@
+5.8课后PDF作业题
+
+1、使用kill 命令实现让httpd服务重新载入配置文件
+	1)安装httpd
+		yum install httpd
+	2)查看服务
+		service httpd status
+		service httpd start
+		netstat -tnlp
+	3)修改配置文件，自定义主页目录
+		vim /etc/httpd/conf/httpd.conf
+			DocumentRoot "/var/www/maxiesite"
+	4)创建自定义目录以及index.html
+		mkdir /var/www/maxiesite
+		vim /var/www/maxiesite/index.html
+			hello maxiesite.com
+	5)重新加载配置文件
+		pstree -p 查找httpd的最初进程（父进程）
+		kill -1 15835
+	6)浏览器查看是否成功
+		http://172.16.1.130
+
+2、对另一个终端中正在执行的ping命令实现ctrl +C功能
+	$ ping 172.16.0.1
+	另一台终端：
+	$ ps aux | grep ping 
+	$ kill -2 16315
+	或者
+	$ kill -2 `pidof ping`
+
+
+3、系统检测到黑客用root用户登录了系统，如何将黑客所登录的终端杀死，并立即对root用户修改密码。
+	1)查看自己当前终端
+		$ tty
+		/dev/pts/3
+	2)查看当前使用root用户登录到终端的bash
+		$ ps axo user,pid,tty,cmd | grep bash
+	3)杀死除当前终端的所有bash进程
+		$ kill -9 15061 && echo "mcy958623" | passwd --stdin root
+
+
+4、测试一下sshd进程是否还存活着
+	$ ps axo user,pid,cmd | grep sshd
+	$ kill -0 14081 或者 $ kill -0 `pidof ping`
+	$ echo $?
+
+
+5、将hacker用户所开启的进程全部杀死
+	$ pkill -9 -U hacker
+
+
+6、并行执行三个脚本程序 	
+	$ (f1.sh &);(f2.sh &);(f3.sh &)
+	或者
+	$ { f1.sh& f2.sh& f3.sh& }
+	或者vim all.sh
+		f1.sh &
+		f2.sh &
+		f3.sh &
+
+
+7、计划每到周日的早上8点定时将服务器重启，如何实现？
+	$ vim /etc/cron.d/reboot
+		#every single week of Sunday ,reboot the server.
+		0 8 * * 7 root /sbin/reboot
+
+
+8、查看/bin/rpm命令所依赖的库文件
+	$ ldd /bin/rpm
+
+
+9、列举三个常用查看系统负载的命令
+	$ top
+	$ htop
+	$ uptime
+	$ iotop
+
+
+10、如何将进程置入后台，而且在关装终端后不退出 
+	$ nohup ping 172.16.0.1 &> /dev/null &
+	或者 
+	$ screen;ping 172.16.0.1
+	如果关闭了，恢复任务
+	$ screen -r
+
+
+11、用crontab执行定时任务，写出定时任务，每周三的凌晨1到5点，每十分钟执行一次/bin/backup.sh
+	$ vim /etc/cron.d/backup-bin
+		0 1-5 * * 3 root /bin/backup.sh 
+	或者
+	$ crontab -e 
+		0 1-5 * * 3 root /bin/backup.sh 
+
+	
+
+12、linux系统如何查看占用80端口的进程，并统计其进程数，将这些进程杀掉
+
+	$ lsof -i :80 查看80端口占用的程序
+
+	$ vim kill-80.sh 
+		#!/bin/bash
+		SERVER=`netstat -tnlp | grep "\:80" | tr  -s " " | cut -d"/" -f2`
+		echo $SERVER
+		PROCESS=`ps aux | grep "^root.*/usr/sbin/httpd" | head -1 | tr -s " " | cut -d" " -f2`
+		echo $PROCESS
+		COUNT=`pstree -p | grep httpd | wc -l`
+		if [ -n "$SERVER" ] && [ -n "$PROCESS"  ];then
+		        echo "占用80端口的进程数：`expr 1+${COUNT}`"
+		        echo "开始杀死进程..."
+		        sleep 2
+		        killall -9 $SERVER &> /dev/null
+		        [ $? -eq 0 ] && echo "杀死成功!"
+		else
+		        echo "进程不存在/80端口没有被占用" && exit 2
+		fi
+
+13、boot目录中的initramfs-3.10.0-327.el7.x86_64.img 文件被误删，如何恢复之？
+	(1)rm -rf /boot/initramfs-3.10.0-327.el7.x86_64.img
+	(2)reboot 
+	(3)插入系统光盘
+	(4)进入光盘启动模式，选择救援模式
+	(5)切根
+		$ chroot /mnt/sysimage/
+		$ cd /boot/
+		$ mkinitrd /boot/initramfs-`uname -r`.img `uname -r`
+	(6)重启
+		$ exit 
+		$ reboot 
+	(7)等待重启完毕，即可修复成功
+
+		如果第五步中的`mkinitrd命令`不存在，则执行：
+			1)切根，重新安装内核
+				$ chroot /mnt/sysimage
+				$ mount /dev/sr0 /mnt 
+				$ rpm -ivh /mnt/Packages/kernel-2.6.32-642.e16.x86_64.rpm --force
+				$ exit
+				$ reboot
+
+
+
+
+
+
+
+
+
+
+
+
+

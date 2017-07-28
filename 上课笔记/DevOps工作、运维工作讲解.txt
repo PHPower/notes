@@ -1,0 +1,171 @@
+DevOps工作、运维工作讲解
+
+
+
+'DevOps：'
+	plan --> code --> build --> test --> release --> deploy --> operate
+					plan	<--	Feedback <--	Measurement	 <--
+
+
+	Dev <--> Ops
+
+	release：部署
+		--> 运维工程师部署测试好的版本到生产环境
+
+	operate：反馈
+		-->
+
+	DevOps：将运维与开发 连接起来
+
+	code + build + test ：持续集成 CI(Continuous Integration)
+
+	release + develiver + deploy ：持续交付 CD(Continuous Delivery)
+
+	test：测试
+		java测试工具
+
+	release：测试完成后发布到ftp上
+		'做完release之后，运维工程师开始接手'
+
+	develiver： 发布工具
+		'ansible工具、puppet工具'
+
+
+
+
+
+	'公司环境：'
+		Development Environment：开发环境(一般为本地)
+			'托管工具：'
+				git
+				Gitlab：自建私有code仓库
+			'具有线上环境的开发环境(伪集群，伪线上)' --> 满足开发需求
+			
+
+		Testing Environment：测试环境
+			1、本地
+				公司内部环境中
+			2、机房
+			3、云端
+			'部署API接口'
+
+
+		Production Environment：生产环境
+			1、机房
+			2、云端
+
+
+
+
+
+
+
+
+	'部署一台服务器' --> 运维工作
+		1、装系统 (Bootstrapping)
+			--> PXE 、 cobbler
+				--> 'Cloud'
+					--> Xen、lxc、KVM
+				--> 'OS Install'
+					--> kickstart、jumpstart、cobbler、openQRM、xCAT
+		
+		
+		2、环境初始化 (Configuration)  --> 配置系统
+			--> 系统环境初始化、线上环境所需的安装程序包 、修改配置文件 、 启动服务
+				--> System Configuration(配置工具)
+					--> 'Puppet(ruby开发)'、SmartFrog、Chef、'SlatStack(python开发)'、Ansible(agentless)
+						
+						--> '配置仓库'(存放在配置系统)
+							存储各个主机的配置文件、安装包
+							--> '通过主机名进行识别'
+							--> '每台主机配置一个agent'，通过agent一直向配置系统请求，查看本地配置、服务是否与配置系统中本机的设置相同
+								如果不相同，则自动通过agent，从配置系统托适合自己的配置、服务。
+						
+						--> '配置系统'
+							(1) 创建模块 --> nginx、tomcat、 chrony 之类的 --> 需要重复操作的，将其配置成模块
+							(2) 创建配置文件、程序包
+							(3) 通过主机服务的不同，以及主机名进行分配
+
+
+
+		3、发布线上应用程序 (Command and Control命令及控制)
+			--> 将程序猿编写好的程序发布
+				Application Server Orchestraion(应用服务编排)
+					--> 'ControlTier'、'Ansible(playbook)'、Caplstrano、Fabric、Func
+
+
+		4、监控服务
+			--> Zabbix 监控服务运行状态
+
+
+
+
+	1、持续集成 --> jenkins
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

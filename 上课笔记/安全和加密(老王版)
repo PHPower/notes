@@ -1,0 +1,261 @@
+安全和加密(老王版)
+
+
+'加密需要：'
+	不加密流量的易受攻击性：
+		1、密码/数据嗅探
+		2、数据操作
+		3、验证操作
+		4、相当于邮寄明信片
+
+	不安全的传统协议：
+		telnel、FTP、POP3等等；不安全密码
+		http、stmp、NFS等等；不安全信息
+		Ldap、NIS、rsh等等；不安全验证
+
+
+'安全机制：'
+	NIST(美国国家标准与技术研究院)定义的安全属性：
+
+		保密性：
+			数据保密性
+			隐私性
+		完整性：
+			数据完整性
+			系统完整性
+		可用性
+
+	安全工具：STRIDE
+		Spoofing（假冒）、Tampering（篡改），Repudiation（否认）、Information Disclosure（信息泄露）、Denial of Service（拒绝服务）和Elevation of Privilege（提升权限）
+
+
+ 	'实验：使用telnet伪造邮件'
+ 		安装telnet server
+ 		$ yum install telnet-server
+
+ 		在客户端输入
+
+ 		$ telnet IP地址 25     端口号
+ 		mail from:mage@mageedu.com
+ 		rcpt to:root   #root是用户
+ 		data
+ 		subject:yuema
+ 		Are u ok ?
+ 		yuema?
+ 		.
+ 		quit
+
+ 		即可
+
+
+ 	'实验：抓telnet的包'
+ 		服务端：
+	 		开启telnet-socket服务
+	 		$ systemctl start telnet
+	 		$ systemctl start telnet-socket
+	 		$ tcpdump -i eth0 -nn -X port 23
+
+	 	客户端：
+	 		安装telnet 
+	 		$ yum install telnel 
+	 		连接：
+	 		$ telnet 172.16.121
+
+
+
+'安全：'
+	
+	安全机制：
+		加密、数字签名、访问控制、数据完整性、认证交换、流量填充、路由控制、公证
+
+	安全服务：
+		认证
+		访问控制
+		数据保密性
+			连接保密性
+			无连接保密性
+			选择域保密性
+			流量保密性
+		数据完整性
+		不可否认性
+
+
+
+	'设计的基本原则：'
+		使用成熟的安全系统
+		以小人之心度输入数据
+			sql注入攻击
+
+		外部系统是不安全的
+			IPS
+			IDS
+			firewall：防火墙（防外部攻击）
+			防水墙：防内部攻击（监控内部）
+
+			DMZ：非军事化区
+			内部LAN：军事化区
+
+		最小授权
+			生产中：权限越小越好
+
+		减少外部接口
+			服务器：对外减少访问端口
+
+		缺省使用安全模式
+
+
+		安全不是似是而非
+		从STRIDE思考
+
+		在入口处检查
+
+		从管理上保护好你的系统
+
+
+
+'安全算法：'
+	
+	常用安全技术：
+		认证
+		授权
+		安全通信
+		审计
+
+	密码算法和协议：
+		对称加密
+		公钥加密
+		单向加密
+		认证协议
+
+
+	Linux系统：OpenSSL，gpg（pgp协议的实现）
+
+
+'对称加密算法：'
+
+	对称加密：加密和解密使用同一个密钥
+		DES：Data Encryption Standard，56bits
+		3DES：
+		AES：Advanced (128, 192, 256bits)
+		Blowfish，Twofish
+		IDEA，RC6，CAST5
+	
+	特性：
+		1、加密、解密使用同一个密钥，效率高
+		2、将原始数据分割成固定大小的块，逐个进行加密
+	
+	缺陷：
+		1、密钥过多
+		2、密钥分发
+		3、数据来源无法确认
+
+
+'非对称加密算法：'
+
+	公钥加密：密钥是成对出现
+		公钥：公开给所有人；public key
+		私钥：自己留存，必须保证其私密性；secret key
+	
+	特点：用公钥加密数据，只能使用与之配对的私钥解密；反之亦然
+	
+	功能：
+		数字签名：主要在于让接收方确认发送方身份
+		对称密钥交换：发送方用对方的公钥加密一个对称密钥后发送给对方
+		数据加密：适合加密较小数据
+	
+	缺点：密钥长，加密解密效率低下
+
+	算法：
+		RSA（加密，数字签名）,DSA（数字签名）,ELGamal
+
+
+	基于一对公钥/密钥对
+		用密钥对中的一个加密，另一个解密
+	
+	实现加密：
+		接收者
+			生成公钥/密钥对：P和S
+			公开公钥P，保密密钥S
+	
+		发送者
+			使用接收者的公钥来加密消息M
+			将P(M)发送给接收者
+		
+		接收者
+			使用密钥S来解密：M=S(P(M))
+
+
+	实现数字签名：
+		发送者
+			生成公钥/密钥对：P和S
+			公开公钥P，保密密钥S
+			使用密钥S来加密消息M
+			发送给接收者S(M)
+		
+		接收者
+			使用发送者的公钥来解密M=P(S(M))
+
+		结合签名和加密
+		
+		分离签名
+
+
+'单向散列：'（哈希算法）
+
+	将任意数据缩小成固定大小的“指纹”
+		任意长度输入
+		固定长度输出（'32位固定长度'）
+		若修改数据，指纹也会改变（“不会产生冲突”）
+		无法从指纹中重新生成数据（“单向哈希”，不可逆）
+	
+	功能：数据完整性
+	
+	常见算式
+		md5: 128bits、sha1: 160bits、sha224
+		sha256、sha384、sha512
+	
+	常用工具
+		•md5sum | sha1sum [ --check ] file
+		•openssl、gpg
+		•rpm -V
+
+	对比MD5值是否相同：
+		md5sum -c filename.md5 
+		sha1sum -c filename.sha1
+			如果md5值没有改变，则会提示 "ok"
+			如果改变了，则会提示"失败，不匹配之类的信息"
+
+			[root@centos7 ~]# md5sum 1.txt > 1.txt.md5
+			[root@centos7 ~]# md5sum -c 1.txt.md5
+			1.txt: 确定
+			[root@centos7 ~]# vim 1.txt				#这一步，我在文件内加了个一个空格
+			[root@centos7 ~]# md5sum -c 1.txt.md5
+			1.txt: 失败
+			md5sum: 警告：1 个校验和不匹配
+
+
+
+	'总结：'
+		1、只要数据相同，摘要必相同（也就是MD5值，必相同）
+		2、不关心元数据的改变，只关心文件内容
+
+
+
+
+'密钥交换：'
+	密钥交换：IKE（Internet Key Exchange ）
+	
+	公钥加密：
+		DH (Deffie-Hellman)：生成会话密钥,参看：https://en.wikipedia.org/wiki/Diffie%E2%80%93Hellman_key_exchange
+	
+	DH：
+		1、A: a,p协商生成公开的整数a,大素数p
+			B: a,p
+		2、A:生成隐私数据:x (x<p )，计算得出a^x%p，发送给B
+			B:生成隐私数据:y,计算得出a^y%p，发送给A
+		3、A:计算得出[(a^y%p)^x] %p = a^xy%p，生成为密钥
+			B:计算得出[(a^x%p)^y] %p = a^xy%p，生成为密钥
+
+	'素数'：只能被1和自身整除的数（也叫质数）
+
+

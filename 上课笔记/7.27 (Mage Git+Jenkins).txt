@@ -1,0 +1,822 @@
+7.27 (Mage Git+Jenkins)
+
+
+
+
+
+
+
+'Git：'  --> linus 开发
+	'版本控制工具；'
+		本地版本控制系统
+		集中化的版本控制系统
+		分布式的版本控制系统
+		
+		BitKeeper，Git， CVS --> SVN
+		
+	
+
+	'Git是什么？'
+		1、目录内容管理系统：Directory content management system
+		2、树状历史存储系统：tree history storage system
+		3、傻瓜式内容追踪器：stupid content tracker
+		4、工具箱：a toolkit
+		5、各种命令：
+			高级：
+			低级：比较接近于底层
+		6、用一个大程序完成所有功能：
+			在主程序之下使用子命令实现不同的功能
+		7、not subversion：不是SVN
+		8、source control taxonomy：源控制分类学
+			delta storage：	是一个增量存储系统
+							只保存变化后的数据
+					存储方式：
+						local：本地 --> 解决方案：rcs
+						centrailzed：有中心节点 --> cvs 、 snv 、 perforce
+						distributed：分布式的(优先选择) --> darcs 、 mercurial(非常著名的，商业版本)
+
+
+			DAG storage：	保存快照
+							有向无环图
+					存储方式：
+						local：本地 -->  'cp -r' 命令.... ， time machine
+						centrailzed：有中心节点 --> bitkeeper 、
+						distributed：分布式的(优先选择) --> bitkeeper 、 git 、 bazaar
+
+		9、git 是分布式的 DAG存储系统
+		10、是一个对象数据库系统
+		
+		11、'GIT 目录结构：'
+			config file： 配置文件
+			hooks：钩子
+			object database：对象数据库系统
+			index：索引 --> 暂存区
+			references：对象引用符号
+
+
+
+
+
+	'Git Directory：'
+
+		'workdir：工作目录'
+			project name 
+			.git：目录 --> 追踪工作目录的中的所有版本
+				用于保存过去打算保存的快照
+				前一个版本的指向
+				有方向的，但没有环路
+			每一次提交：commit，就会保存在.git目录下一次快照
+
+		
+		'object database：对象数据库 '
+			content 
+			new_content = type + '' + content.size + \0 + content 
+				对 new_content做 hash运算
+			sha = Digest::SHA1.hexdigest(new_content)
+				在Object database中存储文件名的hash码
+					并截取hash码，进行分层存储
+			compressed = zlib:deflate(new_content)
+
+			path = ".git/objects/82/4aed032jf2342dac..."
+
+			当文件一旦发生变化，hash码就会变化
+
+			File.open(path, 'w') { |f| f.write(compressed)}
+
+			宽松格式存储
+
+			使用 delta方法进行保存数据，更为节省空间
+
+			'对象类型：'  --> 4 type of git objects
+				核心对象|目录层级结构(目录路径)：tree对象
+				核心对象|文件对象：blob对象
+					
+				提交对象：commit对象
+				标签对象：tag对象(相当于别名)
+
+				'blob对象：'
+					working directory：
+						./
+						|
+						| --> Rakefile(文件)
+						| --> README(文件)
+						| lib/
+							|
+							| --> simplegit.rb(文件)
+
+
+				'tree对象：'树对象
+					working directory 			Git directory
+						./						|	--> tree : 1a7388d
+						| 						|
+						| --> Rakefile  		|	--> blob : a874b8
+						| --> README 			|   --> blob : a90423
+						| lib/					|	--> tree : fe9877
+							| 					|   
+							| --> simplegit.rb  |	--> blob : a09dwa
+
+
+				'commit对象：(快照)' 提交对象
+					working directory
+							|
+						   tree 
+						 |		|
+						tree   blob 
+						 |
+						tree 
+					   |    | 
+					  tree blob 
+					   | 
+					  blob
+
+
+				'tag标签对象'
+					用于给一个特定对象一个易读的名称；
+
+		
+
+
+		'reference：引用'
+			tag是固定的
+			每一次提交，根树会变，修改的文件会变，但是没有变化的，还是不会改变
+
+
+
+
+
+
+
+	
+
+	'Git：'
+		工作区：Working Directory
+		暂存区：Staging Area
+		版本库：Repository
+		
+		主程序： git 
+
+	
+
+	'Git配置文件：git config '
+		仓库特有：REPO/.git/config
+			对某个用户的仓库有效
+
+		全局：~/.gitconfig,  --global
+			对某个用户的所有仓库有效
+
+		系统：/etc/git/gitconfig,  -system
+			对所有用户有效
+
+			'作用范围越大，生效优先级越低'
+		
+		
+		在文件中添加如下配置格式的信息：
+			user.name    ：用户名
+			user.email   ：邮件
+
+		或者使用 git config 配置用户信息
+
+
+
+	'Git分支：'
+		master：主分支
+		branches：其他分支
+			可以合并至主线分支
+			但是分支可能不会合并
+
+					│---------->hotfix------>│
+					│						 │
+			-----> master ----------------master1.0----->
+					│
+					│---------->
+
+		tree .git/
+		.git/
+		├── branches 					# 分支目录
+		├── config 						# 配置文件
+		├── description 				# 描述信息
+		├── HEAD 						# 
+		├── hooks
+		│   ├── applypatch-msg.sample
+		│   ├── commit-msg.sample
+		│   ├── post-update.sample
+		│   ├── pre-applypatch.sample
+		│   ├── pre-commit.sample
+		│   ├── prepare-commit-msg.sample
+		│   ├── pre-push.sample
+		│   ├── pre-rebase.sample
+		│   └── update.sample
+		├── info
+		│   └── exclude
+		├── objects
+		│   ├── info
+		│   └── pack
+		└── refs
+		    ├── heads
+		    └── tags
+
+
+
+
+	'Git工作目录：'
+		工作区： working directory
+
+		.git工作目录： 
+			索引 ：index
+				$ git add  --> 将工作目录中的内容加载到索引中
+
+			对象库：object database
+				$ git commit --> 提交，将索引中的数据提交至对象库中
+
+
+		工作目录				索引 			本地版本库
+			|----git add---->|---git commit---|
+
+
+
+
+
+
+
+	'Git仓库：'
+		索引：暂存； --> 保存 创建但未提交的状态信息
+		对象库：版本库；
+		
+	
+
+
+
+	'Git命令：'
+		初始化仓库：
+			$ git init 
+			$ ls -a 
+			$ ls .git 
+			branches  config  description  HEAD  hooks  info  objects  refs
+			$ ls .git/objects
+			info  pack
+			$ ls ./git/refs 
+			heads  tags
+			$ ls ./git/branches 	# 分支
+
+		
+		'从提交中取出提交后的数据：'
+			$ git checkout 
+				FILE_NAME：提交目录下的文件
+					需要给定文件名/目录下的文件名
+					但是这样只是恢复提交后数据，而非暂存区的内容
+				-b：创建新分支
+
+
+		'添加工作目录的内容至 索引中：'
+			$ git add
+			$ git help add --> 查看帮助手册
+			可以add多次
+			git add不会忽略任何文件，需要自己手动添加 git-ignore文件
+			每一次add都会在 objects中存储index中存储的数据
+			git不会追踪空目录
+
+		
+		$ git commit --> '提交，将索引中的数据提交至对象库中'
+
+
+		$ git status --> '查看git的状态信息'
+
+		$ git rm --> '删除文件'
+			git rm --cached FILE_NAME：删除指定在暂存区的文件
+
+
+		$ git config  --> '修改配置内容'
+			-l ：查看配置信息
+			--system：创建系统级的配置文件
+			--global：创建全局级配置文件
+
+				'示例：'
+					$ git config --global user.name maxie
+					$ git config --global user.email maxie@maxie.io
+					$ git config -l
+					user.name=maxie
+					user.email=maxie@maxie.io
+					core.repositoryformatversion=0
+					core.filemode=true
+					core.bare=false
+					core.logallrefupdates=true
+
+					$ cat ~/.gitconfig
+					[user]
+						name = maxie
+						email = maxie@maxie.io
+
+		
+		$ git commit --> '提交暂存区的内容 存储至对象仓库中，创建提交对象指向树对象'
+			-m：设置提交注释信息
+			-F：给定一个文件，作为提交注释信息
+			--no-status：不存储暂存区的状态信息
+			--interactive：交互模式
+
+				'示例:'
+					$ git commit
+					[master (root-commit) 91ee0eb] Initial version version: 0.0.1
+					 2 files changed, 40 insertions(+)
+					 create mode 100644 README
+					 create mode 100644 passwd
+
+		$ git branch NAME：'创建新分支'
+			--list：列出已有分支
+			$ git checkout NAME：切换分支
+			$ git branch --list：列出已有分支
+
+
+		$ git merge ：'合并分支'
+			将外部的分支，合并至当前分支(一般为master)
+
+			$ git merge dev
+			$ ls 
+
+
+
+
+
+
+
+
+	
+
+	'Git的对象类型：' --> ./git/objects目录下
+
+		块(blob)对象：文件的每个版本表现为一个块（blob）；
+		树（tree）对象：一个目录代表一层目录信息；
+		提交（commit）对象：用于保存版本库一次变化的元数据，包括作者、邮箱、提交日期、日志；每个提交对象都指定一个目录树对象；
+		标签（tag）对象：用于给一个特定对象一个易读的名称；
+		
+	
+
+	'对象库：内容寻址系统； ' --> ./git/objects
+		打包文件：pack file
+		
+		git ls-files：'列出文件；'
+			-s：列出暂存区(stage area)中的文件对象
+		git cat-file：'查看文件；'
+			-p：美观排列显示文件内容
+				$ git cat-file -p 1d2922
+
+		git hash-object：'计算文件的hash码；'
+		git write-tree：'根据当前索引中的内容创建树对象；'
+		
+	
+
+	'Git中的文件分类：'
+		3类：
+			已追踪的（tracked）：已经在版本库中，或者已经使用git add命令添加至索引中的文件；
+			被忽略的（Igored）：在版本库中通过“忽略文件列表”明确声明为被忽略的文件；
+			未追踪的（untracked）：上述两类之外的其它文件；
+			
+		add/rm/mv命令：
+			git add：暂存文件；
+				git ls-files：
+					默认显示索引中的文件列表的原始文件名；
+					-s：显示暂存的文件信息：权限、对象名、暂存号及原始文件名；
+					-o：显示未被追踪的文件； 
+					
+			git rm：  --> 对象库的内容不会被 'rm 命令' 删除
+				git rm：删除工作目录中的文件，及索引中的映射；
+				git rm --cached：只删除索引中的映射；
+				
+			git mv： --> 在git目录下的文件不能随意使用系统的 mv 命令修改其名字
+				git mv：改变工作目录中的文件名，及索引中的映射；
+			
+			
+			git tag ： --> 标签添加
+				-a：添加标签
+				$ git tab v0.1 7adwa9d
+					v0.1：标签名
+					7adwa9d：文件的hash码前6位即可
+				$ git checkout v0.1    -> 从 .git/refs/tags中查找 v0.1
+					可以检出 tag是 v0.1的文件
+					如果又一次add，之后使用checkout可以回退 add之前的状态
+					如果是commit，之后使用checkout可以回退，commit之前的文件状态
+
+
+
+
+
+	'Git提交：'
+		git  commit
+		git log：'查看提交日志；'
+		
+		
+
+		'提交的标识：'
+			引用：ID， reference, SHA1, 绝对提交名；
+			
+			符号引用：symbolic reference, symref；
+				本地特性分支名称、远程跟踪分支名称、标签名；
+				
+
+				'名称：'
+					refs/heads/REF：'本地特性分支名称'
+					refs/remotes/REF：'远程跟踪分支名称'
+					refs/tags/REF：'标签名'
+					
+				'Git会自动维护几个特定目的的特殊符号引用：'
+					HEAD 			始终指向当前分支的最近提交；或检出到其它分支时，目标分支的最近提交；   --> .git/HEAD
+					ORIG_HEAD		合并操作时，新生成的提交之前的提交保存于此引用中； 				--> .git/
+					FETCHED_HEAD	远程取下时的HEAD
+					MERGE_HEAD		合并操作时，其它分支的上一次提交；
+				
+			
+			'相对提交名：'
+				^：C6^, C6^2 
+					^表示当前提交的父提交，默认为1
+					^2表示当前提交的分支的第二个分支的父提交
+					^3表示当前提交的分支的第三个分支的父提交
+					....
+					....
+						
+
+
+				~：C6~, C6~2
+					~：表示当前提交的父提交
+					~2：表示当前提交的父提交的父提交   等同于 ^^ 的功能
+
+
+				..：范围标识符
+					master~3..master^：表示从master的前三次父提交  到 master的第一次父提交的范围
+
+
+				
+		
+!!!		git diff：比较提交、索引及工作目录；   
+			--color
+			
+			'比较时(默认)：'是从索引中的数据 与 工作目录中的数据进行对比
+
+				diff --cached 	索引(暂存区) 	与 最近一次提交(commit)比较 
+				diff HEAD 		工作目录 		与 最近一次提交(commit)比较
+
+			
+		
+		git reset：'撤消此前的操作； '
+			--soft：将HEAD引用指向给定的提交，但不影响索引和工作目录；不改变工作目录状态
+				应为未提交状态；工作目录的文件不会影响
+
+			--mixed：将HEAD引用指向给定的提交，并将索引内容(暂存区)改变为指定提交的快照；但不改变工作目录；
+				应为未加入暂存区状态；工作目录的文件不会影响
+			
+			--hard：将HEAD引用指向给定的提交、将索引内容改变为指定提交的快照，并改变工作目录中的内容反映指定提交的内容；
+				直接抹除所有痕迹，完全回到之前的状态；影响工作目录，可能出现文件丢失
+				'不建议使用 --hard'
+			git reset HEAD <file> to unstage ：在未提交中的索引中撤销操作
+
+				
+
+				'实验：'
+					第三个视频 14点32分
+	
+
+
+
+
+
+	'Git分支:'
+		
+		'分支命名法则：'
+			可以使用/，但不能以/结尾；
+			不能以-开头；
+			以位于/后面的组件，不能以.开头； a/b/c   不能使用：a/.b/.c
+			不能使用连续的...；
+			不能使用空白字符；
+			不能使用^, ~, ?, *，[等；
+			
+		
+		'必须惟一'；分支名字的名字始终指向目标分支的最近一次提交；
+		
+
+		git clone ：克隆分支
+		
+
+		git branch：列出、创建及删除分支；
+			git branch BRANCH_NAME [START_COMMIT]
+			git branch -d BRANCH_NAME
+			
+		
+
+		git show-branch：查看分支及其相关的提交；
+		
+		
+
+		git checkout：
+			 git checkout <branch>：检出分支；
+			 
+		
+
+		'分支合并：'  --> 'merge '
+			合并基础：要合并的分支的最近一次的共同提交；
+			我们的版本：当前分支的最近一次提交；
+			他们的版本：要合并进来的分支的最近一次提交；
+			
+			'无冲突合并：'
+				$ git checkout master
+				$ git status
+				$ git merge BRANCH_NAME
+				$ git log --graph --pretty=oneline --abbrev-commit
+				
+			
+
+			'有冲突合并：'
+				手动解决冲突：编辑有冲突的文件，修改完成之后
+				解决完成之后：
+					git add  
+					git commit 
+					
+
+			'远程版本库：'
+				当两个都下载了 一个仓库，下载到本地
+					A把仓库的内容修改了，并推送至在线仓库中
+					B也修改了内容，但是这时在线仓库内的版本已经与B本地内容不同了
+						这时需要B把在线的仓库下载后，并与B本地仓库进行合并，处理冲突
+						处理完成之后，再push到在线仓库
+		
+
+
+		'变基操作：'  --> rebase 
+			git rebase 
+			
+			$ git checkout dev
+			$ git rebase master
+			$ git checkout master
+			$ git merge -m "MSG"
+			
+			做变基时，将分支变基到master上，而非master变基到分支上
+
+
+		'两种合并方式：'
+			merge 
+			rebase
+		
+	
+
+
+
+
+
+
+	'Git：分布式版本控制系统；'
+
+		远程的仓库：
+			无需有工作目录，只需存在 PROJECT_NAME.git 类似的git
+
+			'创建裸仓库'： $ git init --bare PROJECT_NAME
+
+
+		基于网络协议：http, https, ssh, git 
+		
+		克隆操作：
+			git clone
+			
+			原始版本库存储在refs/heads/
+			
+		
+
+
+		'Git服务器：'
+			协议：本地协议（local）、HTTP/HTTPS协议、SSH协议、Git协议；
+			
+			本地协议：
+				URL：
+					/path/to/repo.git 
+					file:///path/to/repo.git 
+					
+			'Git协议'
+				由git-daemon程序提供，监听在'tcp的9418端口'；仅支持"读"操作，'无任何认证功能'；
+				
+				URL：
+					git://host/path/to/repo.git
+					git://host/~user/path/to/repo.git 
+				
+			SSH协议  --> 生成密钥对儿
+				URL：可以使用指定目录下的仓库
+					ssh://[USER@]host[:port]/path/to/repo.git
+					ssh://[USER@]host[:port]/~USERNAME/path/to/repo.git
+					
+				URL2：只能使用固定路径
+					[USER@]hostpath/to/repo.git 
+					
+			
+			'HTTP/HTTPS协议'
+				1.6.5-：哑http协议 
+				1.6.6+：智能http协议
+					--> 读/写/认证 
+
+					建议配置成 https协议
+					
+				URL：
+					http://host/path/to/repo.git
+
+
+			'最多使用的协议： http/https、ssh'；其他不建议使用
+
+		
+
+
+		'添加远程仓库：' --> 将本地仓库关联至 远程仓库
+			
+			$ git remote add PROJECT_NAME REPO_URL 
+				这里的URL是，是我们的远程仓库URL地址
+			$ git remote  #列出关联的仓库
+
+			$ git pull ：拉取远程仓库
+				如果是自己本地手动merge合并仓库内不同内容，需要使用 fetch，而非 pull
+				pull = fetch + merge 
+
+
+
+			
+			'推送：'
+				1、先fetch下载远程仓库的文件： 
+					$ git pull PROJECT_NAME master
+						这里要指定远程的仓库和分支
+					
+
+				2、 推送本地的master分支到远程节点
+
+					$ git push PROJECT_NAME master 
+					输入密码用户名
+
+				3、克隆我们推送的仓库：
+					$ git clone REPO_URL
+
+
+			'在github添加SSH密钥：'
+				在SSH and GPG keys选项中添加我们本地生成的ssh-keygen 'maxiecloud@qq.com'
+				的公钥信息，粘贴至github的ssh选项框中
+
+				$ ssh-keygen -t rsa -b 4096 -C "email@examply.com"
+
+				将公钥复制到github即可
+
+				'通过ssh下载并提交'
+					$ git clone git@github.com:maxiecloud/PROJECT_NAME
+					$ cd PROJECT_NAME
+					$ vim test.txt
+					$ git add .
+					$ git commit -m "version 0.0.4"
+
+					$ git push orgin master 
+					这里因为是clone下载的，所以是 orgin，否则应该是我们自定义的PROJECT_NAME
+
+
+
+
+		'引用远程版本库：'
+			远程版本库：定义在配置文件中一个实体；
+				[remote "NAME"]
+				
+			由两部分组成：
+				第一部分：URL；
+				第二部分：refspec, 定义一个版本库与其它版本库的名称空间的映射关系；
+					语法格式：
+						+source:destination 
+							refs/heads/NAME：本地分支 
+							refs/remotes/NAME：远程跟踪分支 
+							
+						[remote "publish"]
+						url = http://HOST/pub/repo_name.git 
+						push = +refs/heads/*:refs/remotes/origin/*
+						
+						remote.publish.url 
+						remote.publish.push
+						
+				git remote命令：管理远程仓库；
+				
+			
+
+
+
+
+	'GitLab： ' --> CE版本 ,commuity editon
+		类github的代码托管服务器程序
+		不依赖于WEB界面，需要有认证功能
+
+			推送服务使用：ssh
+			拉取服务使用：https/http
+
+
+
+		'服务器：'
+			git-daemon： --> 支持git协议的程序，但只支持拉取操作，不支持推送
+				git://
+			
+			gitweb： --> 提供http的关于git的程序包
+				要使用，必须安装httpd服务
+
+
+			使用 git-http-backend命令配置；不依赖于gitweb
+
+
+
+			'创建虚拟主机配置文件'：
+
+				$ vim /etc/httpd/conf.d/git.conf 
+				<VirtualHost *:80>
+					ServerName git.magedu.com
+					SetEnv GIT_PROJECT_ROOT /var/www/git
+					SetEnv GIT_HTTP_EXPORT_ALL
+					ScriptAlias /git/ /usr/libexec/git-core/git-http-backend/
+					<Directory "/usr/libexec/git-core/">
+						Options ExecCGI Indexes
+						Require all granted
+					</Directory>
+					<LocationMatch "^/git/.*/git-receive-pack$">
+						AuthType Basic
+						AuthName "Private Git Repo"
+						AuthUserFile /etc/httpd/conf.d/.gitpasswd
+						Require valid-user
+					</LocationMatch>
+				</VirtualHost>	
+
+			
+
+			'确保这两个文件/目录存在：'
+				/var/www/git 
+				/usr/libexec/git-core/git-http-backend/
+
+			'创建用户以及密码'
+
+				$ htpasswd -c -m /etc/httpd/conf.d/.gitpasswd tom
+				密码
+
+				$ htpasswd -m /etc/httpd/conf.d/.gitpasswd jerry
+				密码
+
+
+			'重启服务'
+				$ systemctl restart httpd
+
+			'访问页面'
+				http://172.16.1.100/git 
+				如果没有配置gitweb，则不会有GUI界面，只要不报错即可
+
+
+			'创建仓库，并克隆至本地'
+				另一台虚拟机：
+					$ yum install git 
+					$ git clone http::/172.16.1.100/git/myproject.git
+
+					创建一些文件，推送至远程仓库
+					$ git add .
+					
+
+					$ git config --global user.name tom
+					$ git config --global user.email tom@maxie.io
+
+					$ git commit -m "nginx 0.0.1"
+
+					推送： 可能会出问题，可能是权限的问题，可能是http://blog.csdn.net/happyteafriends/article/details/11554043 
+
+					 	远程库的权限，必须Apache具有属主属组权限
+
+
+
+				
+			
+
+			man git-http-backend
+				
+			github 
+			
+			GitLab
+				gitlab-ce
+						
+
+
+			'安装配置GitLab：'
+				下载ftp上的程序包：
+					$ lftp 172.16.0.1/pub/
+					> cd Sources/7.x86_64/gitlab
+					> get gitlab-ce...
+
+				安装:
+					$ yum install ./gitlab-ce...
+
+				???? $reconfig 
+
+				启动：
+					$ gitlab-ctl start 
+					$ ss -tnl
+		
+
+
+
+		博客作业：git服务器配置；
+			git-daemon
+			git-http-backend
+			
+		
+				
+					
+			
+				
+			
+				
+			 
+			 

@@ -1,0 +1,281 @@
+f5.16 (上午笔记 systemd)
+
+'systemd：centos7'
+
+	启动流程
+		POST --> bios --> MBR bootloader -->  kernel 临时根 vmlinuz--> /根文件系统 --> /sbin/init --> login
+
+		能够管理、控制init进程的模块，就是init系统
+		能够让系统在用户预定义的级别下运行
+
+
+	设备管理器：
+		sysvinit：
+			CentOS5	
+				第一个广泛应用的init系统
+				简单、稳定:
+					只需编写服务的启动脚本、设置启动顺序；并使用ckconfig 命令设置即可
+				
+				执行效率：效率较高，时间较长
+					K|S 服务名称 启动级别(数字代表)
+
+		
+		upstart：
+			CentOS6、Ubuntu
+
+				1、启动速度提高
+				2、反向兼容sysvinit
+				3、设计更先进
+
+
+		systemd： 
+			CentOS7
+				1、替代了所有sysvinit功能、并且添加更多的功能
+				2、极大提高了启动速度（开机不自动启动任何服务）
+				3、标准化管理
+				4、按需激活进程
+					分配套接字文件，但不启动服务
+				5、系统状态快照（snapshot）
+
+
+
+'systemd配置：'
+	
+	核心：'unit'
+		存放路径：
+				/usr/lib/systemd/system/
+				/run/systemd/system/
+				/etc/systemd/system/
+
+		'常见unit类型：'
+			service：服务类型；定义系统服务
+				NAME.service 
+			socket：套接字类型；标识进程间通信时使用到的socket文件
+				NAME.socket 
+			device：设备类型；定义内核能够识别的设备
+				NAME.device 
+			mount：挂载点类型；定义定义文件系统的默认挂载点
+				NAME.mount 
+				cgroup：控制组，实现内核资源合理分配的机制
+			automount：自动挂载类型；定义文件系统自动挂载点设备
+				NAME.automount
+			target：启动目标类型；用来模拟实现“运行级别”
+				NAME.target
+			snapshot：快照类型；用来管理系统快照
+				NAME.snapshot
+			swap：交换分区类型；用于管理和定义交换分区
+				NAME.swap
+			path：监视文件类型；用来定义文件系统的某一文件或目录
+				NAME.path 
+
+			不常用：
+				timer 任务计划
+				slice 资源控制
+				scope 外部进程
+
+
+		关键特性：
+			1、基于socket的激活机制：socket与程序分离
+			2、基于bus的激活机制：
+				若总线上存在对某一服务的访问，可以基于该请求，将设备激活
+			3、基于device的激活机制：当某个设备插入，激活device unit、mount unit、automount unit 
+				首先为设备创建设备文件，再自动挂载到某挂载点，若挂载点不存在，则自动创建
+			4、基于path的激活机制
+			5、基于snapshot的激活机制：
+				能够将各个unit的状态信息保存至持久存储设备中
+			6、向后兼容 sysvinit
+				/etc/init.d/*.sh   也能够通过systemd启动
+
+
+
+		不兼容的特性：
+			1、systemctl的命令是固定不变的
+			2、若服务不是通过systemctl 启动的，那么systemctl无法与之通信
+
+
+'管理系统服务 service：'
+
+	'systemctl命令'：
+			语法：
+			systemctl [OPTIONS...] COMMAND [NAME...]
+
+			启动服务：
+				service NAME start ==> systemctl start NAME.service
+			停止服务：
+				service NAME stop ==> systemctl stop NAME.service 
+			重启服务：
+				service NAME restart ==> systemctl restart NAME.service 
+			状态：
+				service NAME status ==> systemctl status NAME.service 
+			条件式重启：
+				service NAME condrestart ==> systemctl try-restart NAME.service
+			重载或重启服务：
+				systemctl reload-or-try-restart NAME.service
+					支持重载就重载，不支持就重启
+			重载或条件式重启服务：
+				systemctl reload-or-try-restart NAME.service
+			查看某服务当前激活与否的状态：
+				systemctl is-active NAME.service
+					服务启动则返回active，关闭返回 unknown
+			查看所有已激活的服务：
+				systemctl list-units -t service 
+			查看所有服务（已激活和未激活）：
+				chkconfig --list ==> systemctl list-units -t servie --all
+
+
+			开机自启：
+				chkconfig NAME on ==> systemctl enable NAME.service
+			禁止开机自启：
+				chkconfig NAME off ==> systemctl disable NAME.service
+			查看某服务是否能开机自启：
+				chkconfig --list NAME ==> systemctl is-enabled NAME.service
+
+			禁止某服务设定为开机自启：（'禁止之后，用户无法设置服务的开机自启')
+				systemctl mask NAME.service
+			取消此禁止：
+				systemctl unmask NAME.service
+
+			查看服务的依赖关系：
+				systemctl list-dependencies NAME.service 
+
+
+'管理target units：'
+
+	查看当前运行级别：
+		$ systemctl get-default
+	
+	运行级别：
+		0 ==> runlevel0.target , poweroff.target		  0级别
+		1 ==> runlevel1.target , rescue.target (救援模式)  1级别
+		2 ==> runlevel2.target , multi-user.target （多用户级别）
+		3 ==> runlevel3.target , multi-user.target （多用户级别）
+		4 ==> runlevel4.target , multi-user.target （多用户级别）
+		5 ==> runlevel5.target , graphical.target (图形界面)
+		6 ==> runlevel6.target , reboot.target （重启）
+
+	级别切换：
+		init N ==> systemctl isolate NAME.target
+
+	查看级别：
+		runlevel ==> systemctl list-units -t target
+
+	查看所有级别：
+		systemctl list-units -t target -a
+
+	查看当前默认运行级别：
+		systemctl get-default
+	修改默认运行级别：
+		systemctl set-default NAME.target
+
+	切换至紧急救援模式：
+		systemctl rescue
+	切换至紧急模式： （级别1）
+		systemctl emergency
+
+
+
+'其他常用命令：'
+	
+	关机：
+		systemctl halt,poweroff
+	重启: 
+		systemctl reboot 
+	挂起：
+		systemctl suspend 
+	快照：（并不会真正的关机，开机之后还是我们做快照之前的界面）
+		systemctl hibernate
+	快照并挂起：
+		systemctl hybrid-sleep
+
+
+
+
+'配置文件：'
+	配置文件的格式
+		配置文件就是普通的文本文件，可以用文本编辑器打开。
+		
+		$ systemctl cat命令可以查看配置文件的内容。
+
+		$ systemctl cat atd.service
+
+			[Unit]
+			Description=ATD daemon
+
+			[Service]
+			Type=forking
+			ExecStart=/usr/bin/atd
+
+			[Install]
+			WantedBy=multi-user.target
+
+		从上面的输出可以看到，配置文件分成几个区块。
+		每个区块的第一行，是用方括号表示的区别名，比如[Unit]。
+		注意，配置文件的区块名和字段名，都是大小写敏感的。
+
+
+	'【unit】'
+		[Unit]区块通常是配置文件的第一个区块，用来定义 Unit 的元数据，以及配置与其他 Unit 的关系。
+
+		它的主要字段如下。
+			Description：简短描述
+			Documentation：文档地址
+			Requires：当前 Unit 依赖的其他 Unit，如果它们没有运行，当前 Unit 会启动失败
+			Wants：与当前 Unit 配合的其他 Unit，如果它们没有运行，当前 Unit 不会启动失败
+			BindsTo：与Requires类似，它指定的 Unit 如果退出，会导致当前 Unit 停止运行
+			Before：如果该字段指定的 Unit 也要启动，那么必须在当前 Unit 之后启动
+			After：如果该字段指定的 Unit 也要启动，那么必须在当前 Unit 之前启动
+			Conflicts：这里指定的 Unit 不能与当前 Unit 同时运行
+			Condition...：当前 Unit 运行必须满足的条件，否则不会运行
+			Assert...：当前 Unit 运行必须满足的条件，否则会报启动失败
+
+	'【Service】'
+		[Service]区块用来 Service 的配置，只有 Service 类型的 Unit 才有这个区块。
+
+		它的主要字段如下。
+			Type：定义启动时的进程行为。它有以下几种值。
+			Type=simple：默认值，执行ExecStart指定的命令，启动主进程
+				'定义ExecStart指定的程序是主程序'
+
+			Type=forking：以 fork 方式从父进程创建子进程，创建后父进程会立即退出
+				'定义ExecStart选项调用的某一子进程做主程序'
+
+			Type=oneshot：一次性进程，Systemd 会等当前服务退出，再继续往下执行
+			Type=dbus：当前服务通过D-Bus启动
+			Type=notify：当前服务启动完毕，会通知Systemd，再继续往下执行
+				'进程在收到notify函数的通知时再启动'
+
+			Type=idle：若有其他任务执行完毕，当前服务才会运行
+			ExecStart：启动当前服务的命令
+			ExecStartPre：启动当前服务之前执行的命令
+			ExecStartPost：启动当前服务之后执行的命令
+			ExecReload：重启当前服务时执行的命令
+			ExecStop：停止当前服务时执行的命令
+			ExecStopPost：停止当其服务之后执行的命令
+			RestartSec：自动重启当前服务间隔的秒数
+			Restart：定义何种情况 Systemd 会自动重启当前服务，可能的值包括always（总是重启）、on-success、on-failure、on-abnormal、on-abort、on-watchdog
+			TimeoutSec：定义 Systemd 停止当前服务之前等待的秒数
+			Environment：指定环境变量
+
+	'【Install】'
+		[Install]通常是配置文件的最后一个区块，用来定义如何启动，以及是否开机启动。
+
+		它的主要字段如下。
+			WantedBy：它的值是一个或多个 Target，当前 Unit 激活时（enable）符号链接会放入/etc/systemd/system目录下面以 Target 名 + .wants后缀构成的子目录中
+				'指定运依赖行的模式'(弱依赖)
+
+			RequiredBy：它的值是一个或多个 Target，当前 Unit 激活时，符号链接会放入/etc/systemd/system目录下面以 Target 名 + .required后缀构成的子目录中
+				'指定运行依赖的模式'(强依赖)
+
+			Alias：当前 Unit 可用于启动的别名
+			Also：当前 Unit 激活（enable）时，会被同时激活的其他 Unit
+
+
+	
+
+
+
+
+
+
+
+

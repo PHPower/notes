@@ -1,0 +1,292 @@
+5.10 课后PDF作业
+
+
+1.编写一个脚本，可接收一个1-7 的数字作为参数，用if 和case 两种方法实现根据输入的数字输出对应星期的英文简称。
+
+[root@centos7 PDF-homework]# cat week.sh 2-week.sh
+#!/bin/bash
+# Author: Maxie
+# Date: 2017-05-10-19:43:17
+# Description:编写一个脚本，可接收一个1-7 的数字作为参数，用if 和case 两种方法实现根据输入的数字输出对应星期的英文简称。
+
+read -p "please input a num of week: " WEEK
+
+case $WEEK in
+
+1)
+	echo "Mon"
+	;;
+2)
+	echo "Tue"
+	;;
+3)
+	echo "Wed"
+	;;
+4)
+	echo "Thur"
+	;;
+5)
+	echo "Fri"
+	;;
+6)
+	echo "Sat"
+	;;
+7)
+	echo "Sun"
+	;;
+esac
+
+unset WEEK
+#!/bin/bash
+# Author: Maxie
+# Date: 2017-05-10-19:43:17
+# Description:编写一个脚本，可接收一个1-7 的数字作为参数，用if 和case 两种方法实现根据输入的数字输出对应星期的英文简称。
+
+read -p "please input a num of week: " WEEK
+
+[[ $WEEK =~  ^[0-7]$ ]] && echo "输入正确"  || echo "输入错误"; exit 1
+
+if [ $WEEK -eq 1 ];then
+	echo "Mon"
+elif [ $WEEK -eq 2 ];then
+	echo "Tue"
+elif [ $WEEK -eq 3 ];then
+	echo "Wed"
+else
+	echo "Sun"
+fi
+
+unset WEEK 
+
+2.编写一个脚本输出99 乘法表。
+
+
+[root@centos7 PDF-homework]# cat 99chengfabiao.sh
+#!/bin/bash
+# Author: Maxie
+# Date: 2017-05-11-11:12:12
+# Description: 99乘法表
+
+a=9
+for i in `seq 1 $a`;do
+	for j in `seq 1 $i`;do
+	let "sum=i*j"
+	echo -e  "$i*$j=$sum\t\c"
+	done
+	echo
+done
+
+unset a
+unset sum
+unset i
+unset j
+
+
+3.编写一个脚本，随机生成10 个100 以内的整数，输出这10 个数字，并显示其中的最大值和最小值。
+
+echo $(( RANDOM % 100 ))
+
+echo $[RANDOM%100]
+
+
+[root@centos7 PDF-homework]# cat within100-random.sh
+#!/bin/bash
+# Author: Maxie
+# Date: 2017-05-11-11:35:53
+# Description:编写一个脚本，随机生成10 个100 以内的整数，输出这10 个数字，并显示其中的最大值和最小值。
+a=1
+num=$[RANDOM%100]
+max=$num
+min=$num
+while [ $a -lt 10 ];do
+
+	echo "第${a}个随机数: ${num}"
+
+	if [ $num -ge $max ];then
+		max=$num
+	fi
+	if [ $num -le $min ];then
+		min=$num
+	fi
+	num=`echo $[RANDOM%100]`
+	let a++
+done
+
+echo "最大值 $max"
+echo "最小值 $min"
+
+unset a
+unset max
+unset min
+unset num
+unset i
+
+
+4.编写一个脚本，可接收一个整数n 作为参数，要求计算出0 到n 之间所有奇数的和。
+
+[root@centos7 PDF-homework]# vim jishu-count.sh
+#!/bin/bash
+# Author: Maxie
+# Date: 2017-05-11-14:43:16
+# Description:编写一个脚本，可接收一个整数n 作为参数，要求计算出0 到n 之间所有奇数的和。
+
+read -p "please input a number ,and i will count 0 to it of odd number count :" num
+
+[ -z $num ]  && echo "输出为空，重新输入" && exit 1
+
+sum=0
+for i in `seq 0 $num`;do
+        check=`expr $i % 2`
+        if  [ $check -eq 1 ];then
+                sum=`expr $i + $sum`
+        else
+                echo "此数是偶数 $i，不予计算"
+        fi
+done
+echo "奇数总和: $sum"
+
+unset sum
+unset num
+unset j
+unset i
+unset check
+
+
+
+'第二种方法：'
+
+#!/bin/bash
+
+read -p "please input a number ,and i will count 0 to it of odd number count :" num
+
+sum=0
+
+for i in `seq 1 2 $num`;do
+	echo $i 
+	let sum+=$i 
+done
+
+echo "奇数之和 $sum"
+
+
+
+'第三种方法：'
+
+#!/bin/bash
+
+
+5.编写一个脚本，可接收一个包含数字和大小写字母的字符串作为参数，功能为按字母顺序排序，数字在最前面。
+
+方法1：
+方法2：把字母转换成ACCII码再排序，排序完转换回来
+
+
+6.编写一个脚本，可接收一个绝对路径作为参数，统计该路径下每种文件类型各有多少个文件。
+
+[root@centos7 PDF-homework]# cat FileType.sh
+#!/bin/bash
+# Author: Maxie
+# Date: 2017-05-11-15:00:49
+# Description:
+cd $1 &> /dev/null
+if [[ $? = 0 ]]
+then
+DirName=$1
+    for i in `ls -A $1`
+    do
+        FileType=`ls -dl $DirName/$i | cut -c1`
+        case $FileType in
+            d)
+                echo "$i is a diretory."
+		echo
+                ;;
+            -)
+                echo "$i is a common file."
+		echo
+                ;;
+            l)
+                echo "$i is a link file."
+		echo
+                ;;
+            b)
+                echo "$i is a block file."
+		echo
+                ;;
+            c)
+                echo "$i is a character file."
+		echo
+                ;;
+            p)
+                echo "$i is a pipe file."
+		echob
+                ;;
+            s)
+                echo "$i is a socket file."
+		echo
+                ;;
+            *)
+                echo "$i is other file"
+		echo
+                ;;
+        esac
+    done
+else
+    echo "$1 is not a diretory"
+    exit 2
+fi
+
+
+方法2： 
+
+
+
+7.简述CentOS6 开机启动流程。
+
+POST --> BootSequence(BIOS) --> BootLoader（MBR）--> Kernel（ramdisk）--> rootfs（readonly）--> /sbin/init ()
+第一步加电自检
+第二步读取BIOS当中的启动次序，从而决定哪个磁盘设备是接下来的引导加载次序中的设备；
+第三步读取设备的Bootloader，（一般放在硬盘MBR中），
+第四步读取内核文件加载内核，启动操作系统；加载内核完成，内核在磁盘分区上，内核为了完成自身初始化过程中必须要加载真正的根文件系统，这就借助ramdisk来完成真正的根文件设备驱动程序的加载；所以一旦内核借助于ramdisk完成加载真正的根文件系统所在的设备，下一步就装载根文件系统，其实就是mount，不需手动mount，内核会自动mount根文件系统所在的设备挂载至根上，所以说根是在内核中就是这个道理
+
+
+
+
+8.Linux 下有几个运行级别，都代表什么意思？
+
+
+	init0：系统关机，系统默认运行级别不能设为0，否则不能正常启动
+	init1：单用户工作状态，root权限，用于系统维护，禁止远程登陆
+	init 2：多用户状态(没有NFS) 
+	init3：完全的多用户状态(有NFS)，登陆后进入控制台命令行模式
+	init 4：系统未使用，保留
+	init5：X11控制台，登陆后进入图形GUI模式
+	init 6：系统正常关闭并重启，默认运行级别不能设为6，否则不能正常启动
+
+	运行级别的原理：
+	1   在目录/etc/init.d下有许多服务器脚本程序，一般称为服务(service) 
+	2   在/etc下有7个名为rcN.d的目录，对应系统的7个运行级别
+	3   rcN.d目录下都是一些符号链接文件，这些链接文件都指向init.d目录下的service脚本文件，命名规则为K+nn+服务名或S+nn+服务名，其中nn为两位数字。
+	4   系统会根据指定的运行级别进入对应的rcN.d目录，并按照文件名顺序检索目录下的链接文件
+	对于以K开头的文件，系统将终止对应的服务
+	对于以S开头的文件，系统将启动对应的服务
+	5   查看运行级别用：runlevel 
+	6   进入其它运行级别用：init N 
+	7   另外init0为关机，init 6为重启系统
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

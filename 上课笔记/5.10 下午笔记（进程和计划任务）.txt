@@ -1,0 +1,619 @@
+5.10 下午笔记（进程和计划任务）
+
+
+linux完整系统启动流程：
+	
+	POST --> Boot device --> bootloader:MBR446bytes : grub stage1 --> grub stage1.5 --> boot partition
+	--> grub stage2 --> grub.conf --> kernel : vmlinuz --> initrd initramfs --> rootfs --> init 
+	--> /etc/inittab --> /etc/rc.d/rc.sysinit --> /etc/rc#.d/{K*.sh | S*.sh} --> /etc/rc.d/rc.local --> login
+
+'下载一个centos5的启动脚本：/etc/inittab文件'
+
+'系统启动流程：'
+	init程序的类型：
+	
+	SysV: init, CentOS 5之前
+		配置文件：/etc/inittab
+	Upstart: init,CentOS6
+		配置文件：/etc/inittab, /etc/init/*.conf
+	
+	Systemd：systemd, CentOS 7
+		配置文件：/usr/lib/systemd/system
+				/etc/systemd/system
+
+
+'启动流程：'
+	/sbin/initCentOS6之前
+	
+	运行级别：为系统运行或维护等目的而设定；0-6：7个级别
+		0：关机
+		1：单用户模式(root自动登录), single, 维护模式     无网络功能
+		2: 多用户模式，启动网络功能，但不会启动NFS(默认所有模式都关闭)；维护模式
+		3：多用户模式，正常模式；文本界面
+		4：预留级别；可同3级别
+		5：多用户模式，正常模式；图形界面
+		6：重启
+	
+	默认级别：3, 5
+	切换级别：init#
+	查看级别：$ runlevel; $ who -r
+
+	cat /etc/inittab
+		id:3:initdefault:
+			3：运行级别为3
+			initdefault：
+
+
+
+'init初始化：'
+	init读取其初始化文件：/etc/inittab
+		初始运行级别(RUN LEVEL)
+		系统初始化脚本
+		对应运行级别的脚本目录
+		捕获某个关键字顺序
+		定义UPS电源终端/恢复脚本
+		在虚拟控制台生成getty
+		在运行级别5初始化X
+
+
+	'CentOS5'的inittab文件:
+
+		配置文件：/etc/inittab
+		
+		每一行定义一种action以及与之对应的process
+			id:runlevel:action:process
+			action:
+				wait: 切换至此级别运行一次
+				respawn：此process终止，就重新启动之
+				initdefault：设定默认运行级别；process省略
+				sysinit：设定系统初始化方式，此处一般为指定
+					/etc/rc.d/rc.sysinit
+				ca::ctrlaltdel:/sbin/shutdown -t3 -r now
+			id:3:initdefault:
+			si::sysinit:/etc/rc.d/rc.sysinit
+			l0:0:wait:/etc/rc.d/rc0
+			l1:1:wait:/etc/rc.d/rc1...
+			l6:6:wait:/etc/rc.d/rc6
+
+		'centos5的脚本文件：'
+			/etc/rc.d/rc.sysinit文件（'可以阅读一下'）
+
+
+	'CentOS6'的inittab文件和相关文件
+		/etc/inittab
+			设置系统默认的运行级别
+			id:3:initdefault:
+		
+		示例：
+			破解CentOS5和6的root口令
+		
+		/etc/init/control-alt-delete.conf
+		/etc/init/tty.conf
+		/etc/init/start-ttys.conf
+		/etc/init/rc.conf
+		/etc/init/prefdm.conf
+
+
+		'阅读一下这个脚本':
+			[root@centos6 ~]# cat /etc/rc.d/rc.sysinit
+
+
+	
+	'启动流程：'
+		/etc/rc.d/rc.sysinit: 系统初始化脚本
+			(1) 设置主机名
+			(2) 设置欢迎信息
+			(3) 激活udev和selinux
+			'(4) 挂载/etc/fstab文件中定义的文件系统'
+			(5) 检测根文件系统，并以'读写方式'重新挂载根文件系统
+			(6) 设置系统时钟
+			(7) 激活swap设备
+			(8) 根据/etc/sysctl.conf文件设置内核参数
+			(9) 激活lvm(逻辑卷)及software raid设备
+			(10) 加载额外设备的驱动程序
+			(11) 清理操作
+
+
+		说明：rcN --> 意味着读取/etc/rc.d/rcN.d/
+			K*: K##*：##运行次序；数字越小，越先运行；数字越小的服务，通常为依赖到别的服务
+			
+			S*: S##*：##运行次序；数字越小，越先运行；数字越小的服务，通常为被依赖到的服务
+			
+			for srvin /etc/rc.d/rcN.d/K*; do
+				$srvstop
+			done
+			for srvin /etc/rc.d/rcN.d/S*; do
+				$srvstart
+			done
+
+'/etc/rc.d/rc*.d/下的文件：'
+	执行顺序是按照ACCII码表的大小顺序来执行
+		因为有些服务是有着依赖关系的
+		需要启动网络服务，才能启动httpd服务之类的
+
+
+
+
+
+
+
+'chkconfig命令：'
+
+	chkconfig命令
+	
+	查看服务在所有级别的启动或关闭设定情形：
+		chkconfig [--list] [name]
+	
+	添加：
+		SysV的服务脚本放置于/etc/rc.d/init.d(/etc/init.d)
+		chkconfig --add name
+			#!/bin/bash
+			#LLLL 表示初始在哪个级别下启动，-表示都不启动
+			# chkconfig: LLLL nnnn
+			$ chkconfig --level ----  atd 表示任何模式都不开机自启atd服务
+	
+	删除：
+		chkconfig --del name
+	
+	修改指定的链接类型
+		chkconfig [--level levels] name <on|off|reset>
+		        --level LLLL: 指定要设置的级别；省略时表示2345
+
+	实例：
+		$ chkconfig --level 3 atd off   # 3模式下 禁止atd开机启动
+
+
+'ntsysv命令'
+	查看某个服务是否启动
+
+	图形化启动/关闭某个服务
+
+
+
+'查看所有服务的状态：'
+	service --status-all
+
+
+'service 命令：手动管理服务'
+	service 服务start|stop|restart
+		service --status-all
+	
+'xinetd服务：'  （超级守护进程）UNIX：inetd（相当于代理人）'[CentOS7]不适用'
+	监听不常用(访问量少的)的服务，如果有人访问，则这个xinetd服务帮你激活访问的服务
+		'这样节省资源'
+
+		这些被'xinetd服务'管理的服务称为：'非独立服务'
+
+		这个服务默认不会安装（因为系统上默认没有非独立服务）
+
+		如果安装了 非独立服务 ，则会自动安装这个服务
+
+		让 非独立服务 受 xinetd服务管理：
+			$ chkconfig telnet on		（其实是修改/etc/xinetd.conf/telnet的配置文件）
+
+		让 xinetd服务 启动
+			$ service xinetd start 
+
+		现在只要访问 telnet 服务，xinetd就会管理telnet，使其启动（启动非独立服务的服务/进程）
+
+
+
+	瞬态（Transient）服务被xinetd进程所管理
+		进入的请求首先被xinetd代理
+		配置文件：/etc/xinetd.conf、/etc/xinetd.d/<service>
+		与libwrap.so文件链接
+
+
+	用chkconfig控制的服务：
+		chkconfig tftp on
+
+
+
+'CentOS7中服务都是非独立服务：'
+	开机启动快，大部分服务处于非激活状态
+	只有当服务被访问才会激活
+
+
+
+
+
+'启动流程：'
+	注意：正常级别下，最后启动一个服务S99local没有链接至
+		/etc/rc.d/init.d一个服务脚本，而是指向了/etc/rc.d/rc.local脚本
+	
+	$ ls /etc/rc*.d/S99local -l
+	lrwxrwxrwx. 1 root root 11 3月  19 02:13 /etc/rc2.d/S99local -> ../rc.local
+	lrwxrwxrwx. 1 root root 11 3月  19 02:13 /etc/rc3.d/S99local -> ../rc.local
+	lrwxrwxrwx. 1 root root 11 3月  19 02:13 /etc/rc4.d/S99local -> ../rc.local
+	lrwxrwxrwx. 1 root root 11 3月  19 02:13 /etc/rc5.d/S99local -> ../rc.local
+
+	$ cat ../rc.local    ('这里面可以写自己的开机运行的程序/服务'，节省自己写服务脚本)
+	#!/bin/sh
+	#
+	# This script will be executed *after* all the other init scripts.
+	# You can put your own initialization stuff in here if you don't
+	# want to do the full Sys V style init stuff.
+
+	touch /var/lock/subsys/local
+
+
+	不便或不需写为服务脚本放置于/etc/rc.d/init.d/目录，
+	且又想开机时自动运行的命令，可直接放置于/etc/rc.d/rc.local文件中
+		•/etc/rc.d/rc.local在指定运行级别脚本后运行
+		•可以根据情况，进行自定义修改
+
+
+	这个是开机脚本：/etc/rc.d/rc.local
+	这个是登陆脚本：/etc/profile;/etc/bashrc ....之类的
+
+
+	这个文件是：按Ctrl+Alt+Delete键重启服务器
+		cat /etc/init/control-alt-delete.conf
+
+
+	"CentOS5 /etc/inittab文件才有的信息："
+		1:2345:respawn:/usr/sbin/mingettytty1
+		2:2345:respawn:/usr/sbin/mingettytty2
+		...
+		6:2345:respawn:/usr/sbin/mingettytty6
+			mingetty会自动调用login程序
+		x:5:respawn:/etc/X11/prefdm -nodaemon
+
+
+
+	总结：
+		/sbin/init--> (/etc/inittab) 
+		--> 设置默认运行级别--> 运行系统初始脚本、完成系统初始化 
+		--> (关闭对应下需要关闭的服务)启动需要启动服务--> 设置登录终端
+	
+	CentOS 6 init程序为: upstart, 其配置文件：
+		/etc/inittab, /etc/init/*.conf，配置文件的语法遵循upstart配置文件语法格式，和CentOS5不同
+
+
+'总结：启动过程'
+	
+	POST 加电自检 --> MBR stage1 --> stage1.5 MBR的后续扇区 --> stage2 grub.conf 
+	--> vmlinuz root=/dev/sda2 initramfs --> init 1/2/3/4/5模式 
+	--> /etc/inittab --> /etc/rc.d/rc.sysinit 初始化脚本 --> /etc/rcN.d/S* K*
+	--> /etc/rc.d/rc.local --> login mingetty 程序 
+
+
+
+'grub legacy：引导程序'
+	CentOS 6启动流程：
+		POST --> Boot Sequence(BIOS) --> Boot Loader --> Kernel(ramdisk) --> rootfs--> switchroot--> /sbin/init-->(/etc/inittab, /etc/init/*.conf) --> 设定默认运行级别--> 系统初始化脚本rc.sysinit--> 关闭或启动对应级别的服务--> 启动终端
+	
+	grub: GRandUnified Bootloader
+		grub 0.97: grub legacy
+		grub 2.x: grub2
+		grub legacy:
+			stage1: mbr
+			stage1_5: mbr之后的扇区，让stage1中的bootloader能识别stage2所在的分区上的文件系统
+			stage2：磁盘分区(/boot/grub/)
+
+	配置文件：/boot/grub/grub.conf<--/etc/grub.conf
+	
+	stage2及内核等通常放置于一个基本磁盘分区
+	
+	功用：
+		(1) 提供启动菜单、并提供交互式接口
+			a：[内核参数
+			e: 编辑模式，用于编辑菜单
+			c: 命令模式，交互式接口
+		(2) 加载用户选择的内核或操作系统
+			允许传递参数给内核
+			可隐藏启动菜单
+		(3) 为菜单提供了保护机制
+			为编辑启动菜单进行认证
+			为启用内核或操作系统进行认证
+
+	grub的命令行接口
+		help: 获取帮助列表
+		help KEYWORD: 详细帮助信息
+		find (hd#,#)/PATH/TO/SOMEFILE：
+		root (hd#,#)
+		kernel /PATH/TO/KERNEL_FILE: 设定本次启动时用到的内核文件；额外还可添加许多内核支持使用的cmdline参数
+		例如：max_loop=100 selinux=0init=/path/to/init
+		initrd/PATH/TO/INITRAMFS_FILE: 设定为选定的内核提供额外文件的ramdisk
+		boot: 引导启动选定的内核
+
+	cat /proc/cmdline 内核参数
+	
+	内核参数文档:/usr/share/doc/kernel-doc-2.6.32/Documentation/kernel-parameters.txt
+
+	识别硬盘设备
+		(hd#,#)
+		hd#: 磁盘编号，用数字表示；从0开始编号
+		#: 分区编号，用数字表示; 从0开始编号
+		(hd0,0) 第一块硬盘，第一个分区
+	
+	手动在grub命令行接口启动系统
+		grub> root (hd#,#)
+		grub> kernel /vmlinuz-VERSION-RELEASE roroot=/dev/DEVICE
+		grub> initrd/initramfs-VERSION-RELEASE.img
+		grub> boot
+
+
+
+	'grub配置文件'
+		配置文件：/boot/grub/grub.conf
+
+			default=#: 设定默认启动的菜单项；落单项(title)编号从0开始
+			timeout=#：指定菜单项等待选项选择的时长
+			splashimage=(hd#,#)/PATH/XPM_FILE：菜单背景图片文件路径
+			hiddenmenu：隐藏菜单
+			password [--md5] STRING: 启动菜单编辑认证
+			title TITLE：定义菜单项“标题”, 可出现多次
+			root (hd#,#)：查找stage2及kernel文件所在设备分区；为grub的根
+			kernel /PATH/TO/VMLINUZ_FILE [PARAMETERS]：启动的内核
+			initrd/PATH/TO/INITRAMFS_FILE: 内核匹配的ramfs文件
+			password [--md5|--encrypted ] STRING: 启动选定的内核或操作系统时进行认证
+
+	'安装grub：'
+		安装grub：
+			(1) grub-install /dev/sda 
+				$ sync （强制同步）
+				
+				安装grub stage1和stage1_5到/dev/DISK磁盘上，并复制GRUB相关文件到DIR/boot目录下
+				grub-install --root-directory=DIR /dev/DISK   #这个是写到另一个硬盘上，在另一台机器上启动这个操作系统
+			(2) grub
+				grub> root (hd#,#)     #hd#,#  表示boot在第几个硬盘的第几个分区上（一般是第一个硬盘的第一个分区，所以是0,0）
+				grub> setup (hd#)	
+
+
+/boot/grub/stage1 (hd0) ---->它安装stage1到磁盘的MBR
+ 
+(hd0)1+15 p ---->将stage1_5写入到hd0磁盘MBR后面的15个扇区中.
+ 
+(hd0,0)/boot/grub/stage2 ----->告知bootloader,当需要加载stage2时,其位置在第一块硬盘的第一个分区的/boot/grub/目录下.
+ 
+/boot/grub/menu.lst---->将menu.lst的位置告诉stage2
+
+
+
+'hexdump命令：'
+	-v	显示所有数据，如果不包含这一选项，对于同上一行完全相同的数据，hexdump会以*代替显示
+	-C	标准十六进制+ascii码显示，十六进制显示偏移量，每行16个字符，每字符两位显示，不足补0，结尾显示当前16位数据的ascii码值，以|框住
+	-n length 只显示length个字节的数据
+
+
+
+'kernel：'
+	进行自身初始化：
+		1、探测可识别到的所有硬件设备；
+		2、加载硬件驱动程序；（有可能会借助于ramdisk加载驱动）
+		3、以'只读方式'挂载根文件系统（防止内核中有BUG，损坏根文件系统）
+		4、运行用户空间的第一个应用程序（/sbin/init） 
+
+	'init程序的类型：'
+		CentOS5：SysV init 
+			配置文件：/etc/inittab 
+		CentOS6：upstart（Ubuntu发布的，支持并发服务启动）
+			配置文件：/etc/inittab 
+				/etc/init/*.conf文件
+		CentOS7：Systemd
+			配置文件：/usr/lib/systemd/system，/etc/systemd/system
+
+	'ramdisk：'
+		ramdisk --> ramfs
+
+		CentOS5：initrd
+			工具程序：mkinitrd
+
+		CentOS6、7：initramfs
+			工具程序：dracut,mkinitrd
+
+
+'Linux内核的特性之一：'
+	使用缓冲和缓存来加速对磁盘上的文件访问；
+
+
+'系统初始化流程（内核级别）：'
+	POST --> BoootSequence(BIOS) --> Bootloader(MBR) 无法驱动软程序 逻辑卷LVM（不要存放/boot） 软RAID --> kernel(ramdisk) --> 自动mount -->  rootfs -->
+
+
+
+'实验：' 把/etc/inittab文件中的runlevel修改成了6（无限重启）
+		恢复方法：
+			开机进入倒计时，使用回车
+				进入菜单模式
+					按a键，进入到内核启动参数编辑
+						在行尾添加 3，这次启动进入3模式，绕过/etc/inittab文件
+
+
+'实验2：'忘记root用户密码，如果破解（只能在物理机上操作，不能通过远程）
+		开机进入倒计时，使用回车
+			进入菜单模式
+				按a键，进入到内核启动参数编辑
+					直接输入single 或者 single S 或者 single s 
+					即可进入到单用户模式
+					直接passwd修改密码
+
+'实验3：'删除/boot/vmlinuz...文件，如何恢复？
+	1)进入救援模式
+	2)挂载光盘
+	3)拷贝光盘中的/mnt/cdrom/isolinux/vmlinuz文件或者 /mnt/images/pxeboot下的vmlinuz文件都可以
+		这里需要修改这个文件的文件名
+		cp /mnt/cdrom/isolinux/vmlinuz /mnt/sysimage/boot/vmlinuz-`uname -r` 即可
+
+
+
+
+
+'把程序加入到服务中：'
+	达到使用`service命令`可以操作的情况
+
+		1、在/etc/rc.d/init.d/目录中创建脚本
+
+			脚本必须有的信息：
+				1)必须有shebang机制
+				2)chkconfig:   345 95 5
+					345：默认345模式自动启动
+						如果是'chkconfig:-' 这样表示任何模式都不自动启动
+					95：启动编号，（如果依赖服务多，尽量写大一些）
+					5：关闭编号，（尽量写小一点）
+
+					上面这个编号尽量不要与其他服务相同，也要考虑到服务依赖的问题。
+
+					这些编号都是在不同模式下/etc/rc.d/rc5.d/这种目录下的K和S打头文件的
+
+				3)description:
+					必须有这个描述，如果没有，则会报错；写错也会报错（在CentOS5上）。如果是6，这个描述不存在，也不会不报错
+
+				例如：
+					#!/bin/sh
+					#
+					# atd Starts/stop the "at" daemon
+					#
+					# chkconfig:   345 95 5
+					# description: Runs commands scheduled by the "at" command at the time \
+					#    specified when "at" was run, and runs batch commands when the load \
+					#    average is low enough.
+
+		2、添加执行权限
+		3、使用 chkconfig --add testsrv （添加我们自己定义的服务）
+
+			
+			'实验4：'把程序加入到服务中：（扩展：把编译安装的httpd添加成服务）
+
+				$ vim /etc/rc.d/init.d/testsrv
+					#!/bin/bash
+					#chkconfig:345 98 01
+					#description: test service
+					case $1 in 
+					start)
+						echo testsrv is starting
+						touch /app/testsrv
+						;;
+					stop)
+						echo testsrv is stopped
+						rm -f /app/testsrv
+					status)
+						[ -f /app/testsrv ] && echo testsrv is running || echo testsrv is stopped
+						;;
+					*)
+						echo "testsrv usage:start|stop|status"
+						;;
+					esac
+				$ chmod +x /etc/rc.d/init.d/testsrv
+				$ chkconfig --add testsrv
+				即可 添加成功
+
+
+				删除服务：
+				$ chkconfig --del testsrv
+				$ rm -f /etc/rc.d/init.d/testsrv
+				即可 删除成功
+
+
+				'如果这个服务出故障了，启动时就会出BUG了，会一直停在那里；系统就起不来了'（导致系统无法启动）
+					如何解决？
+						解决方案：
+						方法1、 
+							1)开机进入到单用户模式
+							2)chkconfig --level 5 testsrv off #关闭5模式的自启动服务
+						
+						方法2、如果1模式也被设置了自启动
+							1)进入到菜单 按a键 
+							2)修改内核启动参数：
+								(1)kernel /vmlinuz-2.6.32-642.el6.x86_64 ro root=/dev/mapper/vg0-root rd_NO_LUKS rd_NO_DM LANG=en_US.UTF-8 rd_LVM_LV=vg0/swap rd_NO_MD SYSFONT=latarcyrheb-sun16 crashkernel=auto rd_LVM_LV=vg0/root  KEYBOARDTYPE=pc KEYTABLE=us rhgb crashkernel=auto quiet rhgb quiet
+									在最后 加入：
+									init=/bin/bash 
+									开机后直接进入/bash
+								(2)因为现在的/文件系统是只读的 ro
+									重新挂载根文件系统 mount -o remount,rw /
+								(3)再修改 服务的开机自启动
+									$ chkconfig --level 135 testsrv off
+								(4)重启即可
+
+
+?	'挂载ntf文件系统：（第4个视频的20分钟左右） 做这个实验'
+		思考为什么NFS开机自动挂载（NFS开机时候没有启动，起来之后才会启动）
+			如果NFS服务端关闭了服务，客户端重启之后会挂在失败（开机会很慢）
+
+
+
+
+
+
+'实验5：破坏MBR 446个字节，并恢复'（stage1阶段的破坏）
+	$ dd if=/dev/sda of=/root/mbr.bak bs=1 count=4096
+
+	$ dd if=/dev/zero of=/dev/sda bs=1 count=446
+	方法1：$ grub-install
+
+	方法2：
+		(1)进入救援模式
+		(2)使用/boot/grub/stage1进行恢复
+			$ dd if=/mnt/sysimage/boot/grub/stage1 of=/mnt/sysimage/dev/sda bs=1 count=446
+		(3)reboot
+
+	方法3：
+		(1)进入救援模式
+		(2)使用之前备份好的mbr进行恢复即可
+			$ dd if=/mnt/sysimage/root/mbr.bak  of=/mnt/sysimage/dev/sda bs=1 count=446
+		(3)reboot
+
+
+
+
+'实验6：破坏MBR 后续的扇区，并恢复' (stage1.5阶段的破坏)
+	$ dd if=/dev/zero of=/dev/sda bs=1 count=2048 skip=512 seek=512
+
+	修复方法1：
+		$ grub-install   此命令可以修复 1，1.5，2阶段的破坏
+
+	修复方法2：
+		1)进入救援模式
+		2)切根
+		3) $ grub  进入grub界面
+			在grub的界面输入：
+				> root (hd0,0)
+				> setup (hd0)        #此命令的执行前提：/boot/grub/下的文件都必须存在 一堆stage文件，如果不存在，则执行失败
+				> quit 
+		4)reboot
+	
+	方法3：删除之前查看一下 hexdump -C -n 2048 -v /dev/sda 512字节后续是否有stage1.5和2的信息，如果没有，执行dd命令对/dev/sda的清空，其实没有任何意义
+
+
+'实验7：删除/boot/grub/*，如何恢复'
+	修复方法：
+		1)$ 进入救援模式
+		2)切根
+		3)安装grub-install /dev/sda 
+		4)但是 grub.conf文件就没了
+		5)需要手写/boot/grub/grub.conf文件
+			vim grub.conf 
+					default=-
+					timeout=5
+					title CentOS 6.8 (Maxie-2.6.32)
+						root (hd0,0)
+						kernel /vmlinuz-2.6.32-642.e16.x86_64 selinux=0 root=/dev/mapper/vg0-root rd_LVM_LV=vg0/root
+						initrd /initramfs-2.6.32-642.e16.x86_64.img
+			$ exit 
+			$ reboot 即可
+			
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

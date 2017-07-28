@@ -1,0 +1,227 @@
+练习iptables:
+
+'实验：开放本地的samba端口服务'
+
+
+
+
+'实验1：禁止所有IP访问本地所有端口，仅开放22端口；'
+	
+	[root@firewall-test ~]# iptables -A INPUT -d 172.16.1.70 -p tcp --dport 22 -j ACCEPT
+	[root@firewall-test ~]# iptables -A OUTPUT -s 172.16.1.70 -p tcp --sport 22 -j ACCEPT
+	[root@firewall-test ~]# iptables -A INPUT -d 172.16.1.70  -j REJECT
+	[root@firewall-test ~]# iptables -A OUTPUT -s 172.16.1.70  -j REJECT
+	[root@firewall-test ~]# iptables -vnL
+	Chain INPUT (policy ACCEPT 6 packets, 993 bytes)
+	 pkts bytes target     prot opt in     out     source               destination
+	  549 41685 ACCEPT     tcp  --  *      *       0.0.0.0/0            172.16.1.70          tcp dpt:22
+	    0     0 REJECT     all  --  *      *       0.0.0.0/0            172.16.1.70          reject-with icmp-port-unreachable
+
+	Chain FORWARD (policy ACCEPT 0 packets, 0 bytes)
+	 pkts bytes target     prot opt in     out     source               destination
+
+	Chain OUTPUT (policy ACCEPT 0 packets, 0 bytes)
+	 pkts bytes target     prot opt in     out     source               destination
+	  218 22779 ACCEPT     tcp  --  *      *       172.16.1.70          0.0.0.0/0            tcp spt:22
+	    0     0 REJECT     all  --  *      *       172.16.1.70          0.0.0.0/0            reject-with icmp-port-unreachable
+
+
+
+
+'实验2：'
+	控制icmp访问
+
+	1、只允许服务器本机ping其他主机，不允许其他主机ping 本机；
+
+		$ iptables -I INPUT -d 172.16.1.70 -p icmp --icmp-type 0 -j ACCEPT
+		$ iptables -I OUTPUT -s 172.16.1.70 -p icmp --icmp-type 8 -j ACCEPT
+		
+
+	2、允许服务器与其他主机之间互相ping
+
+		$ iptables -R INPUT 1  -d 172.16.1.70 -p icmp --icmp-type  -j ACCEPT
+		$ iptables -R OUTPUT 1 -s 172.16.1.70 -p icmp --icmp-type  -j ACCEPT
+
+
+'实验3：'
+	添加多个端口允许访问：
+
+	[root@firewall-test ~]# iptables -R INPUT 1 -d 172.16.1.70 -p tcp -m multiport --dports 21:23,80,139,445,443,123,323,3306 -j ACCEPT
+	[root@firewall-test ~]# iptables -R OUTPUT 1 -s 172.16.1.70 -p tcp -m multiport --sports 21:23,80,139,445,443,123,323,3306 -j ACCEPT
+
+
+
+'实验4：'
+	添加连续的地址允许访问23端口：(telnet服务)
+
+
+	$ yum install xinetd
+	$ yum install telnet-server
+	$ systemctl enable xinetd
+	$ systemctl start xinetd
+	$ systemctl enable telnet.socket
+	$ systemctl	start telnet.socket
+	$ iptales -I INPUT -d 172.16.1.70 -t tcp -m multiport --dports 21:23 -j ACCEPT
+	$ iptables -I INPUT -s 172.16.1.70 -t tcp -m multiport --sports 21:23 -j ACCEPT
+
+
+'实验5：'
+	如果请求访问的资源有"gay"字符串，则拒绝访问
+
+
+	$ iptables -I OUTPUT -s 172.16.1.70 -p tcp --sport 80 -m string --algo bm --string "gay" -j REJECT
+
+
+
+'实验6：'
+	使用state建立规则
+
+
+	1、已建立的连接，可以继续连接不会被拒绝；新连接全部会被拒绝
+
+	$ iptables -A INPUT -d 172.16.1.70 -m state --state ESTABLISHED -j ACCEPT
+   	$ iptables -A OUTPUT -s 172.16.1.70 -m state --state ESTABLISHED -j ACCEPT
+   	$ iptables -vnL
+   	$ iptables -A INPUT -d 172.16.1.70 -m state --state NEW -j REJECT
+   	$ iptables -A OUTPUT -s 172.16.1.70 -m state --state NEW -j REJECT
+
+	2、对于80，22，443，3306，139，445端口的新连接放行
+	$ iptables -I INPUT -d 172.16.1.70 -p tcp -m multiport --dports 21:23,80,139,443,445,3306 -m state --state NEW -j ACCEPT
+	$ iptables -I OUTPUT -s 172.16.1.70 -p tcp -m multiport --sports 21:23,80,139,443,445,3306 -m state --state NEW -j ACCEPT
+
+
+
+
+
+'实验7：'
+	放行ftp端口，使得远程正常访问ftp服务，并上传下载
+		'注意：ftp服务连接时是命令接口，也就是21端口；但是之后ls,各种命令是另一种协议，也就是另一个端口(而且是随机端口)'
+			要开放：
+				RELATED：相关联的连接，当前连接是一个新请求，但附属于某个已存在的连接；
+
+	1、加载nf_conntrack_ftp模块
+		$ modprobe nf_conntrack_ftp
+	2、启动vsftpd：
+		$ systemctl start vsftpd
+
+	3、放行端口
+
+	4、放行RELATED：
+	$ iptables -I OUTPUT  -s 172.16.1.70 -m state --state ESTABLISHED,RELATED -j ACCEPT
+   	$ iptables -I INPUT  -d 172.16.1.70 -m state --state ESTABLISHED,RELATED -j ACCEPT
+
+
+
+	[root@firewall-test ~]# iptables -vnL
+	Chain INPUT (policy ACCEPT 617 packets, 65868 bytes)
+	 pkts bytes target     prot opt in     out     source               destination
+	  884 61945 ACCEPT     all  --  *      *       0.0.0.0/0            172.16.1.70          state RELATED,ESTABLISHED
+	    5   304 ACCEPT     tcp  --  *      *       0.0.0.0/0            172.16.1.70          multiport dports 21:23,80,139,443,445,3306 state NEW
+	    5   300 REJECT     all  --  *      *       0.0.0.0/0            172.16.1.70          state NEW reject-with icmp-port-unreachable
+
+	Chain FORWARD (policy ACCEPT 0 packets, 0 bytes)
+	 pkts bytes target     prot opt in     out     source               destination
+
+	Chain OUTPUT (policy ACCEPT 0 packets, 0 bytes)
+	 pkts bytes target     prot opt in     out     source               destination
+	  508 62924 ACCEPT     all  --  *      *       172.16.1.70          0.0.0.0/0            state RELATED,ESTABLISHED
+	    0     0 ACCEPT     tcp  --  *      *       172.16.1.70          0.0.0.0/0            multiport sports 21:23,80,139,443,445,3306 state NEW
+	   73  5735 REJECT     all  --  *      *       172.16.1.70          0.0.0.0/0            state NEW reject-with icmp-port-unreachable
+	[root@firewall-test ~]# iptables-save >./ftp_rules
+	[root@firewall-test ~]# cat ./ftp_rules
+	# Generated by iptables-save v1.4.21 on Thu May 25 20:18:48 2017
+	*filter
+	:INPUT ACCEPT [631:68102]
+	:FORWARD ACCEPT [0:0]
+	:OUTPUT ACCEPT [0:0]
+	-A INPUT -d 172.16.1.70/32 -m state --state RELATED,ESTABLISHED -j ACCEPT
+	-A INPUT -d 172.16.1.70/32 -p tcp -m multiport --dports 21:23,80,139,443,445,3306 -m state --state NEW -j ACCEPT
+	-A INPUT -d 172.16.1.70/32 -m state --state NEW -j REJECT --reject-with icmp-port-unreachable
+	-A OUTPUT -s 172.16.1.70/32 -m state --state RELATED,ESTABLISHED -j ACCEPT
+	-A OUTPUT -s 172.16.1.70/32 -p tcp -m multiport --sports 21:23,80,139,443,445,3306 -m state --state NEW -j ACCEPT
+	-A OUTPUT -s 172.16.1.70/32 -m state --state NEW -j REJECT --reject-with icmp-port-unreachable
+	COMMIT
+	# Completed on Thu May 25 20:18:48 2017
+
+
+'实验8：'
+	保存现有的iptables配置文件至指定文件内；并重载保存的配置
+
+	$ iptables-save > ./ftp_rules 
+	$ iptables-restore -t ./ftp_rules		#测试保存的配置是否正常
+	$ iptables-restore -n ./ftp_rules		#重载配置，但不清空之前的配置
+
+
+
+
+'实验9：'
+	创建iptables配置文件开机自动导入的Unit File文件：('步骤可能有问题，之后再处理')
+
+	1、先复制一份别的程序的Unit File： 
+		$ cp /usr/lib/systemd/system/httpd.service /usr/lib/systemd/system/iptables.service
+
+	2、编辑配置文件：
+		$ vim /usr/lib/systemd/system/iptables.service
+		[Unit]
+		Description=iptables rules constructor							#描述
+		After=network.target remote-fs.target nss-lookup.target
+
+		[Service]
+		Type=notify
+		ExecStart=/usr/sbin/iptables-restore /root/iptables-rules/rules1		#启动时执行
+		ExecReload=/usr/sbin/iptables-restore /root/iptables-rules/rules1		#重载时执行
+		ExecStop=/usr/sbin/iptables -F 											#停止时执行
+
+		[Install]
+		WantedBy=multi-user.target		#多用户模式下运行
+
+	3、装载配置文件：
+		$ systemctl daemon-reload
+
+	4、启动自定义配置：
+		$ systemctl enable iptables
+		$ systemctl start iptables
+
+
+
+
+'实验10：'
+	三台机器之间实现路由功能，中间的Linux主机开启核心转发功能：
+
+
+	$ sysctl -w net.ipv4.ip_forward=1
+	$ cat /proc/sys/net/ipv4/ip_forward
+	1
+
+	
+
+'实验11：'通过SNAT功能，对服务器隐藏访问的客户端的IP地址：
+
+
+	[root@firewall-test ~]# iptables -t nat -A POSTROUTING -s 172.16.0.0/16 -j SNAT  --to-source 192.168.1.254
+
+'实验12：'通过DNAT功能，隐藏服务器IP地址：
+
+	[root@firewall-test ~]# iptables -t nat -A PREROUTING -d 172.16.1.70 -p tcp --dport 80 -j DNAT --to-destination 192.168.1.10
+ 
+
+ ADD?CDC
+
+	
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

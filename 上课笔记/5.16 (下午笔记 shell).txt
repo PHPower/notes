@@ -1,0 +1,439 @@
+5.16 (下午笔记 shell)
+
+
+select 
+	特点：
+		1、自动列出菜单（不需要echo）
+		2、自带输入效果（不需要read）
+		3、自动为变量赋值
+
+	语法结构：
+		select VARIABLE in list
+		do
+			循环体
+		done 
+
+	select 循环无法自己跳出循环，需要手动在循环体中加 break 跳出
+
+
+?	自己使用 select + while + case 制作一个脚本
+	
+	#!/bin/bash
+	# Author: Maxie
+	# Date: 2017-05-17-16:42:37
+	# Description:select and case and while
+
+	select i in "China" "USA" "JP" "TW";do
+	    case $i in
+	    China)
+	        echo $i is a good place && break
+	        ;;
+	    USA)
+	       echo error && break
+	        ;;
+	    esac
+	done
+
+
+
+'函数function：'
+	特点：
+		1、简化操作
+		2、重复调用
+		3、结构化编程
+
+	作用：
+		模块化编程
+		结构化编程
+
+	将一段代码当做一个整体，并为其设定一个名称，该名称即为函数
+
+		注意：定义函数的代码段不会自动执行，只有在调用时执行；
+			所谓调用函数，既是在代码中给定函数名即可
+			函数名出现的任何位置，在代码执行时，都会被自动替换为函数代码
+
+	'函数只有被调用时才会执行'
+
+
+	'语法结构：'
+		函数名 和 函数体
+
+		'语法一'：
+			function f_name {
+				...函数体...
+			}
+
+		'语法二':（常用）
+			f_name() {
+				...函数体...
+			}
+
+
+	'函数的生命周期'： 
+		每次被调用时创建，返回时中止（状态返回）。
+			其状态返回结果为函数体中运行的最后一条命令的状态结果
+			自定义状态返回值，需要使用 'return'，相当于脚本中的 exit 
+			 return [0-255]
+			 	0：成功
+			 	1-255：失败
+
+	'注意：'
+		函数不能直接调用脚本参数，也就是 $1 $# $@ 之类的
+
+
+
+	'函数返回值：'
+		函数的执行结果返回值
+			(1)使用echo 或  printf 命令进行输出
+			(2)函数体中调用的命令的执行结果
+
+		函数的退出状态码：
+			(1)默认取决于函数体中执行的最后一条命令的退出状态码
+			(2)自定义：return
+
+		函数自定义退出状态码：
+			return [0-255]
+			 	0：成功
+			 	1-255：失败
+
+
+	'函数可以接受参数：'
+		传递参数给函数：
+			在函数体当中，可以使用$1,$2,$#.... 引用传递给函数的参数；还是可以函数中使用$*或$@调用所有参数，$#引用传递的参数的个数
+			在调用函数时，在函数名后面以空白符分隔给定参数列表即可，例如 testfunc arg1 arg2 arg3 ...
+		例如：
+			testfunc(arg1,arg2,arg3) {
+
+			}
+
+	'变量作用域：'
+	局部变量：
+		作用域是函数的生命周期；在函数结束时被自动销毁
+
+		定义局部变量的方法：
+			local VARLIBALE=VALUE
+
+	本地变量：作用域是运行脚本的shell进程的生命周期；因此，其作用范围为当前shell脚本程序文件
+
+
+	'函数递归：'
+	函数直接或间接调用自身
+
+		'阶乘函数：'
+			阶乘公式：
+				n!=(n-1)!*n  
+					10!=9!*10
+				n!：n的阶乘
+
+
+			实例：
+				vim jiecheng.sh 
+				#!/bin/bash
+				#
+				fact() {
+					if [ $1 -eq 0 -o $1 -eq 1 ];then 
+						echo 1
+					else 
+							echo $[$1*$(fact $[$1-1])]
+					fi
+				}
+
+		'斐波那契数列：（每一项等于前两项的和）'
+			实例：
+				#!/bin/bash
+				#
+				fab() {
+					if [ $1 -eq 1 ];then
+							echo  "1"
+					elif [ $1 -eq 2 ];then 
+							echo  "1"
+					else 
+						echo  "$[$(fab $[$1-1])+$(fab $[$1-2])]"
+					fi
+				}
+
+				for i in `seq 1 $1`; do
+						fab $i 
+				done 
+				echo
+
+			实例：斐波那契数列前N项的排列组合
+				#!/bin/bash
+				# Author: Maxie
+				# Date: 2017-05-16-16:54:54
+				# Description:
+				fab() {
+				    if [ $1 -eq 1 ]
+				    then
+				        echo "1"
+				    elif [ $1 -eq 2 ]
+				    then
+				        echo "1"
+				    else
+				        echo  "$[$(fab $[$1-1])+$(fab $[$1-2])]"
+				    fi
+				}
+				for i in `seq 1 $[$1-1]`;do
+				    fab $i
+				done
+
+	练习：
+		1、指定一个用户，获取该用户的ID号和默认shell
+			$ grep "^root\>" | cut -d: -f3,7
+			0:/bin/bash
+
+			$ vim id-shell.sh
+			#!/bin/bash
+			userinfo() {
+			    if id $username &> /dev/null; then
+			        grep "^$username\>" /etc/passwd | cut -d: -f3,7
+			    else
+			        echo "no such usuer"
+			    fi
+			}
+			#开始调用函数
+			username=$1
+			userinfo
+			
+			username=$2
+			userinfo
+
+		2、服务脚本框架
+			$ vim testsrv
+			[root@centos7 function]# cat testsrv
+			#!/bin/bash
+			#
+			# chkconfig: - 50 50
+			# description: test service scrpti
+			
+			prog=$(basename $0)
+			lockfile=/var/lock/subsys/$prog
+			
+			start() {
+			    if [ -f $lockfile ];then
+			        echo "$prog is running yet"
+			    else
+			        touch $lockfile
+			        [ $? -eq 0 ] && echo "start $prog finshed"
+			   fi
+			}
+			
+			stop() {
+			    if [ -f $lockfile ];then
+			        rm -f $lockfile
+			        [ $? -eq 0 ] && echo "stop $prog finshed"
+			    else
+			        echo "$prog is not running"
+			    fi
+			}
+			
+			status() {
+			    if [ -f $lockfile ]; then
+			        echo "$prog is running"
+			    else
+			        echo "$prog is stopped"
+			    fi
+			}
+			
+			usage() {
+			    echo "Usage: $prog {start|stop|restart|status}}"
+			}
+
+			case $1 in
+			start)
+			    start ;;
+			stop)
+			    stop ;;
+			restart)
+			    stop
+			    start
+			    ;;
+			status)
+			    status ;;
+			*)
+				usage
+				exit 1 ;;
+			esac
+
+		3、添加10个用户：
+			[root@centos7 0516shell-class]# cat useradd-func.sh
+			#!/bin/bash
+			# Author: Maxie
+			# Date: 2017-05-16-16:06:12
+			# Description:add 10 users
+			adduser() {
+			    if id $1 &> /dev/null;then
+			        return 2
+			    else
+			        useradd $1
+			        retval=$?
+			        return $retval
+			    fi
+			}
+			for i in {1..10};do
+			    adduser ${1}${i}
+			    retval=$?
+			        if [ $retval -eq 0 ];then
+			            echo "add user ${1}${i} finished."
+			        elif [ $retval -eq 5 ];then
+			            echo "user ${1}${i}  exists"
+			        else
+			            echo "Unknown Error"
+			        fi
+			done
+
+
+
+			'#这里函数adduser()中$1是在脚本中的   adduser ${1}${i}  这个${1}${i}代表函数中$1'
+
+
+
+	1、写一个脚本：
+			使用函数实现ping一个主机来测试主机的在线状态；主机地址通过参数传递诶函数
+			主程序：测试172.16.1.1-172.16.67.1范围内各主机的在线状态
+				[root@centos7 0516shell-class]# cat ip-online.sh
+				#!/bin/bash
+				#user:Maxie
+				# 写一个脚本，提示请输入网络地址，如 172.16.0.0 ，判断输入的网段中主机在线状态
+				read -p "请输入IP地址的网络地址：" IP         # 说明信息IP
+				# 定义变量名称=调用$IP获取的值 抽取 以.为分隔符 1-2的字符
+				IpAddr=`echo $IP | cut -d. -f1-2`.
+				sum=`echo $IP | cut -d. -f3`
+				addr_ping() {
+				                for i in `seq 0 5`;do
+				                if ping -c 1 -W 1 ${IpAddr}${1}.${i} &> /dev/null
+				                then
+				                                echo -e "${IpAddr}${1}.${i}\tonline"
+				                else
+				                        echo -e "${IpAddr}${1}.${i}\toffline"
+				                    fi
+				                done
+				}
+				if echo $IP | egrep '\<([1-9]|[1-9][0-9]|1[0-9][0-9]|2[0-4][0-9]|25[0-5])\.(([0-9]|[1-9][0-9]|1[0-9][0-9]|2[0-4][0-9]|25[0-5])\.){2}([0-9]|[1-9][0-9]|1[0-9][0-9]|2[0-4][0-9]|25[0-5])\>' &>/dev/null;then
+				    for I in `seq 1 $sum`;do
+				        addr_ping $I
+				        [ $I -eq $sum ] && break
+				    done
+				fi
+				
+				unset IP 
+				unset sum 
+				unset IpAddr
+
+
+		2、写一个脚本：
+			实现打印 n,n （例如4,3)乘法表；
+
+			[root@centos7 0516shell-class]# cat nnchengfabiao.sh
+			#!/bin/bash
+			# Author: Maxie
+			# Date: 2017-05-16-18:26:35
+			# Description:print triangle and Trapezoid
+
+
+			Multi() {
+			    for ((i=1;i<=$1;i++));do
+			        for ((j=1;j<=$2 && j<=i;j++));do
+			            echo -e -n "${i}x${j}=$[${i}*${j}]\t"
+			        done
+			        echo
+			    done
+			}
+
+			n1=$1
+			n2=$2
+			Multi $n1 $n2
+
+			unset n1
+			unset n2
+
+
+		
+		3、打印三角形，梯形
+
+			[root@centos7 0516shell-class]# cat triangle.sh
+			#!/bin/bash
+			# Author: Maxie
+			# Date: 2017-05-16-18:38:37
+			# Description:打印三角形和梯形
+
+			TRIANGLE() {
+			    for ((line=1;line<=$1;line++));do
+			        for ((space=1;space<=$[$1-line];space++));do
+			            echo -n " "
+			        done
+
+			        for ((start=1;start<=$[line*2-1];start++));do
+			            echo -n "*"
+			        done
+			        echo
+			    done
+			}
+
+			sum_line=$1
+
+			TRIANGLE $sum_line
+
+			unset sum_line
+
+			echo
+			echo
+
+			#print Trapezoid
+
+			TRAPEZOID() {
+			    for i in `seq $1 $2`;do
+			        for j in `seq $i`;do
+			            echo -n "* "
+			        done
+			        echo
+			    done
+			}
+
+			_MIN=$2
+			_MAX=$3
+
+			TRAPEZOID $_MIN $_MAX
+
+			unset _MIN
+			unset _MAX
+
+
+
+
+
+
+
+'fork炸弹'
+	fork炸弹是一种恶意程序，它的内部是一个不断在fork进程的无限循环，实质是一个简单的递归程序。
+	由于程序是递归的，如果没有任何限制，这会导致这个简单的程序迅速耗尽系统里面的所有资源
+	
+	函数实现
+		:(){ :|:& };:
+		bomb() { bomb | bomb & }; bomb
+	
+	脚本实现
+		cat Bomb.sh
+		#!/bin/bash
+		./$0|./$0&
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

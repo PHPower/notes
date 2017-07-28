@@ -1,0 +1,307 @@
+5.18 (下午笔记 awk文本分析工具)
+
+
+文本三剑客：
+	grep：文本过滤器，效率较高（行为单位）
+	sed：流编辑器，默认只处理模式空间，不处理源数据
+	awk：报告生成器，格式化以后显示；一般以 列 为单位处理数据。支持C语法，可以加入条件判断、循环语句
+
+
+Linux：使用的是 GNU awk,也就是gawk
+
+	[root@centos7 signal-shell]# which awk
+	/usr/bin/awk
+	[root@centos7 signal-shell]# ll /usr/bin/awk
+	lrwxrwxrwx. 1 root root 4 3月  19 10:00 /usr/bin/awk -> gawk
+	[root@centos7 signal-shell]# ll /usr/bin/gawk
+	-rwxr-xr-x. 1 root root 428576 6月  10 2014 /usr/bin/gawk
+
+
+'gawk命令：'
+	语法：
+		gawk [OPTIONS] 'program' FILE...
+			program：PATTERN{ACTION STATEMENTS}
+				ACTION STATEMENTS：动作语句，可以有多个；语句之间用分号分隔
+
+				awk內建命令：
+					print、printf 
+
+
+	选项：
+		-F fs：字段分隔符；fs指定输入分隔符，fs可以是字符串或正则表达式，如-F: 
+			指明输入时用到的字段分隔符
+		-v var=value：用于实现自定义变量
+
+
+	'awk內建命令/变量：'
+		1、print打印
+			print item1,item2 ...
+
+			要点：
+				(1)逗号分隔符
+				(2)输出的各item可以是字符串，也可以是数值；当前记录的字段、变量或awk的表达式
+				(3)如果省略 item，通常相当于执行 print $0   打印整行字符
+		2、变量：
+			'內建变量：'
+
+				(1)FS：input field seperator，默认为空白字符
+					指定分隔符：
+						awk -v FS=":" '{print $1 }' /etc/passwd 
+
+							[root@centos7 awk-test]# cat data1.txt
+							data11 data12 data13 data14 data15
+							data21 data22 data23 data24 data25
+							data31 data32 data33 data34 data35
+							[root@centos7 awk-test]# sed -i "s/ /,/g" data1.txt
+							[root@centos7 awk-test]# cat data1.txt
+							data11,data12,data13,data14,data15
+							data21,data22,data23,data24,data25
+							data31,data32,data33,data34,data35
+							[root@centos7 awk-test]# awk 'BEGIN{FS=","} {print $1,$2,$3}' data1.txt
+							data11 data12 data13
+							data21 data22 data23
+							data31 data32 data33
+
+ 				(2)OFS：output field seperator，默认为空白字符
+ 					指定输出分隔符：
+ 						awk -v FS=":" -v OFS=":" '{print $1}' /etc/passwd 
+
+ 						[root@centos7 awk-test]# awk 'BEGIN{FS=","; OFS="--"} {print $1,$2,$3}' data1.txt
+						data11--data12--data13
+						data21--data22--data23
+						data31--data32--data33
+
+ 				(3)RS：input record seperator，输入时的换行符
+
+ 					[root@centos7 awk-test]# cat data2
+					Riley Mullen
+					123 Main Street
+					Chicago, IL 60601
+					(312)555-1234
+
+					Frank Williams
+					456 Oak Street
+					Indianapolis, IN 46201
+					(317)555-9876
+
+					Haley Snell
+					4231 Elm Street
+					Detroit, MI 48201
+					(313)555-4938
+
+					[root@centos7 awk-test]# awk 'BEGIN{FS="\n"; RS=""} {print $1 $4}' data2
+					Riley Mullen(312)555-1234
+					Frank Williams(317)555-9876
+					Haley Snell(313)555-4938
+
+					这里的思路就是：指定FS（分隔符）为换行符\n ，指定输入时的换行符为""，也就是空白行
+
+
+ 				(4)ORS：output record seperator，输出时的换行符
+
+
+ 				(5)'FIELDWIDTHS变量'允许你不依靠字段分隔符来读取记录。在一些应用程序中，数据并没有使
+				用字段分隔符，而是被放置在了记录中的特定列。这种情况下，必须设定'FIELDWIDTHS'变量来
+				匹配数据在记录中的位置。
+					
+					一旦设置了'FIELDWIDTH变量'，gawk就会忽略FS变量，并根据提供的字段宽度来计算字段。
+					
+					下面是个采用字段宽度而非字段分隔符的例子。
+					
+					[root@centos7 awk-test]# cat data1b
+					1005.3247596.37
+					115-2.349194.00
+					05810.1298100.1
+					[root@centos7 awk-test]# awk 'BEGIN{FIELDWIDTHS="3 5 2 5"; OFS="<-->"} {print $1,$2,$3,$4}' data1b
+					100<-->5.324<-->75<-->96.37
+					115<-->-2.34<-->91<-->94.00
+					058<-->10.12<-->98<-->100.1
+
+					'警告 一定要记住，一旦设定了FIELDWIDTHS变量的值，就不能再改变了。这种方法并不适用于变长的字段。'
+
+
+			'数据变量：'
+						变 量 					描 述
+						
+						ARGC 					当前命令行参数个数(获取的是当前终端的参数个数，但不包括"program")
+						ARGIND 					当前文件在ARGV中的位置
+						ARGV 					包含命令行参数的数组(获取当前终端的参数，并指定位置)
+						CONVFMT 				数字的转换格式（参见printf语句），默认值为%.6 g
+						ENVIRON 				当前shell环境变量及其值组成的关联数组
+						ERRNO 					当读取或关闭输入文件发生错误时的系统错误号
+						FILENAME 				用作gawk输入数据的数据文件的文件名
+						FNR 					当前数据文件中的数据行数
+						IGNORECASE 				设成非零值时，忽略gawk命令中出现的字符串的字符大小写
+						NF 						数据文件中的字段总数
+						NR 						已处理的输入记录数
+						OFMT 					数字的输出格式，默认值为%.6 g
+						RLENGTH 				由match函数所匹配的子字符串的长度
+						RSTART 					由match函数所匹配的子字符串的起始位置
+
+						'注意：跟shell变量不同，在脚本中引用gawk变量时，变量名前不加美元符。'
+
+				实例：
+					[root@centos7 awk-test]# gawk 'BEGIN{print ARGC}' data1
+					2
+					[root@centos7 awk-test]# gawk 'BEGIN{print ARGC,ARGV[0]}' data1
+					2 gawk
+					[root@centos7 awk-test]# gawk 'BEGIN{print ARGC,ARGV[1]}' data1
+					2 data1
+
+						ARGC变量表明命令行上有两个参数。这包括gawk命令和data1参数（记住，程序脚本并不算参数）。ARGV数组从索引0开始，代表的是命令。第一个数组值是gawk命令后的第一个命令行参数。
+
+
+
+
+	gawk的主要特性之一是其处理文本文件中数据的能力。它会自动给一行中的每个数据元素分
+		配一个变量。默认情况下，gawk会将如下变量分配给它在文本行中发现的数据字段：
+	
+	 $0 代表整个文本行；
+	 $1 代表文本行中的第1个数据字段；
+	 $2 代表文本行中的第2个数据字段；
+	 $n 代表文本行中的第n个数据字段。
+
+
+	 	实例：
+	 		awk '{$4="hello" ; print $0 }'<< EOF
+			> hello my friend maxie
+			> EOF
+			hello my friend hello
+
+
+	'模式：'
+		模式可以是以下任意一个： 
+
+		/正则表达式/：使用通配符的扩展集。 
+		关系表达式：使用运算符进行操作，可以是字符串或数字的比较测试。 
+		模式匹配表达式：用运算符~（匹配）和~!（不匹配）。 
+		BEGIN语句块、pattern语句块、END语句块：
+
+	'操作：'
+		操作由一个或多个命令、函数、表达式组成，之间由换行符或分号隔开，并位于大括号内，主要部分是：
+			1、变量或数组赋值
+			2、输出命令
+			3、内置函数
+			4、控制流语句
+
+
+	'awk的工作原理：'
+		awk 'BEGIN{ commands } pattern{ commands } END{ commands }'
+
+		第一步：执行BEGIN{commands}语句块中的语句
+		第二步：从文件或标准输入(stdin)读取一行，然后执行 pattern{commands}语句块，它逐行扫描文件，从第一行到最后一行重复这个过程，直到文件全部被读取完毕
+		第三步：当读至输入流末尾时，执行 END{ commands }语句块
+
+		BEGIN语句块：在awk开始时从输入流中 `读取行之前被执行`，这是一个可选的语句块，比如变量初始化、打印输出表格的表头等语句，通常可以写在BEGIN语句块中
+		
+		END语句块在awk从输入流中读取完所有的行之后即被执行，比如打印所有行的分析结果这类信息汇总都是在END语句块中完成，它也是一个可选语句块。 
+		
+		pattern语句块中的通用命令是最重要的部分，它也是可选的。如果没有提供pattern语句块，则默认执行{ print }，即打印每一个读取到的行，awk读取的每一行都会执行该语句块。
+
+
+
+
+
+
+
+
+
+
+
+'awk练习：'
+	1、从文本文件读取 "program"，来执行awk
+		[root@centos7 awk-test]# cat script3.awk
+		{
+		text="'s home dir is "
+		print $1 text $6
+		}
+		[root@centos7 awk-test]# awk -F: -f script3.awk /etc/passwd
+		...
+		apache's home dir is /usr/share/httpd
+		hacker's home dir is /home/hacker
+		maxie1's home dir is /home/maxie1'
+
+		script3.gawk程序脚本定义了一个变量来保存print命令中用到的文本字符串。注意，gawk程序在引用变量值时并未像shell脚本一样使用美元符。
+
+	2、在awk处理文本之前时，运行脚本：比如为报告创建标题。
+		这里我们使用'BEGIN'关键字，他会强制awk在读取数据前执行BEGIN关键字后指定的程序脚本
+
+		[root@centos7 awk-test]# awk 'BEGIN {print "this is my data :"}'
+		this is my data :
+		[root@centos7 awk-test]# awk -F: 'BEGIN {print "this is my data :"} { print $1}' /etc/passwd
+		this is my data :
+		root
+
+		[root@centos7 awk-test]# cat data.txt
+		Line 1
+		Line 2
+		Line 3
+		Line 4
+		Line 5
+		Line 6
+		[root@centos7 awk-test]# awk 'BEGIN{ print "This is my data: "} {print $0 }' data.txt
+		This is my data:
+		Line 1
+		Line 2
+		Line 3
+		Line 4
+		Line 5
+		Line 6
+
+
+		在gawk执行了BEGIN脚本后，它会用第二段脚本来处理文件数据。这么做时要小心，两段脚本仍然被认为是gawk命令行中的一个文本字符串。你需要相应地加上单引号。
+
+
+	3、在处理数据后运行脚本
+		与BEGIN关键字类似，'END'关键字允许你指定一个程序脚本，awk会在读完数据后执行它
+
+			[root@centos7 awk-test]# awk 'BEGIN{print "This is my data: "}  {print $0} END{ print "End of the file"}' data.txt
+			This is my data:
+			Line 1
+			Line 2
+			Line 3
+			Line 4
+			Line 5
+			Line 6
+			End of the file
+
+		当awk程序执行完打印文件内容后，它会执行END脚本中的命令。
+
+			[root@centos7 awk-test]# cat script4.awk
+			BEGIN{
+			print "The list of this system's users and shells : "
+			print "UserID    \t    Shell"
+			print "--------  \t   --------"
+			FS=":"
+			}
+
+			{
+			print $1 "      \t " $7
+			}
+
+			END{
+			print "The End of the list"
+			}
+
+		上面这个脚本用BEGIN脚本来为报告创建标题。它还定义了一个叫作FS的特殊变量。这是定义字段分隔符的另一种方法。这样你就不用依靠脚本用户在命令行选项中定义字段分隔符了。
+
+			[root@centos7 awk-test]# awk -f script4.awk /etc/passwd
+			The list of this systems users and shells :
+			UserID    	    Shell
+			--------  	   --------
+			root      	 /bin/bash
+			bin      	 /sbin/nologin
+			daemon      	 /sbin/nologin
+			adm      	 /sbin/nologin
+			lp      	 /sbin/nologin
+			sync      	 /bin/sync
+
+
+
+
+
+
+
+
+
+

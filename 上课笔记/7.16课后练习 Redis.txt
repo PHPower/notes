@@ -1,0 +1,1013 @@
+7.16课后练习 Redis
+
+
+同步时间
+	$ ntpdate 172.16.0.1
+
+
+1、修改redis配置文件
+	###NET WORKING###
+	# 设定监听地址
+	bind 127.0.0.1 172.16.1.100
+
+	###SECURITY###
+	# 设定认证密码
+	requirepass mypass 
+
+
+2、测试@string
+	(1) SET / SETNX / GET  / MSET 
+		
+		$ redis-cli -a mypass
+		127.0.0.1:6379> SETNX mykey tom
+		(integer) 1
+		127.0.0.1:6379> SETNX mykey jerry
+		(integer) 0
+		127.0.0.1:6379> GET mykey
+		"tom"
+		127.0.0.1:6379> SET mykey jerry
+		OK
+		127.0.0.1:6379> GET mykey
+		"jerry"
+
+
+	(2) INCR DECR 自增自减
+		127.0.0.1:6379> SET counts 10
+		OK
+		127.0.0.1:6379> INCR counts
+		(integer) 11
+		127.0.0.1:6379> INCR counts
+		(integer) 12
+		127.0.0.1:6379> INCR counts
+		(integer) 13
+		127.0.0.1:6379> INCR counts
+		(integer) 14
+		127.0.0.1:6379> DECR counts
+		(integer) 13
+		127.0.0.1:6379> DECR counts
+		(integer) 12
+		127.0.0.1:6379> DECR counts
+		(integer) 11
+		127.0.0.1:6379> DECR counts
+		(integer) 10
+
+
+
+
+3、测试@list
+	(1) LPUSH / LINDEX / LRANGE  / LREM
+		127.0.0.1:6379> LPUSH mylist 10 11 12 14 19 20 30 99 2 29 76
+		(integer) 11
+		127.0.0.1:6379> LINDEX mylist 0
+		"76"
+		127.0.0.1:6379> LINDEX mylist 1
+		"29"
+		127.0.0.1:6379> LINDEX mylist
+		(error) ERR wrong number of arguments for lindex command
+		127.0.0.1:6379> LLEN mylist
+		(integer) 11
+		127.0.0.1:6379> LRANGE mylist 0 5
+		1) "76"
+		2) "29"
+		3) "2"
+		4) "99"
+		5) "30"
+		6) "20"
+		127.0.0.1:6379> LREM mylist 0
+		(error) ERR wrong number of arguments for lrem command
+		127.0.0.1:6379> LREM mylist 0 76
+		(integer) 1
+		127.0.0.1:6379> LLEN mylist
+		(integer) 10
+
+
+4、测试@hash
+
+	127.0.0.1:6379> HSET stu id 1
+	(integer) 0
+	127.0.0.1:6379> HSET stu name 'maxie'
+	(integer) 0
+	127.0.0.1:6379> HGET stu name
+	"maxie"
+	127.0.0.1:6379> HGET stu id
+	"1"
+	127.0.0.1:6379> HSET stu age 22
+	(integer) 0
+	127.0.0.1:6379> HVALS stu
+	1) "1"
+	2) "maxie"
+	3) "22"
+	127.0.0.1:6379> HGETALL stu
+	1) "id"
+	2) "1"
+	3) "name"
+	4) "maxie"
+	5) "age"
+	6) "22"
+
+
+
+
+5、测试@set 
+	127.0.0.1:6379> SADD students 'tom' 'jerry' 'lucy' 'lily'
+	(integer) 4
+	127.0.0.1:6379> SADD teachers 'sam' 'trump'
+	(integer) 2
+	127.0.0.1:6379> SADD teachers 'lucy' 'tom'
+	(integer) 2
+	127.0.0.1:6379> SMEMBERS teachers
+	1) "trump"
+	2) "tom"
+	3) "sam"
+	4) "lucy"
+	127.0.0.1:6379> SMEMBERS students
+	1) "lily"
+	2) "tom"
+	3) "lucy"
+	4) "jerry"
+	127.0.0.1:6379> SUNION students teachers
+	1) "trump"
+	2) "lily"
+	3) "tom"
+	4) "sam"
+	5) "lucy"
+	6) "jerry"
+	127.0.0.1:6379> SDIFF students teachers
+	1) "lily"
+	2) "jerry"
+	127.0.0.1:6379> SDIFF teachers students
+	1) "trump"
+	2) "sam"
+
+
+
+6、测试@sorted_set 有序列表
+	127.0.0.1:6379> ZADD stus 90 'maxie' 100 'tom' 69 'lily' 85 'jerry' 95 'sam'
+	(integer) 5
+	127.0.0.1:6379> ZCARD stus
+	(integer) 5
+	127.0.0.1:6379> ZRANK stus 'tom'
+	(integer) 4
+	127.0.0.1:6379> ZRANK stus 'tom'
+	(integer) 4
+	127.0.0.1:6379> ZRANGE stus 0 4
+	1) "lily"
+	2) "jerry"
+	3) "maxie"
+	4) "sam"
+	5) "tom"
+	127.0.0.1:6379> ZRANGEBYSCORE stus 0 3
+	(empty list or set)
+	127.0.0.1:6379> ZRANGEBYSCORE stus 60 90
+	1) "lily"
+	2) "jerry"
+	3) "maxie"
+
+
+
+
+
+
+7、测试@server
+	127.0.0.1:6379> CLIENT LIST
+	id=3 addr=127.0.0.1:50883 fd=6 name= age=1583 idle=0 flags=N db=0 sub=0 psub=0 multi=-1 qbuf=0 qbuf-free=32768 obl=0 oll=0 omem=0 events=r cmd=client
+	127.0.0.1:6379> CLIENT LIST
+	id=3 addr=127.0.0.1:50883 fd=6 name= age=1602 idle=0 flags=N db=0 sub=0 psub=0 multi=-1 qbuf=0 qbuf-free=32768 obl=0 oll=0 omem=0 events=r cmd=client
+	id=4 addr=172.16.1.70:60292 fd=7 name= age=2 idle=2 flags=N db=0 sub=0 psub=0 multi=-1 qbuf=0 qbuf-free=0 obl=0 oll=0 omem=0 events=r cmd=command
+	127.0.0.1:6379> CLIENT SETNAME test-1
+	OK
+	127.0.0.1:6379> CLIENT KILL ID 4
+	(integer) 1
+
+
+
+
+
+
+
+8、配置AOF
+
+	(1) 修改配置文件
+		############################## APPEND ONLY MODE ###############################
+		# 开启AOF，其实只需设置这项为yes即可
+		appendonly yes
+		# 仅追加的文件名，存放在dir定义的目录下 
+		appendfilename "appendonly.aof"
+		# 每秒同步一次内存的数据到磁盘中
+		appendfsync everysec
+		# 后台执行aof重写期间不调用fsync，默认为no，表示调用
+		no-appendfsync-on-rewrite no
+		# 变化比例达到100%，触发
+		auto-aof-rewrite-percentage 100
+		# 大于64mb时，触发(数据量小时，可能会用到此限制)
+		auto-aof-rewrite-min-size 64mb
+		# 上述两个条件同时满足时，方会触发重写AOF；与上次aof文件大小相比，其增长量超过100%，且大小不少于64MB;
+
+	(2) 重启redis
+
+		$ systemctl restart redis 
+
+	(3) 查看生成的aof文件
+		$ ll /var/lib/redis/
+		total 4
+		-rw-r--r-- 1 redis redis   0 Jul 15 21:15 appendonly.aof
+		-rw-r--r-- 1 redis redis 319 Jul 15 21:15 dump.rdb
+
+		注意：如需备份RDB或者AOF，只需复制这里的数据文件即可实现备份功能。  恢复时：将备份的文件移动至此目录，开启redis服务，即可实现数据恢复
+
+	(4) 查看INFO命令中 Persistence段：
+		> INFO Persistence
+		# Persistence
+		loading:0
+		rdb_changes_since_last_save:0
+		rdb_bgsave_in_progress:0
+		rdb_last_save_time:1500124507
+		rdb_last_bgsave_status:ok
+		rdb_last_bgsave_time_sec:-1
+		rdb_current_bgsave_time_sec:-1
+		aof_enabled:1
+		aof_rewrite_in_progress:0
+		aof_rewrite_scheduled:0
+		aof_last_rewrite_time_sec:-1
+		aof_current_rewrite_time_sec:-1
+		aof_last_bgrewrite_status:ok
+		aof_last_write_status:ok
+		aof_current_size:0
+		aof_base_size:0
+		aof_pending_rewrite:0
+		aof_buffer_length:0
+		aof_rewrite_buffer_length:0
+		aof_pending_bio_fsync:0
+		aof_delayed_fsync:0
+
+
+
+
+
+
+
+
+9、配置redis主从复制 replication
+	准备两台装有redis程序的虚拟机
+	MASTER：172.16.1.100
+	SLAVE： 172.16.1.70
+
+	(1) 编辑主从节点配置文件
+		MASTER： 
+			$ vim /etc/redis.conf
+			bind 172.16.1.100
+			requirepass mypass
+			protected-mode no
+
+		SLAVE：
+			$ vim /etc/redis.conf
+			bind 172.16.1.70
+			requirepass mypass
+			# 主节点的IP地址和监听端口
+			slaveof 172.16.1.100 6379
+			# 认证主节点需要的密钥 --> master节点的密码，而非slave本机
+			masterauth mypass
+			# 选举master时，使用的优先级;数字越小优先级越高，但0表示不参与选举
+			slave-priority 100
+
+	(2) 启动主从节点redis服务
+		$ systemctl start redis.service
+
+	(3) 使用INFO命令、CLIENT LIST命令查看
+		127.0.0.1:6379> INFO Replication
+		# Replication
+		role:master
+		connected_slaves:1
+		slave0:ip=172.16.1.70,port=6379,state=online,offset=57,lag=1
+		master_repl_offset:57
+		repl_backlog_active:1
+		repl_backlog_size:1048576
+		repl_backlog_first_byte_offset:2
+		repl_backlog_histlen:56
+		
+		127.0.0.1:6379> CLIENT LIST
+		id=2 addr=127.0.0.1:50890 fd=7 name= age=1288 idle=0 flags=N db=0 sub=0 psub=0 multi=-1 qbuf=0 qbuf-free=32768 obl=0 oll=0 omem=0 events=r cmd=client
+		id=3 addr=172.16.1.70:60296 fd=8 name= age=48 idle=1 flags=S db=0 sub=0 psub=0 multi=-1 qbuf=0 qbuf-free=0 obl=0 oll=0 omem=0 events=r cmd=replconf
+		
+
+	(4) 测试
+		MASTER：
+			127.0.0.1:6379> SET mykey 10
+			OK
+			127.0.0.1:6379> GET mykey
+			"10"
+
+		SLAVE：
+			127.0.0.1:6379> GET mykey
+			"10"
+
+	(5) 再添加一台SLAVE
+		$ yum install -y redis 
+		$ vim /etc/redis.conf
+		bind 172.16.1.30
+		requirepass mypass
+		slaveof 172.16.1.100 6379
+		masterauth mypass
+		# 选举master时，要使用的优先级
+		slave-priority 90
+
+		$ systemctl start redis 
+
+	(6) 查看INFO 
+		127.0.0.1:6379> INFO Replication
+		# Replication
+		role:master
+		connected_slaves:2
+		slave0:ip=172.16.1.70,port=6379,state=online,offset=1442,lag=0
+		slave1:ip=172.16.1.30,port=6379,state=online,offset=1442,lag=0
+		master_repl_offset:1442
+		repl_backlog_active:1
+		repl_backlog_size:1048576
+		repl_backlog_first_byte_offset:2
+		repl_backlog_histlen:1441
+		127.0.0.1:6379>
+
+	 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+10、配置 redis sentinel
+	当主节点宕机时，使用sentinel帮助选举，自动提升从节点为主节点   --> auto failover
+
+	(1) 在9实验的基础上
+		主节点：
+			> SADD students 'tom' 'lucy' 'jerry'
+			(integer) 3
+			127.0.0.1:6379> SMEMBERS students
+			1) "jerry"
+			2) "lucy"
+			3) "tom"
+		
+		从1：
+			127.0.0.1:6379> SMEMBERS students
+			1) "lucy"
+			2) "jerry"
+			3) "tom"
+		
+		从2：
+			127.0.0.1:6379> SMEMBERS students
+			1) "lucy"
+			2) "tom"
+			3) "jerry"
+
+		主从同步正常，开始配置'sentinel'
+
+	(2) 配置sentinel的配置文件
+		'这里我们使用主从节点中的主节点作为sentinel节点'
+
+		$ vim /etc/redis-sentinel.conf
+		# 监听端口
+		port 26379
+		# 设定监控的redis主节点的master-name、IP地址、端口、quorum
+		sentinel monitor mymaster 172.16.1.100 6379 1
+		# 配置连接主从复制集群的master节点的密码
+		sentinel auth-pass mymaster mypass
+		# 主节点超时时间，超过此时间后，判定master节点为down，默认单位：毫秒
+		sentinel down-after-milliseconds mymaster 5000
+		# 并行同步节点
+		sentinel parallel-syncs mymaster 1
+		# 故障切换的超时时间，默认为3分钟
+		sentinel failover-timeout mymaster 180000
+
+	(3) 启动redis-sentinel
+		$ systemctl start redis-sentinel.service
+		$ ss -tnl
+		State       Recv-Q Send-Q                                         Local Address:Port                                                        Peer Address:Port
+		LISTEN      0      128                                                        *:26379                                                                  *:*
+		LISTEN      0      128                                             172.16.1.100:6379                                                                   *:*
+		LISTEN      0      128                                                127.0.0.1:6379                                                                   *:*
+		LISTEN      0      128                                                        *:22                                                                     *:*
+		LISTEN      0      128                                                127.0.0.1:631                                                                    *:*
+		LISTEN      0      100                                                127.0.0.1:25                                                                     *:*
+		LISTEN      0      128                                                       :::26379                                                                 :::*
+		LISTEN      0      128                                                       :::22                                                                    :::*
+		LISTEN      0      128                                                      ::1:631                                                                   :::*
+		LISTEN      0      100                                                      ::1:25                                                                    :::*
+	
+	(4) 连接redis-sentinel
+		$ redis-cli -p 26379
+		127.0.0.1:26379> SENTINEL masters
+		1)  1) "name"
+			# 集群名称
+		    2) "mymaster"
+		    3) "ip"
+			# IP地址
+		    4) "172.16.1.100"
+		    5) "port"
+		    6) "6379"
+		    7) "runid"
+		    8) "decc4a3c5af3f1220a640ecc1ab896ba350a0406"
+		    9) "flags"
+		   10) "master"
+		   11) "link-pending-commands"
+		   12) "0"
+		   13) "link-refcount"
+		   14) "1"
+		   15) "last-ping-sent"
+		   16) "0"
+		   17) "last-ok-ping-reply"
+		   18) "119"
+		   19) "last-ping-reply"
+		   20) "119"
+		   21) "down-after-milliseconds"
+		   22) "30000"
+		   23) "info-refresh"
+		   24) "9896"
+		   25) "role-reported"
+		   26) "master"
+		   27) "role-reported-time"
+		   28) "130439"
+		   29) "config-epoch"
+		   30) "0"
+		   31) "num-slaves"
+		   32) "2"
+		   33) "num-other-sentinels"
+		   34) "0"
+		   35) "quorum"
+		   36) "1"
+		   37) "failover-timeout"
+		   38) "180000"
+		   39) "parallel-syncs"
+		   40) "1"
+
+		# 查看mymaster主从复制集群的从节点信息
+		127.0.0.1:26379> SENTINEL slaves mymaster  
+
+
+
+	(5) 手动设置failover
+		127.0.0.1:26379> SENTINEL failover mymaster
+		OK
+		127.0.0.1:26379> SENTINEL masters
+		1)  1) "name"
+		    2) "mymaster"
+		    3) "ip"
+		    4) "172.16.1.30"
+		    5) "port"
+		    6) "6379"
+		    7) "runid"
+		    8) "573765d30ec1f0fa4cafeacf4cb934c496d1ed35"
+		    9) "flags"
+		   10) "master"
+		   11) "link-pending-commands"
+		   12) "0"
+		   13) "link-refcount"
+		   14) "1"
+		   15) "last-ping-sent"
+		   16) "0"
+		   17) "last-ok-ping-reply"
+		   18) "252"
+		   19) "last-ping-reply"
+		   20) "252"
+		   21) "down-after-milliseconds"
+		   22) "30000"
+		   23) "info-refresh"
+		   24) "176"
+		   25) "role-reported"
+		   26) "master"
+		   27) "role-reported-time"
+		   28) "341"
+		   29) "config-epoch"
+		   30) "1"
+		   31) "num-slaves"
+		   32) "2"
+		   33) "num-other-sentinels"
+		   34) "0"
+		   35) "quorum"
+		   36) "1"
+		   37) "failover-timeout"
+		   38) "180000"
+		   39) "parallel-syncs"
+		   40) "1"
+
+	(6) 到新MASTER节点查看 --> 172.16.1.30
+		127.0.0.1:6379> INFO Replication
+		# Replication
+		role:master
+		connected_slaves:1
+		slave0:ip=172.16.1.70,port=6379,state=online,offset=72205,lag=0
+		master_repl_offset:72205
+		repl_backlog_active:1
+		repl_backlog_size:1048576
+		repl_backlog_first_byte_offset:64715
+		repl_backlog_histlen:7491
+
+	(7) 将之前手动下线的旧MASTER，作为SLAVE上线
+		旧MASTER：
+			127.0.0.1:6379> CONFIG SET masterauth mypass
+			OK
+			127.0.0.1:6379> CONFIG REWRITE
+			OK
+
+		新MASTER：
+			127.0.0.1:6379> INFO Replication
+			# Replication
+			role:master
+			connected_slaves:2
+			slave0:ip=172.16.1.70,port=6379,state=online,offset=77446,lag=0
+			slave1:ip=172.16.1.100,port=6379,state=online,offset=77285,lag=1
+			master_repl_offset:77446
+			repl_backlog_active:1
+			repl_backlog_size:1048576
+			repl_backlog_first_byte_offset:64715
+			repl_backlog_histlen:12732
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+11、配置redis cluster
+	三台新的虚拟机
+	172.16.1.100
+	172.16.1.70
+	172.16.1.30
+
+		$ yum install -y redis 
+
+
+
+	(1) 修改配置文件
+		$ vim /etc/redis.conf
+		bind 0.0.0.0
+		requirepass mypass
+
+		################################ REDIS CLUSTER  ###############################
+		cluster-enabled yes
+		cluster-config-file nodes-6379.conf
+		cluster-node-timeout 15000
+
+		$ scp /etc/redis.conf root@172.16.1.70:/etc/
+		$ scp /etc/redis.conf root@172.16.1.30:/etc/
+
+	(2) 启动redis 
+		$ systemctl restart redis 
+		$ ss -tnl
+		$ ll /var/lib/redis/
+		total 4
+		-rw-r--r-- 1 redis redis 112 Jun 20 07:59 nodes-6379.conf
+
+	(3) 配置集群
+		$ redis -a mypass
+		127.0.0.1:6379> CLUSTER NODES
+		ae97e9700ef65e6ccf648c8a77a339cdfe7366c1 :6379 myself,master - 0 0 0 connected
+		127.0.0.1:6379> CLUSTER MEET 172.16.1.70 6379
+		OK
+		127.0.0.1:6379> CLUSTER MEET 172.16.1.30 6379
+		OK
+		127.0.0.1:6379> CLUSTER NODES
+		76a6fdbc6fe619ef120cf230145cb4b43c80aeaf 172.16.1.70:6379 master - 0 1497917025809 1 connected
+		7349f132ca8cefc148b203ff3e02f8afb1692962 172.16.1.30:6379 master - 0 1497917026819 2 connected
+		ae97e9700ef65e6ccf648c8a77a339cdfe7366c1 172.16.1.100:6379 myself,master - 0 0 0 connected
+		127.0.0.1:6379> CLUSTER INFO
+		cluster_state:fail
+		cluster_slots_assigned:0
+		cluster_slots_ok:0
+		cluster_slots_pfail:0
+		cluster_slots_fail:0
+		cluster_known_nodes:3
+		cluster_size:0
+		cluster_current_epoch:2
+		cluster_my_epoch:0
+		cluster_stats_messages_sent:47
+		cluster_stats_messages_received:47
+
+	(4) 修改slots
+		修改/var/lib/redis/node-conf文件
+
+		1.100节点：
+			$ vim /var/lib/redis/nodes-6379.conf
+			ae97e9700ef65e6ccf648c8a77a339cdfe7366c1 172.16.1.100:6379 myself,master - 0 0 0 connected 0-5000
+
+		1.70节点：
+			$ vim /var/lib/redis/nodes-6379.conf
+			76a6fdbc6fe619ef120cf230145cb4b43c80aeaf 172.16.1.70:6379 myself,master - 0 0 1 connected 5001-10000
+
+		1.30节点：
+			$ vim /var/lib/redis/nodes-6379.conf
+			7349f132ca8cefc148b203ff3e02f8afb1692962 172.16.1.30:6379 myself,master - 0 0 2 connected 10001-16383
+
+
+
+
+	(5) 重启redis(三台节点)
+		$ systemctl restart redis 
+
+
+		如果重启后，查看各节点的slots不对的话，需要手动设置成如下信息：
+		1.100:
+			ae97e9700ef65e6ccf648c8a77a339cdfe7366c1 172.16.1.100:6379 myself,master - 0 0 0 connected 0-5000
+			7349f132ca8cefc148b203ff3e02f8afb1692962 172.16.1.30:6379 master - 0 1497917554765 2 connected 10001-16383
+			76a6fdbc6fe619ef120cf230145cb4b43c80aeaf 172.16.1.70:6379 master - 0 1497917555774 1 disconnected 5001-10000
+
+		1.70:
+			76a6fdbc6fe619ef120cf230145cb4b43c80aeaf 172.16.1.70:6379 myself,master - 0 0 1 connected 5001-10000
+			ae97e9700ef65e6ccf648c8a77a339cdfe7366c1 172.16.1.100:6379 master - 0 1497941001839 0 connected 0-5000
+			7349f132ca8cefc148b203ff3e02f8afb1692962 172.16.1.30:6379 master - 0 1497941002952 2 connected 10001-16383
+
+		1.30:
+			ae97e9700ef65e6ccf648c8a77a339cdfe7366c1 172.16.1.100:6379 master - 0 1497941049586 0 connected 0-5000
+			7349f132ca8cefc148b203ff3e02f8afb1692962 172.16.1.30:6379 myself,master - 0 0 2 connected 10001-16383
+			76a6fdbc6fe619ef120cf230145cb4b43c80aeaf 172.16.1.70:6379 master - 0 1497941050596 1 connected 5001-10000
+
+	(6) 重新meet
+		$ redis-cli -a mypass
+		127.0.0.1:6379> CLUSTER MEET 172.16.1.70 6379
+		OK
+		127.0.0.1:6379> CLUSTER MEET 172.16.1.30 6379
+		OK
+		127.0.0.1:6379> CLUSTER INFO
+		cluster_state:ok
+		cluster_slots_assigned:16384
+		cluster_slots_ok:16384
+		cluster_slots_pfail:0
+		cluster_slots_fail:0
+		cluster_known_nodes:3
+		cluster_size:3
+		cluster_current_epoch:2
+		cluster_my_epoch:0
+		cluster_stats_messages_sent:37
+		cluster_stats_messages_received:37
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+12、使用脚本配置redis-cluster
+	
+	在上面的配置完初始化的配置文件后，执行如下操作
+
+	#### <font size=4 color="#32CD99">下载redis-trib.rb的ruby脚本</font>
+
+	因为从epel安装的`redis`不自带`redis-trib.rb`脚本，这时就需要我们自己去下载了
+
+	```bash
+	$ wget http://download.redis.io/redis-stable/src/redis-trib.rb
+	```
+
+	不过需要运行`ruby`脚本，我们还需要ruby环境：
+
+	```bash
+	$ yum install ruby ruby-devel rubygems rpm-build
+	```
+
+	还需要ruby连接gem的软件包
+
+	```bash
+	$ wget --no-check-certificate https://rubygems.org/downloads/redis-3.3.3.gem
+	$ gem install redis-3.3.3.gem
+	```
+
+
+	#### <font size=4 color="#32CD99">脚本使用帮助</font>
+
+	* 查看脚本帮助
+
+	```bash
+	$ ruby redis-trib.rb help
+	Usage: redis-trib <command> <options> <arguments ...>
+
+	  create          host1:port1 ... hostN:portN
+	                  --replicas <arg>
+	  check           host:port
+	  info            host:port
+	  fix             host:port
+	                  --timeout <arg>
+	  reshard         host:port
+	                  --from <arg>
+	                  --to <arg>
+	                  --slots <arg>
+	                  --yes
+	                  --timeout <arg>
+	                  --pipeline <arg>
+	  rebalance       host:port
+	                  --weight <arg>
+	                  --auto-weights
+	                  --use-empty-masters
+	                  --timeout <arg>
+	                  --simulate
+	                  --pipeline <arg>
+	                  --threshold <arg>
+	  add-node        new_host:new_port existing_host:existing_port
+	                  --slave
+	                  --master-id <arg>
+	  del-node        host:port node_id
+	  set-timeout     host:port milliseconds
+	  call            host:port command arg arg .. arg
+	  import          host:port
+	                  --from <arg>
+	                  --copy
+	                  --replace
+	  help            (show this help)
+
+	For check, fix, reshard, del-node, set-timeout you can specify the host and port of any working node in the cluster.
+	```
+
+	* 各选项详解
+
+	```bash
+	1、create：创建集群
+	2、check：检查集群
+	3、info：查看集群信息
+	4、fix：修复集群
+	5、reshard：在线迁移slot
+	6、rebalance：平衡集群节点slot数量
+	7、add-node：将新节点加入集群
+	8、del-node：从集群中删除节点
+	9、set-timeout：设置集群节点间心跳连接的超时时间
+	10、call：在集群全部节点上执行命令
+	11、import：将外部redis数据导入集群
+	```
+
+	#### <font size=4 color="#32CD99">使用脚本create创建集群</font>
+
+	* create命令可选replicas参数，replicas表示需要有几个slave。最简单命令使用如下
+
+	```bash
+	$ ruby redis-trib.rb create 172.16.1.100:6379 172.16.1.70:6379 172.16.1.30:6379
+	```
+
+	* slave节点的创建命令(需要最少6的节点，此命令)
+
+	```bash
+	$ ruby redis-trib.rb create --replicas 1 172.16.1.101:6379 172.16.1.102:6379 172.16.1.103:6379 
+	```
+
+	<br>
+
+	* 创建流程如下：
+
+	> 1、首先为每个节点创建ClusterNode对象，包括连接每个节点。检查每个节点是否为独立且db为空的节点。执行load_info方法导入节点信息。
+	> 2、检查传入的master节点数量是否大于等于3个。只有大于3个节点才能组成集群。
+	> 3、计算每个master需要分配的slot数量，以及给master分配slave。分配的算法大致如下：
+	    * 先把节点按照host分类，这样保证master节点能分配到更多的主机中。
+	    * 不停遍历遍历host列表，从每个host列表中弹出一个节点，放入interleaved数组。直到所有的节点都弹出为止。
+	    * master节点列表就是interleaved前面的master数量的节点列表。保存在masters数组。
+	    * 计算每个master节点负责的slot数量，保存在slots_per_node对象，用slot总数除以master数量取整即可。
+	    * 遍历masters数组，每个master分配slots_per_node个slot，最后一个master，分配到16384个slot为止。
+	    * 接下来为master分配slave，分配算法会尽量保证master和slave节点不在同一台主机上。对于分配完指定slave数量的节点，还有多余的节点，也会为这些节点寻找master。分配算法会遍历两次masters数组。
+	    * 第一次遍历masters数组，在余下的节点列表找到replicas数量个slave。每个slave为第一个和master节点host不一样的节点，如果没有不一样的节点，则直接取出余下列表的第一个节点。
+	    * 第二次遍历是在对于节点数除以replicas不为整数，则会多余一部分节点。遍历的方式跟第一次一样，只是第一次会一次性给master分配replicas数量个slave，而第二次遍历只分配一个，直到余下的节点被全部分配出去。
+
+	> 4、打印出分配信息，并提示用户输入“yes”确认是否按照打印出来的分配方式创建集群。
+	> 5、输入“yes”后，会执行flush_nodes_config操作，该操作执行前面的分配结果，给master分配slot，让slave复制master，对于还没有握手（cluster meet）的节点，slave复制操作无法完成，不过没关系，flush_nodes_config操作出现异常会很快返回，后续握手后会再次执行flush_nodes_config。
+	> 6、给每个节点分配epoch，遍历节点，每个节点分配的epoch比之前节点大1。
+	> 7、节点间开始相互握手，握手的方式为节点列表的其他节点跟第一个节点握手。
+	> 8、然后每隔1秒检查一次各个节点是否已经消息同步完成，使用ClusterNode的get_config_signature方法，检查的算法为获取每个节点cluster nodes信息，排序每个节点，组装成node_id1:slots|node_id2:slot2|...的字符串。如果每个节点获得字符串都相同，即认为握手成功。
+	> 9、此后会再执行一次flush_nodes_config，这次主要是为了完成slave复制操作。
+	> 10、最后再执行check_cluster，全面检查一次集群状态。包括和前面握手时检查一样的方式再检查一遍。确认没有迁移的节点。确认所有的slot都被分配出去了。
+	> 11、至此完成了整个创建流程，返回[OK] All 16384 slots covered.
+
+
+	* 下载redis源码包、编译安装
+	```bash
+	$ wget http://download.redis.io/releases/redis-3.2.9.tar.gz
+	$ tar -xf redis-3.2.9.tar.gz
+	$ cd redis-3.2.9
+	$ yum groupinstall -y "Development Tools"
+	$ make && make install 
+	```
+
+	
+	* 修改配置文件
+
+	```bash
+	$ cp /root/redis-3.2.9/redis.conf /root
+	$ mkdir /root/cluster-test
+	$ cd /root/
+	$ mkdir -pv cluster-test/700{0,1,2,3,4,5} 
+
+	# 拷贝配置文件
+	$ cp /root/redis.conf /root/cluster-test/7000
+	$ cp /root/redis.conf /root/cluster-test/7001
+	$ cp /root/redis.conf /root/cluster-test/7002
+	$ cp /root/redis.conf /root/cluster-test/7003
+	$ cp /root/redis.conf /root/cluster-test/7004
+	$ cp /root/redis.conf /root/cluster-test/7005
+
+	#修改端口号
+	$ sed -i "s/6379/7000/g" /root/cluster-test/7000/redis.conf
+	$ sed -i "s/6379/7001/g" /root/cluster-test/7001/redis.conf
+	$ sed -i "s/6379/7002/g" /root/cluster-test/7002/redis.conf
+	$ sed -i "s/6379/7003/g" /root/cluster-test/7003/redis.conf
+	$ sed -i "s/6379/7004/g" /root/cluster-test/7004/redis.conf
+	$ sed -i "s/6379/7005/g" /root/cluster-test/7005/redis.conf
+
+	# 查看目录结构
+	$ tree ./
+	./
+	├── 7000
+	│   └── redis.conf
+	├── 7001
+	│   └── redis.conf
+	├── 7002
+	│   └── redis.conf
+	├── 7003
+	│   └── redis.conf
+	├── 7004
+	│   └── redis.conf
+	└── 7005
+	    └── redis.conf
+	```
+
+	* 启动节点
+
+	```bash
+	$ redis-server 7000/redis.conf
+	$ redis-server 7001/redis.conf
+	$ redis-server 7002/redis.conf
+	$ redis-server 7003/redis.conf
+	$ redis-server 7004/redis.conf
+	$ redis-server 7005/redis.conf
+	```
+
+	* 拷贝redis-trib.rb脚本
+	```bash
+	$ cp /root/redis-3.2.9/src/redis-trib.rb /usr/local/bin
+	```
+
+
+	* 启动脚本
+
+	```bash
+	$ redis-trib.rb create --replicas 1 127.0.0.1:7000 127.0.0.1:7001 127.0.0.1:7002 127.0.0.1:7003 127.0.0.1:7004 127.0.0.1:7005
+	>>> Creating cluster
+	>>> Performing hash slots allocation on 6 nodes...
+	Using 3 masters:
+	127.0.0.1:7000
+	127.0.0.1:7001
+	127.0.0.1:7002
+	Adding replica 127.0.0.1:7003 to 127.0.0.1:7000
+	Adding replica 127.0.0.1:7004 to 127.0.0.1:7001
+	Adding replica 127.0.0.1:7005 to 127.0.0.1:7002
+	M: db4a46c913c35fe91dc2fd06c7b4b535f7bccb80 127.0.0.1:7000
+	   slots:0-5460 (5461 slots) master
+	M: 484bec734b24bb06fb79b7c9b70487a809e951f8 127.0.0.1:7001
+	   slots:5461-10922 (5462 slots) master
+	M: 731c2c52bb535536035dc4eaf5ba962c4de611c6 127.0.0.1:7002
+	   slots:10923-16383 (5461 slots) master
+	S: e28ead4ed999bff578737f1aaa722ebd1baec40d 127.0.0.1:7003
+	   replicates db4a46c913c35fe91dc2fd06c7b4b535f7bccb80
+	S: 0b630e0f408c4f7ecc873642bb745f11e22d1095 127.0.0.1:7004
+	   replicates 484bec734b24bb06fb79b7c9b70487a809e951f8
+	S: e9b60427dafd3a8bfbd28c64da91da8403ec6060 127.0.0.1:7005
+	   replicates 731c2c52bb535536035dc4eaf5ba962c4de611c6
+	Can I set the above configuration? (type 'yes' to accept): yes
+	>>> Nodes configuration updated
+	>>> Assign a different config epoch to each node
+	>>> Sending CLUSTER MEET messages to join the cluster
+	Waiting for the cluster to join...
+	>>> Performing Cluster Check (using node 127.0.0.1:7000)
+	M: db4a46c913c35fe91dc2fd06c7b4b535f7bccb80 127.0.0.1:7000
+	   slots:0-5460 (5461 slots) master
+	   1 additional replica(s)
+	M: 484bec734b24bb06fb79b7c9b70487a809e951f8 127.0.0.1:7001
+	   slots:5461-10922 (5462 slots) master
+	   1 additional replica(s)
+	S: e9b60427dafd3a8bfbd28c64da91da8403ec6060 127.0.0.1:7005
+	   slots: (0 slots) slave
+	   replicates 731c2c52bb535536035dc4eaf5ba962c4de611c6
+	M: 731c2c52bb535536035dc4eaf5ba962c4de611c6 127.0.0.1:7002
+	   slots:10923-16383 (5461 slots) master
+	   1 additional replica(s)
+	S: 0b630e0f408c4f7ecc873642bb745f11e22d1095 127.0.0.1:7004
+	   slots: (0 slots) slave
+	   replicates 484bec734b24bb06fb79b7c9b70487a809e951f8
+	S: e28ead4ed999bff578737f1aaa722ebd1baec40d 127.0.0.1:7003
+	   slots: (0 slots) slave
+	   replicates db4a46c913c35fe91dc2fd06c7b4b535f7bccb80
+	[OK] All nodes agree about slots configuration.
+	>>> Check for open slots...
+	>>> Check slots coverage...
+	[OK] All 16384 slots covered.
+	```
+
+	#### <font size=4 color="#32CD99">check检查集群</font>
+
+	检查集群状态的命令，没有其他参数，只需要选择一个集群中的一个节点即可。执行命令如下：
+
+	```bash
+	$ redis-trib.rb check 127.0.0.1:7000
+	>>> Performing Cluster Check (using node 127.0.0.1:7000)
+	M: db4a46c913c35fe91dc2fd06c7b4b535f7bccb80 127.0.0.1:7000
+	   slots:0-5460 (5461 slots) master
+	   1 additional replica(s)
+	M: 484bec734b24bb06fb79b7c9b70487a809e951f8 127.0.0.1:7001
+	   slots:5461-10922 (5462 slots) master
+	   1 additional replica(s)
+	S: e9b60427dafd3a8bfbd28c64da91da8403ec6060 127.0.0.1:7005
+	   slots: (0 slots) slave
+	   replicates 731c2c52bb535536035dc4eaf5ba962c4de611c6
+	M: 731c2c52bb535536035dc4eaf5ba962c4de611c6 127.0.0.1:7002
+	   slots:10923-16383 (5461 slots) master
+	   1 additional replica(s)
+	S: 0b630e0f408c4f7ecc873642bb745f11e22d1095 127.0.0.1:7004
+	   slots: (0 slots) slave
+	   replicates 484bec734b24bb06fb79b7c9b70487a809e951f8
+	S: e28ead4ed999bff578737f1aaa722ebd1baec40d 127.0.0.1:7003
+	   slots: (0 slots) slave
+	   replicates db4a46c913c35fe91dc2fd06c7b4b535f7bccb80
+	[OK] All nodes agree about slots configuration.
+	>>> Check for open slots...
+	>>> Check slots coverage...
+	[OK] All 16384 slots covered.
+	```
+
+
+
+	#### <font size=4 color="#32CD99">check检查集群</font>
+
+	info命令用来查看集群的信息。info命令也是先执行load_cluster_info_from_node获取完整的集群信息。然后显示ClusterNode的info_string结果，示例如下：
+
+
+	```bash
+	$ ruby redis-trib.rb info 127.0.0.1:7000
+	127.0.0.1:7000  (db4a46c9...) -> 0 keys | 5461 slots | 1 slaves.
+	127.0.0.1:7001 (484bec73...) -> 0 keys | 5462 slots | 1 slaves.
+	127.0.0.1:7002 (731c2c52...) -> 1 keys | 5461 slots | 1 slaves.
+	[OK] 1 keys in 3 masters.
+	0.00 keys per slot on average.
+	```
+
+
+	#### <font size=4 color="#32CD99">测试集群功能</font>
+
+	```bash
+	$ redis-cli -c -p 7000
+	127.0.0.1:7000> SET mykey maxie
+	-> Redirected to slot [14687] located at 127.0.0.1:7002
+	OK
+	127.0.0.1:7002> GET mykey
+	"maxie"
+	127.0.0.1:7002> exit
+	[root@test-1 ~]# redis-cli -c -p 7005
+	127.0.0.1:7005> GET mykey
+	-> Redirected to slot [14687] located at 127.0.0.1:7002
+	"maxie"
+	127.0.0.1:7002>
+	```
+
+
+
+
+
+
+
+
+

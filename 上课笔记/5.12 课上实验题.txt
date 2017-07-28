@@ -1,0 +1,478 @@
+5.12 课上实验题
+
+实验： 
+
+	'实验1：如果grub.conf文件编写错误，如何恢复？'
+		(1)进入菜单，按e键
+		(2)修改顺序即可
+			删除上面的，在下面手动添加
+
+		(3)启动系统
+		(4)再手动修改/boot/grub/grub.conf文件
+
+	'实验2：如果grub.conf文件被删除，如何恢复？'
+		(1)重启后，直接进入grub界面
+		(2)手写：
+			grub> kernel /vmlinuz-2.6.32-642.el6.x86_64 selinux=0 root=/dev/mapper/vg0-root
+			grub> initrd /initramfs-2.6.32-642.el6.x86_64.img
+			grub> boot  #启动
+		(3)启动后，在/boot/grub/下创建grub.conf文件
+			$ vim /boot/grub/grub.conf 
+			default=0
+			timeout=5
+			splashimage=(hd0,0)/grub/splash.xpm.gz 
+			title CentOS Maxie 2.0
+				kernel /vmlinuz.... root=/dev/mapper/vg0-root selinux=0
+				initrd /initramfs.....img 
+
+			即可修复成功
+
+
+			妈的。。。没写title。。。
+
+	'实验3：删除/boot/grub/*，如何恢复'
+		(1)进入救援模式
+		(2)切根
+		(3)$ gurb-install /dev/sda 
+		   $ sync #同步磁盘
+		(4)写一个/boot/grub/grub.conf 
+
+			$ vim /boot/grub/grub.conf 
+			default=0
+			timeout=5
+			splashimage=(hd0,0)/grub/splash.xpm.gz 
+			title CentOS Maxie 2.0
+				kernel /vmlinuz.... root=/dev/mapper/vg0-root selinux=0
+				initrd /initramfs.....img 
+
+
+
+
+	'实验4：删除/boot/*，如何恢复？'
+		方法1：
+			（1）挂载系统光盘（第一张盘）
+			（2）VMware，ESC键，选择光盘引导
+			（3）选择救援模式
+			（4）切根，执行以下命令：
+				$ grub-install /dev/sda 
+				$ mount /dev/sr0 /mnt 
+				$ rpm -ivh --force kernel-2.6.32-642.e16.x86_64.rpm 
+				$ cd /boot/grub 
+				$ vim grub.conf 
+					default=0
+					timeout=5
+					title CentOS 6.8 (Maxie-2.6.32)
+						root (hd0,0)
+						kernel /vmlinuz-2.6.32-642.e16.x86_64 selinux=0 root=/dev/mapper/vg0-root LANG=en.US.UTF-8 rd_LVM_LV=vg0/root
+						initrd /initramfs-2.6.32-642.e16.x86_64.img
+				$ exit 
+				$ reboot 即可
+			如果是'CentOS7：'
+				重建grub的命令是：
+					grub-install 是grub 0.xx的了，grub2以后貌似是用 'update-grub'
+
+		方法2：
+			(1)进入救援模式
+			(2)切根
+			(3)挂载/dev/sr0 /mnt 
+			(4)拷贝 cp /mnt/isolinux/vmlinux /boot/
+			(5)执行mkinitrd命令：
+				$ mkinitrd /boot/initramfs-`uname -r`.img  `uname -r`
+				$ sync 
+			(6)$ grub-install /dev/sda 
+			(7)编辑/boot/grub/grub.conf
+				default=0
+				timeout=5
+					titile CentOS 6.8
+					kernel /vmlinuz root=/dev/sda2 selinux=0
+					initrd /initramfs-2.6.32-642.e16.x86_64.img
+			(8)同步磁盘 
+				$ sync 
+			(9)重启 
+
+
+	'实验5：如果/sbin/init 程序被删除，如何恢复？'
+		(1)在菜单界面，按a键
+			输入 init=/bin/bash  （加载第一个进程为 bash）
+		(2)启动后，直接进入到 bash界面
+		(3)因为系统现在是 ro(只读)，需要重新挂载
+			$ mount -o remount,rw /
+		(4)挂载光盘，重新安装 upstart的rpm安装包
+			或者
+			之前有备份，直接拷贝/sbin/下
+
+		!!!!!!(5)同步!!!!!!!!!!! 
+			$ sync 
+
+		(6)重启
+
+		这里出问题 估计是没有 同步的问题！！！！
+
+
+		但是可能会导致 init 这个二进制文件属性信息变化，因为有'selinux'
+			$ ll -Z /sbin/init 
+
+
+!	'实验6：删除/etc/fstab文件和/boot/*，如何恢复？'（!!!!普通手动 划分区的情况下!!!!）
+		(1)进入救援模式
+		(2)因为fstab被删除，救援模式不会自动挂载/和其他分区
+		(3)使用 $ blkid查看
+		(4)使用 fsdisk 查看 
+			$ fdisk -l 
+			如果 BOOT 选项 有 *  ，则为boot分区
+		(5)创建挂载点，并挂载
+			$ mkdir /mnt/sda{1,2,3}
+			$ mount /dev/sda1 /mnt/sda1 
+			$ mount /dev/sda2 /mnt/sda2
+				.....
+
+				根据挂载后，查看每个挂载点上的数据信息，判断分区的类型是 boot  /  还是其他
+
+		(6)找到根在哪个分区上，并创建fstab
+			$ vi /mnt/sda2/etc/fstab 			#注意：fstab中/ 和/boot的填写顺序（也就是它们的挂载顺序）
+				UUID=						 /     ext4 defaults 1 1
+				UUID=22523-2242-52362-2352 /boot ext4 defaults 1 2
+				UUID=						 swap  swap defaults 0 0
+
+				'!!!!!!注意：这里UUID后面不能跟双引号（blkid命令获取的UUID会有引号）!!!!!!'
+
+			$ sync    !!!!!同步!!!!!
+			$ exit 
+			$ reboot 
+		(7)重新进入救援模式 !!!
+			进入后：
+				$ df  查看所有分区是否都挂载成功，如果没有，检查/etc/fstab文件 ，必须要全部挂载成功！
+
+		(8)开始修复 /boot下的信息：
+			按照之前实验做即可
+
+				切根，执行以下命令：
+				$ grub-install /dev/sda 
+				$ mount /dev/sr0 /mnt 
+				$ rpm -ivh --force kernel-2.6.32-642.e16.x86_64.rpm 
+				$ cd /boot/grub 
+				$ vim grub.conf 
+					default=0
+					timeout=5
+					title CentOS 6.8 (Maxie-2.6.32)
+						root (hd0,0)
+						kernel /vmlinuz-2.6.32-642.e16.x86_64 selinux=0 root=/dev/mapper/vg0-root LANG=en.US.UTF-8 rd_LVM_LV=vg0/root
+						initrd /initramfs-2.6.32-642.e16.x86_64.img
+				$ exit 
+				$ reboot 即可
+
+
+	'实验7：如果centos是逻辑卷安装，删除/fstab文件和/boot*，如何恢复？'
+		(1)进入救援模式
+		(2)$ blkid查看 只能看到/dev/sda1 和 /dev/sda2是一个逻辑卷
+		   $ /etc/rc.d/rc.sysinit （激活lvm卷）
+		(3)查看逻辑卷
+			$ lvdisplay  或者 lvs 
+		(4)激活逻辑卷
+			'也就是激活卷组：'
+			$ vgchange -a y vg0
+				这里vg0  要通过 vgdisplay查看一下，确认是不是
+			$ lvdisplay #在查看一下，是否都激活
+
+
+		(5)再查看 /dev/mapper 下应该就有文件了
+		(6)挂载逻辑卷
+			$ mkdir /mnt/root
+			$ mount /dev/mapper/vg0-root /mnt/root 
+		(7)创建/etc/fstab文件
+			在 /dev/mapper下的所有逻辑卷都需要写入文件内
+			$ vim /etc/fstab 
+				/dev/mapper/vg0-root    /                       ext4    defaults        1 1
+				UUID=cce14206-5f29-46e9-bd1c-adc739d1d3d0 /boot ext4    defaults        1 2
+				/dev/mapper/vg0-usr     /usr                    ext4    defaults        1 2
+				/dev/mapper/vg0-var     /var                    ext4    defaults        1 2
+				/dev/mapper/vg0-swap    swap                    swap    defaults        0 0 
+		(8)同步 $ sync
+		(9)重启
+		(10)再进入救援模式
+			查看是否能自动挂载 / 
+		(11)开始恢复/boot/*
+			同上面的实验步骤：
+				切根，执行以下命令：
+				$ grub-install /dev/sda 
+				$ mount /dev/sr0 /mnt 
+				$ rpm -ivh --force kernel-2.6.32-642.e16.x86_64.rpm 
+				$ cd /boot/grub 
+				$ vim grub.conf 
+					default=0
+					timeout=5
+					title CentOS 6.8 (Maxie-2.6.32)
+						root (hd0,0)
+						kernel /vmlinuz-2.6.32-642.e16.x86_64 selinux=0 root=/dev/mapper/vg0-root LANG=en.US.UTF-8 rd_LVM_LV=vg0/root
+						initrd /initramfs-2.6.32-642.e16.x86_64.img
+				$ exit 
+				$ reboot 即可
+
+
+
+'自制Linux系统：'
+
+	(1)拷贝工具+工具依赖的库文件
+	(2)挂载 boot 
+	(3)装kernel,initramfs
+		安装grub：
+			grub-install --root-directory=/mnt /dev/sdb 
+				--root-directory：把grub装载到/mnt下的/boot/grub/目录下
+
+
+	'实验步骤'：
+		1、添加一块20G硬盘，让系统识别硬盘：
+			$ echo "- - -" > /sys/class/scsi_host/hots2/scan 
+
+		2、先分区：
+			fdisk /dev/sdb
+
+			1)创建boot分区   100M
+			2)创建根分区		 1G
+			3)格式化文件系统
+				mkfs.ext4 /dev/sdb1
+				mkfs.ext4 /dev/sdb2
+
+		3、创建挂载点目录：
+			$ mkdir /mnt/{boot,root}
+
+		4、挂载分区：
+			$ mount /dev/sdb1 /mnt/boot
+			$ mount /dev/sdb2 /mnt/root 
+
+		5、拷贝vmlinuz和initramfs：
+			$ cp -a /boot/vmlinuz-2.6......   /mnt/boot/vmlinuz 
+			$ cp -a /boot/initramfs-..		  /mnt/boot/initramfs.img 
+
+
+		6、grub-install：导入stage1，1.5，2阶段
+			$ grub-install --root-directory=/mnt  /dev/sdb 
+
+		7、创建grub.conf文件
+			$ vim /mnt/boot/grub/grub.conf 
+			default=0
+			timeout=5
+			titile minilinux
+			kernel /vmlinuz root=UUID=e223525-2352523463-6364363-634363   selinux=0
+			initrd /initramfs.img 
+
+		8、创建 / 文件下有的目录：
+			$ mkdir /mnt/root/{bin,sbin,lib,lib64,root,home,etc,dev,mnt,var,usr,proc,sys,tmp,boot,opt,misc,media}
+
+		9、使用脚本拷贝必要的程序到/mnt/root/（根目录下）：
+			$ copycmd.sh 
+				df 
+				cat 
+				bash
+				ls
+				cp
+				mount
+				vi 
+				vim 
+				insmod
+				ifconfig
+				umount
+				ip 
+				rm
+				mv
+				reboot
+				shutdown
+				tree
+				ping
+				kill       #应该是实现ctrl+c的基础
+				hostname 
+				sh 
+				csh 
+
+
+		9、可以测试一下：
+			切根：
+				$ chroot /mnt/root 
+				$ exit #退出
+
+		10、拷贝网卡驱动：
+			$ locate e1000.ko 
+			$ cp `locate e1000.ko`  /mnt/root/lib/
+
+
+		11、写一个/sbin/init的脚本：
+			$ vim /mnt/root/sbin/init 
+			#!/bin/bash
+			echo "welcome to minilinux"
+			mount -n -o rw /dev/sda2 /		#挂载
+			#insmod /lib/e1000.ko			#加载网卡驱动
+			#ifconfig eth0 172.16.1.12/16	#添加IP地址
+			#ping 172.16.0.1 -c1
+
+			$ chmod +x /mnt/root/sbin/init 
+		
+		12、写一个/mnt/root/etc/fstab文件：
+
+
+		12、关机，把此硬盘挂载到另一操作系统上
+
+		13、开机即可
+			在开机菜单的grub选项后面加一个 init=/bin/bash
+
+
+
+'实验：编译安装内核'（足够空间，起码20G）
+	使内核支持ntfs文件系统
+		$ cat /boot/config-3.10.0-327.el7.x86_64  | grep -i ntfs
+		# CONFIG_NTFS_FS is not set
+			not set :就是不启用这个功能
+
+	(1)解压内核文件
+		$ tar -xvf linux-4.10.15....
+	(2)$ du -sh linux-4.10.15....
+	(3)$ cat /boot/config-3.10.0-327.el7.x86_64文件('作为参考的模板')
+		内核启用了哪些功能
+	(4)$ cp /boot/config-3.....   /root/linux-4.11/.config 
+	(5)$ ll .config
+	(6)$ 安装开发包组
+		$ yum groupinstall "Development Tools"
+	(7)$ make menuconfig     #打开编译安装菜单(一个基于curses的图形化配置界面)
+		  yum install -y ncurses-devel    会缺少这个包，安装后再执行
+		  1)进入菜单
+		  	2)进入General setup菜单
+		  		修改local VERSION
+		  			设置自己的编译版本号
+			3)进入File system菜单
+				查找NTFS
+					进入DOS/FAT/NT FILESYSTEM菜单
+						选中NTFS和FAT
+							NTFS file system support
+			4)退出并保存
+	(8)查看.config文件大小 是否比/boot下的config文件大了
+	(9)查看NFFS功能是否启用：
+		 $ grep -i ntfs .config
+			CONFIG_NTFS_FS=m
+			CONFIG_NTFS_DEBUG=y
+			CONFIG_NTFS_RW=y
+	(10)开始编译：
+		$  make -j 4 && (for i in {1..10};do echo -e "\a";sleep 0.5; done)   #-j并行加速，4个CPU
+
+			报错：
+				scripts/sign-file.c:25:30: fatal error: openssl/opensslv.h: No such file or directory
+				 #include <openssl/opensslv.h>
+				                              ^
+				compilation terminated.
+				make[1]: *** [scripts/sign-file] Error 1
+				make[1]: *** Waiting for unfinished jobs....
+				  HOSTCC  scripts/mod/file2alias.o
+				  HOSTLD  scripts/mod/modpost
+				make: *** [scripts] Error 2
+				make: *** Waiting for unfinished jobs....
+				make: *** wait: No child processes.  Stop.
+
+			安装：yum install openssl-devel -y 
+		$ 需要等待20分钟 ： 开始时间：16：08  完成时间：16：30
+			日本vps：开始时间16：37  完成时间： 
+
+		(2)单独编译单个驱动：
+			比如编译e1000.ko 
+				$ cd /root/linux-4.11/drivers/net/ethernet/intel/e1000/
+				$ make e1000.ko 
+
+
+	?(11)$ make modules_install    #这个命令是把模块安装到/lib/moudels下这个目录
+		[root@localhost linux-4.11]# updatedb
+		[root@localhost linux-4.11]# locate ntfs.ko
+		/root/linux-4.11/fs/ntfs/.ntfs.ko.cmd
+		/root/linux-4.11/fs/ntfs/ntfs.ko
+	?(12)$ make install    #boot分区必须要大，大于1G起码
+	?(13)查看/boot分区下的内核文件（我们制作的4.11-1.0-Maxie的内核版本）
+		查看/boot/grub2/grub2.cfg
+	
+	(14)删除编译的内核：
+
+		删除之前先把之前的配置文件拷贝出来，防止以后使用
+			cp /root/linux-4.11/.config /root 
+
+		第一步：删除/boot下产生的'vmlinuz文件和initramfs文件'
+		(1) rm -r /boot/*4.11-Maxie*   #应该是4个文件
+		(2) vim /boot/grub2/grub.conf 
+			删除关于 4.11-Maxie 的启动项
+				'下面这些信息都要从这个文件内删除'，可以使用vim的V键，选择多行，直接删除
+				menuentry 'Maxie Linux (4.11.0-1.0-Maxie-Linux) 7 (Core)' --class centos --class gnu-linux --class gnu --class os --unrestricted $menuentry_id_option 'gnulinux-3.10.0-327.el7.x86_64-advanced-9043a612-e7b9-4a31-b9a1-c04acf5b2eec' {
+				        load_video
+				        set gfxpayload=keep
+				        insmod gzio
+				        insmod part_msdos
+				        insmod ext2
+				        set root='hd0,msdos1'
+				        if [ x$feature_platform_search_hint = xy ]; then
+				          search --no-floppy --fs-uuid --set=root --hint-bios=hd0,msdos1 --hint-efi=hd0,msdos1 --hint-baremetal=ahci0,msdos1 --hint='hd0,msdos1'  66efd966-78bc-4407-aa39-16020e134488
+				        else
+				          search --no-floppy --fs-uuid --set=root 66efd966-78bc-4407-aa39-16020e134488
+				        fi
+				        linux16 /vmlinuz-4.11.0-1.0-Maxie-Linux root=UUID=9043a612-e7b9-4a31-b9a1-c04acf5b2eec ro rhgb quiet LANG=en_US.UTF-8 net.ifnames=0
+				        initrd16 /initramfs-4.11.0-1.0-Maxie-Linux.img
+				}
+
+		第二步：删除'/lib/modules/'下的自己编译的内核版本的目录
+		(3) rm /lib/modules/4.11-Maxie....  -rf 
+		
+		第三步：删除编译之后的大多数文件（在/root/linux4.11目录下），不包括config文件
+		(4)$ make clean 
+
+		第四步：清理所有生成的文件，包括config 以及某些备份文件
+		(5)$ make mrproper
+
+		第五步：清理所有文件，mrproper以及patches以及编辑器备份文件都删除
+		(6)$ make disclean 
+
+
+
+	(15)CentOS7:进入图形化界面：
+		$ systemctl set-default graphical.target
+	(16)删除模块：
+		$ lsmod | grep ext4  # 查看ext4模块是否加载
+		$ rmmod ext4  #卸载模块 
+		$ insmod ext4 #装载模块
+
+
+
+练习题：
+	1、破解root口令，并为grub设置保护功能
+	2、破坏本机grub stage1，而后在救援模式下修复之
+	3、删除vmlinuz和initramfs文件后无法启动,两种方法恢复之
+	4、增加新硬盘，在其上制作能单独运行kernel和bash的系统
+	5、在U盘上定制linux，使其可启动系统，并具有网络功能
+	6、删除/etc/fstab和/boot目录的所有文件，并恢复之
+	7、编译安装kernel，启用支持ntfs文件系统功能
+
+
+
+
+练习题：
+	1、扫描/etc/passwd文件每一行，如发现GECOS字段为空，则填充用户名和单位电话为62985600，并提示该用户的GECOS信息修改成功。
+			chfn命令：修改描述信息
+			finger命令：显示描述信息
+			
+	2、1、每隔3秒钟到系统上获取已经登录的用户的信息；如果发现用户hacker登录，则将登录时间和主机记录于日志/var/log/login.log中,并退出脚本
+	2、随机生成10以内的数字，实现猜字游戏，提示比较大或小，相等则退出
+	3、用文件名做为参数，统计所有参数文件的总行数
+ 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

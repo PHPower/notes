@@ -1,0 +1,359 @@
+sudo：
+	
+	su：switch user
+		用户切换
+		
+		(1) su  -l  user  
+		(2) su  -l  user  -c   'COMMAND'
+		
+	sudo：
+		能够让获得授权的用户以另外一个用户的身份运行指定的命令；
+		
+		授权机制：授权文件 /etc/sudoers
+			root 	ALL=(ALL) 	ALL 
+			%wheel 	ALL=(ALL)  	ALL 
+			
+		编译此文件的专用命令：visudo
+		
+			授权项：
+				who  	where=(whom)  	commands
+				
+				users 	hosts=(runas)	 	commands
+					
+					users：
+						username
+						#uid
+						%groupname
+						%#gid
+						user_alias
+						
+						支持将多个用户定义为一组用户，称之为用户别名，即user_alias；
+
+					hosts:
+						ip
+						hostname
+						NetAddr
+						host_alias
+						
+					runas:
+						...
+						runas_alias
+						
+					commands:
+						command
+						directory
+						sudoedit：特殊权限，可用于向其它用户授予sudo权限；
+						cmnd_alias
+						
+				定义别名的方法：
+					ALIAS_TYPE  NAME=item1, item2, item3, ...
+						NAME：别名名称，必须使用全大写字符；
+					ALIAS_TYPE:
+						User_Alias
+						Host_Alias
+						Runas_Alias
+						Cmnd_Alias
+						
+					例如：
+						User_Alias  NETADMIN=tom, jerry
+						Cmnd_Alias NETCMND=ip, ifconfig, route
+						
+						NETADMIN 	localhost=(root) 	NETCMND
+						
+					
+		sudo命令：
+			检票机制：能记录成功认证结果一段时间，默认为5分钟；
+			
+			以sudo的方式来运行指定的命令；
+				sudo  [options]  COMMAND
+				
+					-l[l]  command 列出用户能执行的命令
+					-k     清除此前缓存用户成功认证结果；
+					
+		/etc/sudoers应用示例：
+		
+			Cmnd_Alias USERADMINCMNDS = /usr/sbin/useradd, /usr/sbin/usermod, /usr/bin/passwd [a-z]*, !/usr/bin/passwd root
+
+			User_Alias USERADMIN = bob, alice
+
+			USERADMIN       ALL=(root)      USERADMINCMNDS
+			
+		常用标签：
+			NOPASSWD:
+			PASSWD:
+		
+		
+				
+		
+rsyslog：
+	
+	日志：历史事件日志
+		历史事件：
+			时间，事件
+			事件级别（日志级别）：事件的关键性程度；
+			
+	事件：系统引导启动、应用程序启动、应用程序尤其是服务类应用程序运行过程中的一些事件；
+		系统日志服务：
+			syslog：
+				syslogd： system
+				klogd：kernel
+				
+			事件格式较为简单时，可统一由syslog进行记录：
+				事件产生的日期时间 	主机 	进程[pid] ：事件内容
+				
+			支持C/S架构：可通过UDP或TCP协议提供日志记录服务；
+			
+			rsyslog：
+				rsyslogd
+				
+				
+				特性：
+					多线程；
+					UDP，TCP，SSL，TLS，RELP；
+					存储日志信息于MySQL、PGSQL、Oracle等数据管理系统；
+					强大的过滤器，实现过滤日志信息中任何部分的内容；
+					自定义输出格式；
+					
+			elk stack：elasticsearch, logstash, kibana
+			
+	rsyslog日志收集器重要术语：
+		facility：设施，从功能或程序上对日志收集进行分类；
+			auth, authpriv, cron, daemon, kern, lpr, mail, mark, news, security, user, uucp, local0-local7, syslog
+		priority：优先级，日志级别
+			debug, info, notice, warn(warning), err(error), crit(critical), alert, emerg(panic)
+			
+			指定级别：
+				*：所有级别；
+				none：没有级别； 
+				priority：此级别以高于此级别的所有级别；
+				=priorty：仅此级别；
+				……
+				
+		程序环境：
+			主程序：rsyslogd
+			主配置文件：/etc/rsyslog.conf，/etc/rsyslog.d/*.conf
+			服务脚本(centos6)：/etc/rc.d/init.d/rsyslog
+			Unit File(CentOS 7)：/usr/lib/systemd/system/rsyslog.service 
+			
+		配置文件格式rsyslog.conf
+			主要由三部分组成：
+				MODULES
+				GLOBAL DRICTIVES
+				RULES
+				
+			RULES:
+				facilty.priority 	target
+				
+				target：
+					文件：记录日志事件于指定的文件中；通常应该位于/var/log目录下；文件路径之前的"-"表示异步写入；
+					用户：将日志事件通知给指定的用户；是通过将信息发送给登录到系统上的用户的终端进行的；
+					日志服务器：@host，把日志送往指定的服务器主机；
+						host：即日志服务器地址，监听在tcp或udp协议的514端口以提供服务；
+					管道： | COMMAND
+					
+			其它日志文件：
+				/var/log/wtmp：当前系统成功登录系统的日志；
+					需要使用last命令查看
+				/var/log/btmp：当前系统尝试登录系统失败相关的日志；
+					需要使用lastb命令查看
+					
+					lastlog：显示当前系统上的所有用户最近一次登录系统的时间；
+				
+				/var/log/dmesg：系统引导过程中的日志信息；
+					也可以使用dmesg命令进行查看；
+				
+		rsyslog服务器：
+			# Provides UDP syslog reception
+			$ModLoad imudp
+			$UDPServerRun 514
+
+			# Provides TCP syslog reception
+			$ModLoad imtcp
+			$InputTCPServerRun 514
+			
+		记录日志于mysql中：
+			(1) 于MySQL服务器：准备好MySQL服务器，创建用户，授权对Syslog数据库拥有全部访问权限；
+			(2) 于rsyslog主机：安装rsyslog-mysql程序包；
+			(3) 于rsyslog主机：通过导入createDB.sql脚本创建依赖到的数据库及表；
+				mysql    -uUSER  -hHOST  -pPASSWORD  < /usr/share/doc/rsyslog-mysql-VERSION/createDB.sql 
+			(4) 配置rsyslog使用ommysql模块
+				### MODULES ####
+				$ModLoad  ommysql
+				
+				#### RULES ####
+				facility.priority 		:ommysql:DBHOST,DB,DBUSER,DBUSERPASS
+				
+				注意：重启rsyslog服务；
+			(5) web展示接口：loganalyzer
+				(a) 配置lamp组合
+					httpd, php, php-mysql, php-gd
+				(b) 安装loganalyzer
+					# tar  xf  loganalyzer-3.6.5.tar.gz
+					# cp  -r  loganalyzer-3.6.5/src  /var/www/html/loganalyzer
+					# cp  -r loganalyzer-3.6.5/contrib/*.sh  /var/www/html/loganalyzer/
+					# cd /var/www/html/loganalyzer/
+					# chmod  +x  *.sh
+					# ./configure.sh
+
+					
+					
+				通过URL访问
+					http://HOST/loganalyzer
+					
+				# ./secure.sh
+		
+nsswitch and pam：
+	
+	nsswitch：name service switch
+		通用框架，与各种类型存储进行交互的公共实现；
+		
+		实现：/usr/lib64/libnss*, /lib64/libnss*
+			框架：libnss
+			驱动：libnss_files-
+			
+		为每一种用到解析库的应用通过配置定义其位置：
+			/etc/nsswitch.conf 
+				db:  store1  store2  ...
+				
+				例如：
+				passwd: files
+				hosts: files  dns 
+					
+			解析库：
+				文件、关系型数据管理系统(MySQL)、NIS、LDAP、DNS 
+				
+			每种存储中的查找结果状态：
+				STATSU => success | notfound | unavail | tryagain
+			对应于每种状态结果的行为（action）：
+				return | continue 
+				
+			例子：
+				hosts: files  nis [NOTFOUND=return]  dns 
+				
+			getent命令：
+				getent  DATABASE  [key]
+			
+	pam：pluggable  authentication module
+		
+		认证库：存储
+			多种类型的存储：文件、关系型数据管理系统、LDAP、NIS
+			
+			pam：通用框架，提供了与各种类型存储进行交互的公共实现、以及多种辅助类的功能：
+				/lib64/security/*
+				
+			配置文件：为各种调用了pam的应用提供其专用配置；
+				通用配置文件：/etc/pam.conf，可为每一种调用pam完成认证功能的应用程序提供配置；
+				专用配置文件：/etc/pam.d/*，通常专用于为某种特定的应用程序提供配置；
+				
+				通常每个应用会使用一个单独的配置文件；
+				
+			配置文件格式：
+				通用配置文件：
+					application  	type		control 		module-path 		module-arguments
+				专用配置文件：	
+					type		control 		module-path 		module-arguments
+					
+				type：检查的功能类别
+					auth：账号的认证和授权；
+					account：与账号管理相关的非认证类的功能；
+					password：用户修改密码时密码复杂度检查机制；
+					session：用户获取到服务之前或使用服务完成之后需要进行一些附加性操作；
+					
+				control：同一种功能的多个检查之间如何进行组合；
+					两种实现机制：
+						(1) 简单实现：使用一个关键词来定义
+						(2) 详细实现：使用一个或多个“status=action”
+						
+					简单实现：
+						required：必须通过检查；否则，即为失败；无论成功还是失败，都需继续由后续同种功能的其它模块进行检查；
+						requisite：一票否决；检测失败就直接返回失败；检测成功，则由由后续同种功能的其它模块进行检查；
+						sufficient：一票通过，检测成功就直接返回成功；检测失败，则由由后续同种功能的其它模块进行检查；
+						optional：可选的，参考性控制机制；
+						include：调用其它配置文件中的同种功能的检测机制；
+						
+					详细实现：
+						[status1=action1, status2=action2, ...]
+							status：返回状态
+							action：采取的行为，比如ok, done, die, bad, ignore, ...
+							
+				module-path：模块文件路径；
+					相对路径：相对于/lib64/security/目录而言；
+					绝对路径：可位于任何可访问路径；
+					
+				module-arguments：模块的专用参数；
+					
+					
+			模块示例：
+				pam_limits.so：资源限制
+					在用户级别实现对其可使用的资源的限制，例如可打开的文件数量，可运行的进程数量，可用内存空间；
+					
+					修改限制的实现方式：
+						(1) ulimit命令
+						(2) 配置文件：/etc/security/limits.conf, /etc/security/limits.d/*.conf
+						
+					配置文件：每行一个定义；
+						<domain>        <type>  <item>  <value>
+						
+							<domain>：应用于哪些对象
+								username
+								@group
+								*：所有用户
+								
+							<type>：限制的类型
+								soft：软限制，普通用户自己可以修改；
+								hard：硬限制，由root用户设定，且通过kernel强制生效；
+								-：软硬使用相同限制；
+								
+							<item>：限制的资源类型
+								nofile：所能够同时打开的最大文件数量；默认为1024；
+								nproc：所能够同时运行的进程的最大数量；默认为1024；
+								
+					ulimit命令：用于调整软限制；
+						-n        最多的打开的文件描述符个数
+						-u        最大用户进程数
+						-S        使用 `soft'（软）资源限制
+						-H        使用 `hard'（硬）资源限制
+						
+			课外作业：分开实现；
+				(1) 限制centos用户只能够在worktime通过ssh远程连接本机；
+				(2) 限制只有distro组内的用户可通过ssh连接到本机；		
+		
+	
+				
+						
+					
+					
+						
+				
+						
+					
+		
+						
+			
+		
+		
+		
+		
+		
+		
+		
+		
+		
+		
+		
+		
+		
+		
+		
+		
+		
+		
+		
+		
+		
+		
+					
+				
+						
+						
+	 

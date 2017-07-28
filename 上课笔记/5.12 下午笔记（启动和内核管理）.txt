@@ -1,0 +1,581 @@
+5.10 下午笔记（启动和内核管理）
+
+
+'自制Linux系统：'
+
+	(1)拷贝工具+工具依赖的库文件
+	(2)挂载 boot 
+	(3)装kernel,initramfs
+		安装grub：
+			grub-install --root-directory=/mnt /dev/sdb 
+				--root-directory：把grub装载到/mnt下的/boot/grub/目录下
+
+
+	'实验步骤'：
+		1、添加一块20G硬盘，让系统识别硬盘：
+			$ echo "- - -" > /sys/class/scsi_host/hots2/scan 
+
+		2、先分区：
+			fdisk /dev/sdb
+
+			1)创建boot分区   100M
+			2)创建根分区		 1G
+			3)格式化文件系统
+				mkfs.ext4 /dev/sdb1
+				mkfs.ext4 /dev/sdb2
+
+		3、创建挂载点目录：
+			$ mkdir /mnt/{boot,root}
+
+		4、挂载分区：
+			$ mount /dev/sdb1 /mnt/boot
+			$ mount /dev/sdb2 /mnt/root 
+
+		5、拷贝vmlinuz和initramfs：
+			$ cp -a /boot/vmlinuz-2.6......   /mnt/boot/vmlinuz 
+			$ cp -a /boot/initramfs-..		  /mnt/boot/initramfs.img 
+
+
+		6、grub-install：导入stage1，1.5，2阶段
+			$ grub-install --root-directory=/mnt  /dev/sdb 
+
+		7、创建grub.conf文件
+			$ vim /mnt/boot/grub/grub.conf 
+			default=0
+			timeout=5
+			titile minilinux
+			kernel /vmlinuz root=UUID=e223525-2352523463-6364363-634363   selinux=0
+			initrd /initramfs.img 
+
+		8、创建 / 文件下有的目录：
+			$ mkdir /mnt/root/{bin,sbin,lib,lib64,root,home,etc,dev,mnt,var,usr,proc,sys,tmp,boot,opt,misc,media}
+
+		9、使用脚本拷贝必要的程序到/mnt/root/（根目录下）：
+			$ copycmd.sh 
+				df 
+				cat 
+				bash
+				ls
+				cp
+				mount
+				vi 
+				vim 
+				insmod
+				ifconfig
+				umount
+				ip 
+				rm
+				mv
+				reboot
+				shutdown
+				tree
+				ping
+				kill       #应该是实现ctrl+c的基础
+				hostname 
+				sh 
+				csh 
+
+
+		9、可以测试一下：
+			切根：
+				$ chroot /mnt/root 
+				$ exit #退出
+
+		10、拷贝网卡驱动：
+			$ locate e1000.ko 
+			$ cp `locate e1000.ko`  /mnt/root/lib/
+
+
+		11、写一个/sbin/init的脚本：
+			$ vim /mnt/root/sbin/init 
+			#!/bin/bash
+			echo "welcome to minilinux"
+			mount -n -o rw /dev/sda2 /		#挂载
+			#insmod /lib/e1000.ko			#加载网卡驱动
+			#ifconfig eth0 172.16.1.12/16	#添加IP地址
+			#ping 172.16.0.1 -c1
+
+			$ chmod +x /mnt/root/sbin/init 
+		
+		12、写一个/mnt/root/etc/fstab文件：
+
+
+		12、关机，把此硬盘挂载到另一操作系统上
+
+		13、开机即可
+			在开机菜单的grub选项后面加一个 init=/bin/bash
+
+
+ 
+'LFS自己构建一个Linux操作系统'
+
+
+
+
+系统在引导期间，很重要的一个过程就是init进程读取其配置文件/etc/inittab，启动系统基本服务程序及默认运行级别的服务程序完成系统引导，如果/etc/inittab误删除或修改错误，Linux将无法正常启动。此时，只有通过救援模式才可以解决此类问题。
+	•有备份文件的回复方法
+	•没有备份文件的恢复办法
+
+如果想只提取RPM包中的/etc/inittab文件进行恢复，可以在进入救援模式后，执行命令：
+# rpm2cpio /mnt/source/Packages/initscripts-9.03.49-1.el6.centos.x86_64.rpm| cpio -idv./etc/inittab
+# cpetc/inittab/mnt/sysimage/etc
+注意此命令执行时不能将文件直接恢复至/etc目录，只能提取到当前目录下，且恢复的文件名称所在路径要写完整的路径。提取文件成功后，将其复制到根分区所在的/mnt/sysimage目录下相应位置即可
+
+
+
+'/proc目录'：process 进程
+	$ du -sh /porc 
+
+	/proc目录：
+		内核把自己内部状态信息及统计信息，以及可配置参数通过proc伪文件系统加以输出
+	
+	参数：只读：输出信息
+		可写：可接受用户指定“新值”来实现对内核某功能或特性的配置
+
+	
+	/proc/sys
+		(1) sysctl命令用于查看或设定此目录中诸多参数
+			sysctl-w path.to.parameter=VALUE
+			sysctl-w kernel.hostname=mail.magedu.com  			#修改主机名
+
+		(2) echo命令通过重定向方式也可以修改大多数参数的值
+			echo "VALUE" > /proc/sys/path/to/parameter
+			echo “websrv” > /proc/sys/kernel/hostname
+
+	/proc/cmdline：
+		此文件存放内核参数
+			root=/dev/sda2 
+			可以自定义：
+				加30个Loop设备：
+					max_loop=30
+
+
+	'/etc/sysctl.conf' :系统性能相关的配置文件
+
+	'sysctl命令：'
+		默认配置文件：'/etc/sysctl.conf'   这个配置文件  控制 /proc/sys 这个目录
+		
+		(1) 设置某参数
+			sysctl-w parameter=VALUE
+		
+		(2) 通过读取配置文件设置参数（修改设置后 立即生效）     '在配置文件中的设置，永久生效'
+			sysctl-p [/path/to/conf_file]
+		
+		(3) 查看所有生效参数
+			sysctl-a
+
+		'常用的几个参数：'
+			net.ipv4.ip_forward			#ip转发
+			
+			'net.ipv4.icmp_echo_ignore_all'  #禁ping
+				$ sysctl -w net.ipv4.icmp_echo_ignore_all=1  #修改/proc/sys/net/ipv4/下文件的信息
+			 
+			 vm.drop_caches
+			 	清除缓存(释放缓存)
+			 		$ echo 1 > /proc/sys/vm/drop_caches 
+
+
+
+		(4)'Oracle：如果在linux上安装oracle，会自动占用内存'
+			kernel.shammax = 69123939394  (64g大约)
+
+			如果要使用oracle，这个值要调的
+
+		(5)文件系统相关的：
+			fs.file-max = 96284   #最多打开文件的个数（生成可能不够，web服务器）
+		
+
+
+'/sys目录' 存放硬件信息
+		sysfs：为用户使用的伪文件系统，输出内核识别出的各硬件设备的相关属性信息，也有内核对硬件特性的设定信息；有些参数是可以修改的，用于调整硬件工作特性。
+	
+		udev通过此路径下输出的信息动态为各设备创建所需要设备文件，udev是运行用户空间程序
+	
+		专用工具：udevadmin, hotplug
+	
+		udev为设备创建设备文件时，会读取其事先定义好的规则文件，一般在/etc/udev/rules.d及/usr/lib/udev/rules.d目录下
+
+		自定义规则：
+			vim /etc/udev/rules.d/usb.rules
+				.....
+
+
+
+'内核编译：'
+	单内核体系设计、但充分借鉴了微内核设计体系的优点，为内核引入模块化机制
+	
+	内核组成部分：
+		kernel: 内核核心，一般为bzImage，通常在/boot目录下，名称为vmlinuz-VERSION-RELEASE；
+		kernel object: 内核对象，一般放置于
+			/lib/modules/VERSION-RELEASE/
+		[ ]: N
+		[M]: M
+		[*]: Y
+		辅助文件：ramdisk
+		initrd
+		initramfs
+
+	运行中的内核：
+		uname命令：
+			uname-print system information
+			uname[ OPTION]...
+			-n: 显示节点名称；
+			-r: 显示VERSION-RELEASE;
+			-a:显示所有信息
+
+	lsmod命令：
+		显示由核心已经装载的内核模块
+		显示的内容来自于: /proc/modules文件
+	
+	modinfo命令：
+		'显示模块的详细描述信息'
+		modinfo[ -k kernel ] [ modulename|filename... ]
+			-n: 只显示模块文件路径
+				$  modinfo ext4 -n
+				/lib/modules/4.11.0-1.0-Maxie-Linux/kernel/fs/ext4/ext4.ko
+
+			-p: 显示模块参数
+			-a: author
+			-d: description
+			-l: license  #一般是GPL License
+
+
+		lsmod|grep xfs;modinfoxfs
+
+		$ modinfo ext4
+			filename:       /lib/modules/3.10.0-514.el7.x86_64/kernel/fs/ext4/ext4.ko
+			license:        GPL
+			description:    Fourth Extended Filesystem
+			author:         Remy Card, Stephen Tweedie, Andrew Morton, Andreas Dilger, Theodore Ts'o and others'
+			alias:          fs-ext4
+			alias:          ext3
+			alias:          fs-ext3
+			alias:          ext2
+			alias:          fs-ext2
+			rhelversion:    7.3
+			srcversion:     EAC5A047A664000F2A68A6E
+			depends:        mbcache,jbd2
+			intree:         Y
+			vermagic:       3.10.0-514.el7.x86_64 SMP mod_unload modversions
+			signer:         CentOS Linux kernel signing key
+			sig_key:        D4:88:63:A7:C1:6F:CC:27:41:23:E6:29:8F:74:F0:57:AF:19:FC:54
+			sig_hashalgo:   sha256
+
+
+	modprobe命令：
+		装载或卸载内核模块
+	
+		modprobe[ -C config-file ] [ modulename] [ module parame-ters... ]
+		
+		'配置文件：/etc/modprobe.conf, /etc/modprobe.d/*.conf'
+		
+		modprobe[ -r ] modulename...
+
+
+	depmod命令：
+		内核模块依赖关系文件及系统信息映射文件的生成工具
+	
+	装载或卸载内核模块：
+	
+	insmod命令：指定模块文件，不自动解决依赖模块
+		insmod [ filename ] [ module options... ]
+		insmod `modinfo–n exportfs`
+		lnsmod `modinfo–n xfs`
+
+			$ insmod ext4.ko   #加载ext4.ko模块
+
+	rmmod命令 ：卸载模块
+		rmmod[  modulename]
+		rmmod xfs
+		rmmod exportfs
+
+			$ rmmod ext4.ko  #卸载ext.ko模块
+
+	前提：
+		(1) 准备好开发环境
+		(2) 获取目标主机上硬件设备的相关信息
+		(3) 获取目标主机系统功能的相关信息
+			例如:需要启用相应的文件系统
+		(4) 获取内核源代码包
+			www.kernel.org
+
+
+
+
+
+'开发环境准备：'
+	包组(CentOS 6)：
+		Server Platform Development
+		Development Tools
+	
+	目标主机硬件设备相关信息：
+		CPU：
+			#cat /proc/cpuinfo
+			#x86info -a
+			#lscpu
+
+
+
+
+
+'硬件设备：'
+	PCI设备：
+		lspci
+			-v
+			-vv
+		lsusb
+			-v
+			-vv
+		lsblk块设备
+
+	
+	了解全部硬件设备信息
+		hal-device:CentOS6
+
+
+
+
+
+'内核编译安装系统'
+	
+	安装开发包组
+	
+	下载源码文件
+	
+	.config：准备文本配置文件
+	
+	make menuconfig：配置内核选项
+	
+	make [-j #]
+	
+	make modules_install：安装模块
+	
+	make install ：安装内核相关文件
+		安装bzImage为/boot/vmlinuz-VERSION-RELEASE
+		生成initramfs文件
+		编辑grub的配置文件
+
+
+	示例：
+		tar xf linux-3.10.67.tar.xz -C /usr/src
+		cd /usr/src
+		ln -sv linux-3.10.67 linux
+		cd /usr/src/linux
+		cp /boot/config-$(uname -r) ./.config
+		make help
+		make menuconfig
+		make -j 2
+		make modules_install
+		make install
+		reboot
+
+
+
+
+
+
+
+'编译内核：'（生产用的很少）
+	(1) 配置内核选项
+		
+		支持“更新”模式进行配置：make help
+		(a) make config：基于命令行以遍历的方式去配置内核中可配置的每个选项
+		(b) make menuconfig：基于curses的文本窗口界面
+		(c) make gconfig：基于GTK (GNOME）环境窗口界面
+		(d) make xconfig：基于QT(KDE)环境的窗口界面
+		
+		支持“全新配置”模式进行配置
+		(a) make defconfig：基于内核为目标平台提供的“默认”配置进行配置
+		(b) make allyesconfig: 所有选项均回答为“yes“
+		(c) make allnoconfig: 所有选项均回答为"no"
+
+	(2) 编译
+		全编译:make [-j #]
+		编译内核的一部分功能：
+			(a) 只编译某子目录中的相关代码
+				$ cd /usr/src/linux
+				$ make dir/
+			
+			(b) 只编译一个特定的模块
+				$ cd /usr/src/linux
+				$ make dir/file.ko
+				例如：只为e1000编译驱动：
+				$ make drivers/net/ethernet/intel/e1000/e1000.ko
+
+	如何交叉编译内核：('跨平台')
+		编译的目标平台与当前平台不相同
+		$ make ARCH=arch_name
+	
+	要获取特定目标平台的使用帮助
+		$ make ARCH=arch_namehelp
+		$ make ARCH=arm help
+
+
+
+
+
+'内核编译：'
+	在已经执行过编译操作的内核源码树做重新编译
+	
+	需要事先清理操作：
+		 make clean：清理大多数编译生成的文件，但会保留config文件等
+		 make mrproper: 清理所有编译生成的文件、config及某些备份文件
+		 make distclean：mrproper、patches以及编辑器备份文件
+
+
+'卸载内核：'
+	删除/lib/modules/目录下不需要的内核库文件
+	删除/usr/src/linux/目录下不需要的内核源码
+	删除/boot目录下启动的内核和内核映像文件
+	更改grub的配置文件，删除不需要的内核启动列表
+
+
+
+
+
+
+
+'搜索目录下所有文件内指定字符串：'
+	$ grep -R "/sbin/init" *      # *表示当前目录所有文件，-R递归搜索
+	或者
+	$ find linux-4.11/ -name "main.*"
+	$  grep -R "/sbin/init" * | grep "init/main.c"
+	init/main.c:    if (!try_to_run_init_process("/sbin/init") ||
+		'上面这些命令是查找，为什么系统启动会执行/sbin/init程序'
+
+
+
+
+'实验：编译安装内核'（足够空间，起码20G）
+	使内核支持ntfs文件系统
+		$ cat /boot/config-3.10.0-327.el7.x86_64  | grep -i ntfs
+		# CONFIG_NTFS_FS is not set
+			not set :就是不启用这个功能
+
+	(1)解压内核文件
+		$ tar -xvf linux-4.10.15....
+	(2)$ du -sh linux-4.10.15....
+	(3)$ cat /boot/config-3.10.0-327.el7.x86_64文件('作为参考的模板')
+		内核启用了哪些功能
+	(4)$ cp /boot/config-3.....   /root/linux-4.11/.config 
+	(5)$ ll .config
+	(6)$ 安装开发包组
+		$ yum groupinstall "Development Tools"
+	(7)$ make menuconfig     #打开编译安装菜单(一个基于curses的图形化配置界面)
+		  yum install -y ncurses-devel    会缺少这个包，安装后再执行
+		  1)进入菜单
+		  	2)进入General setup菜单
+		  		修改local VERSION
+		  			设置自己的编译版本号
+			3)进入File system菜单
+				查找NTFS
+					进入DOS/FAT/NT FILESYSTEM菜单
+						选中NTFS和FAT
+							NTFS file system support
+			4)退出并保存
+	(8)查看.config文件大小 是否比/boot下的config文件大了
+	(9)查看NFFS功能是否启用：
+		 $ grep -i ntfs .config
+			CONFIG_NTFS_FS=m
+			CONFIG_NTFS_DEBUG=y
+			CONFIG_NTFS_RW=y
+	(10)开始编译：
+		$  make -j 4 && (for i in {1..10};do echo -e "\a";sleep 0.5; done)   #-j并行加速，4个CPU
+
+			报错：
+				scripts/sign-file.c:25:30: fatal error: openssl/opensslv.h: No such file or directory
+				 #include <openssl/opensslv.h>
+				                              ^
+				compilation terminated.
+				make[1]: *** [scripts/sign-file] Error 1
+				make[1]: *** Waiting for unfinished jobs....
+				  HOSTCC  scripts/mod/file2alias.o
+				  HOSTLD  scripts/mod/modpost
+				make: *** [scripts] Error 2
+				make: *** Waiting for unfinished jobs....
+				make: *** wait: No child processes.  Stop.
+
+			安装：yum install openssl-devel -y 
+		$ 需要等待20分钟 ： 开始时间：16：08  完成时间：16：30
+			日本vps：开始时间16：37  完成时间： 
+
+		(2)单独编译单个驱动：
+			比如编译e1000.ko 
+				$ cd /root/linux-4.11/drivers/net/ethernet/intel/e1000/
+				$ make e1000.ko 
+
+
+	?(11)$ make modules_install    #这个命令是把模块安装到/lib/moudels下这个目录
+		[root@localhost linux-4.11]# updatedb
+		[root@localhost linux-4.11]# locate ntfs.ko
+		/root/linux-4.11/fs/ntfs/.ntfs.ko.cmd
+		/root/linux-4.11/fs/ntfs/ntfs.ko
+	?(12)$ make install    #boot分区必须要大，大于1G起码
+	?(13)查看/boot分区下的内核文件（我们制作的4.11-1.0-Maxie的内核版本）
+		查看/boot/grub2/grub2.cfg
+	
+	(14)删除编译的内核：
+
+		删除之前先把之前的配置文件拷贝出来，防止以后使用
+			cp /root/linux-4.11/.config /root 
+
+		第一步：删除/boot下产生的'vmlinuz文件和initramfs文件'
+		(1) rm -r /boot/*4.11-Maxie*   #应该是4个文件
+		(2) vim /boot/grub2/grub.conf 
+			删除关于 4.11-Maxie 的启动项
+				'下面这些信息都要从这个文件内删除'，可以使用vim的V键，选择多行，直接删除
+				menuentry 'Maxie Linux (4.11.0-1.0-Maxie-Linux) 7 (Core)' --class centos --class gnu-linux --class gnu --class os --unrestricted $menuentry_id_option 'gnulinux-3.10.0-327.el7.x86_64-advanced-9043a612-e7b9-4a31-b9a1-c04acf5b2eec' {
+				        load_video
+				        set gfxpayload=keep
+				        insmod gzio
+				        insmod part_msdos
+				        insmod ext2
+				        set root='hd0,msdos1'
+				        if [ x$feature_platform_search_hint = xy ]; then
+				          search --no-floppy --fs-uuid --set=root --hint-bios=hd0,msdos1 --hint-efi=hd0,msdos1 --hint-baremetal=ahci0,msdos1 --hint='hd0,msdos1'  66efd966-78bc-4407-aa39-16020e134488
+				        else
+				          search --no-floppy --fs-uuid --set=root 66efd966-78bc-4407-aa39-16020e134488
+				        fi
+				        linux16 /vmlinuz-4.11.0-1.0-Maxie-Linux root=UUID=9043a612-e7b9-4a31-b9a1-c04acf5b2eec ro rhgb quiet LANG=en_US.UTF-8 net.ifnames=0
+				        initrd16 /initramfs-4.11.0-1.0-Maxie-Linux.img
+				}
+
+		第二步：删除'/lib/modules/'下的自己编译的内核版本的目录
+		(3) rm /lib/modules/4.11-Maxie....  -rf 
+		
+		第三步：删除编译之后的大多数文件（在/root/linux4.11目录下），不包括config文件
+		(4)$ make clean 
+
+		第四步：清理所有生成的文件，包括config 以及某些备份文件
+		(5)$ make mrproper
+
+		第五步：清理所有文件，mrproper以及patches以及编辑器备份文件都删除
+		(6)$ make disclean 
+
+
+
+	(15)CentOS7:进入图形化界面：
+		$ systemctl set-default graphical.target
+	(16)删除模块：
+		$ lsmod | grep ext4  # 查看ext4模块是否加载
+		$ rmmod ext4  #卸载模块 
+		$ insmod ext4 #装载模块
+
+
+
+练习题：
+	1、破解root口令，并为grub设置保护功能
+	2、破坏本机grub stage1，而后在救援模式下修复之
+	3、删除vmlinuz和initramfs文件后无法启动,两种方法恢复之
+	4、增加新硬盘，在其上制作能单独运行kernel和bash的系统
+	5、在U盘上定制linux，使其可启动系统，并具有网络功能
+	6、删除/etc/fstab和/boot目录的所有文件，并恢复之
+	7、编译安装kernel，启用支持ntfs文件系统功能
+
+
+
+
+
+
+
+	

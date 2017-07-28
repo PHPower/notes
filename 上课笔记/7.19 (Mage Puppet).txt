@@ -1,0 +1,2181 @@
+7.19 (Mage Puppet)
+
+Puppet：
+	puppet是一个IT基础设施自动化管理工具，它能够帮助系统管理员管理基础设施的整个生命周期：
+		供应(provisioning)、配置(configuration)、联动(orcherstraion)及报告(reporting)
+
+		基于puppet，可实现自动化重复任务、快速部署关键性应用以及在本地或云端完成主动管理变更
+
+
+	需要的模块：
+		DATABASE、WebServer、AppServer、Security
+
+
+	'puppet使用的场景：'
+		1、inital configuration：初始化配置
+		2、Fixex、Updates、Audits(审计)
+
+
+
+	'工作方式：'
+		MASTER/agent
+			MASTER：自建CA、存储配置仓库
+			agent：各服务器节点(各种服务)
+
+				--> 通过https进行配置
+					XMLRPC --> 基于XML的远程过程调用
+				--> 双向验证 证书
+					MASTER/agent
+
+
+
+
+	'puppet的三层模型：'
+		configuration language
+			配置语言，能描述资源、依赖关系的语言，进行输出
+		
+		transaction layer
+			描述资源的依赖关系
+
+		resource abstraction layer
+			资源层
+
+
+
+site.pp
+
+
+
+	   
+
+
+	
+	'standalone'：单机
+
+	'agent/master'：主从
+
+
+
+
+	OS Provision：
+		bare metal：pxe, cobbler
+		virutal machine：image file template
+	Configuration：
+		ansible(agentless)
+		puppet(master/agent)（ruby）
+		saltstack（python）
+	Command and Control：
+		ansible(playbook)
+		fabric(fab)
+		func
+		...
+
+
+	'Puppet模型'
+	puppet apply：单机模型 --> 在单机模型下进行开发，之后才会去做跨主机运行
+	puppet agent --> puppet master
+		
+		puppet的工作模型：
+			单机模型：手动应用清单；
+			master/agent：由agent周期性地向Master请求清单并自动应用于本地；
+		
+
+
+
+	
+'单机模型：'
+	程序环境：
+		配置文件：/etc/puppet/
+			puppet.conf 
+		主程序：/usr/bin/puppet 
+		
+	puppet程序：
+		Usage: puppet <subcommand> [options] <action> [options]
+		
+		help              Display Puppet help.
+		apply             Apply Puppet manifests locally
+		describe       Display help about resource types
+		agent            The puppet agent daemon
+		master          The puppet master daemon
+		module        Creates, installs and searches for modules on the Puppet Forge
+		……
+		
+		'puppet help <subcommand>' for help on a specific subcommand.
+		'puppet help <subcommand> <action>' for help on a specific subcommand action.
+	
+
+
+
+	'安装配置Puppet'
+		程序包：
+			puppet(主程序)、puppet-server
+
+			facter：收集本地系统变量 发送给master节点
+
+			如果只是单机节点，则只需安装puppet、facter两个程序包即可
+
+		$ wget ftp://172.16.0.1/pub/Sources/7.x86_64/puppet/puppet-3.8.7-1.el7.noarch.rpm 
+		$ wget ftp://172.16.0.1/pub/Sources/7.x86_64/puppet/facter-2.4.6-1.el7.x86_64.rpm 
+
+		$ yum install ./*.rpm 
+
+
+
+	'puppet运行过程：'
+		  manifest：资源清单
+				↓
+			   编译
+			    ↓
+		   伪代码(catalog)
+		   		↓
+		   	应用apply
+		   		↓
+		 状态查询、执行目标状态
+
+
+
+
+	'命令'
+		puppet help ：查看子命令的帮助信息
+
+		
+		puppet apply：'单机模型使用'  --> 资源清单在本地执行
+			Applies a standalone Puppet manifest to the local system.
+			
+			puppet apply  [-d|--debug] [-v|--verbose] [-e|--execute] [--noop] <file>
+
+			'选项：'
+				puppet apply [-d | --debug] [-v | --verbose] [-e]
+				-v：实现详细信息
+				--noop：不真正的运行，只是测试; dry-run，干跑
+				-d：debug模式
+				-e：执行某个命令
+				--help：查看帮助
+				
+
+
+		'puppet资源：'
+			资源抽象的纬度（RAL如何抽象资源的？）：
+				类型：具有类似属性的组件，例如package、service、file；
+				将资源的属性或状态与其实现方式分离；
+				仅描述资源的目标状态，也即期望其实现的结果状态，而不是具体过程； 
+				
+				RAL由“类型”和提供者(provider)；
+				
+
+			puppet describe：'查看资源类型'
+				Prints help about Puppet resource types, providers, and metaparameters.
+				
+				puppet describe [-h|--help] [-s|--short] [-p|--providers] [-l|--list] [-m|--meta] [type]
+					-l：列出所有资源类型；
+					-s：显示指定类型的简要帮助信息；
+					-m：显示指定类型的元参数，一般与-s一同使用；
+						
+
+
+		
+	'资源定义：'向资源类型的属性复制来实现，可称为资源类型实例化
+		定义了资源实例的文件即清单，manifest;
+		'一个清单，可以定义多个资源'   --> '资源清单是支持幂等性，但是执行的命令可能不是幂等性的'
+			--> 需要手动设置，使得资源清单中的执行的命令具有幂等性(加条件判断)
+
+
+
+		定义资源的语法：
+			type {'titile':
+				attribute1	=>	value1,
+				attribute2	=>	value2,
+				...
+			}
+
+		注意：type必须使用小写字符; title是一个字符串，在同一类型中必须唯一
+
+		
+		'资源类型中的三个特殊属性:'	
+			Namevar：可简称为name
+			ensure：资源的目标状态
+			providers：指明资源的管理接口
+
+
+
+
+		
+	'资源类型：'
+		查看指定类型的帮助：
+			$ puppet describe TYPE --> puppet describe group
+
+		
+		group：管理组的
+			manage groups
+
+			属性：
+				name：组名
+				gid：GID组ID
+				ensure：目标的状态 	--> 创建系统组时必须给定此参数
+					absent：删除
+					present：创建
+				system：是否为系统组，true or false
+				members：成员用户
+
+
+		user：管理用户
+
+			属性：
+				name：用户名
+				uid：UID
+				gid：基本组GID组ID  --> 这里的基本组，必须事先存在，否则会报错
+				groups：附加组，不能包含基本组
+				comment：注释
+				expiry：过期时间
+				home：家目录
+				shell：默认shell类型
+				system：是否为系统组，true or false
+				ensure：目标的状态 absent/present
+
+
+		'资源引用'
+
+			'格式：'
+				Type['titile']
+					eg: User['maxie']
+
+
+			'注意:'
+				资源引用时，其类型名的首字母要大写
+
+		
+		
+
+		'元参数：'
+			1、依赖关系：'before/require'
+				A before B：B依赖于A，定义在A资源中
+					{
+						...
+						before => Type['B'],
+						...
+					}
+
+				B require A：B依赖于A，定义在B资源中
+					{
+						...
+						require => Type['A']
+						...
+					}
+
+
+				'注意'：
+					1、被依赖的资源如果不存在，则会报错。需要提前创建
+					2、资源可以被定义，也可以被引用
+
+
+			2、通知关系：通知相关的其他资源进行'刷新'操作：
+				'notify：通知'
+					A notify B：B依赖于A，且A发生变化后会通知B;
+						{
+							。。。
+							notify => Type['B']
+						}
+
+				'subscribe：订阅'
+					B subscribe A：B依赖于A，且B监控A资源的变化产生的事件
+						{
+							...
+							subscribe => Type['A'],
+							...
+						}
+
+
+
+
+
+		'package'：定义包管理属性
+			参数：
+				ensure：目标的状态
+					present：相当于installed 安装，并且为安装最新版
+					absent：不安装
+					latest：安装最新版
+
+				name：包名
+					不同版本linux的包名可能也不一样，需要进判断
+
+				source：程序包来源，仅对不会自动下载相关程序包的provider有用，例如rpm或者dpkg
+
+			
+			示例：'安装redis'
+				$ vim pkg.pp
+				package{'redis':
+					ensure => latest,
+				}
+				# 测试安装
+				$ puppet apply --verbose --debug --noop pkg.pp
+				# 安装
+				$ puppet apply --verbose --debug pkg.pp
+				# 查看是否安装成功
+				$ rpm -q redis
+
+				'安装jdk'
+					$ wget jdk....
+					$ vim jdk.pp 
+					package{'jdk':
+						ensure 	=> installed,
+						source 	=> '/root/jdk-7u79-linux-x64.rpm',
+						provider => rpm,
+					}
+
+					$ puppet apply --verbose --debug --noop jdk.pp
+					$ puppet apply --verbose --debug jdk.pp
+
+					$ ls /usr/java
+
+
+
+
+
+		'service'：服务的相关配置
+			manage running services;
+
+			属性：
+				ensure：stopped、running 或者 false、true
+				enable：是否开机自启，true 、 false、 manual(手动启动)
+				name：服务名
+				path：脚本搜索路径，默认为/etc/init.d，centos7应为 /usr/lib/systemd/system
+				hasrestart：命令是否有restart命令，如果没有，则使用stop，然后start
+				hasstatus：探测服务状态。
+				restart：自定义restart命令。通常用于自定义为reload。防止服务重启导致服务不可用
+				start：手动定义启动命令
+				stop：手动定义停止命令
+				status：手动定义启动命令
+				binary：定义程序的文件路径 --> 没有Unit File的程序，需要指定这项
+
+
+			示例：
+				'定义一个redis服务'
+					$ vim rediservice.pp
+					package{'redis':
+						ensure 	=> present,
+					}
+
+					service{'redis':
+						ensure 	=>	running,
+						enable 	=> 	true,
+						require =>	Package['redis'],
+					}
+
+
+
+		'file'：文件相关配置
+			manage files,including their content, ownership and permissions
+
+			属性：
+				ensure：确保文件存在
+					file：普通文件，其内容
+					directory：目录，可通过soure，递归复制 
+				path：文件路径
+				source：源文件
+				content：文件内容
+				target：符号链接的目标文件
+				owner：属主
+				group：属组
+				mode：权限
+					rwx , 777都可以定义
+				atime/ctime/mtime：时间戳
+
+				-> ：表示此资源必须要在下一个资源之前执行
+				~> ：表示此资源如果变化了，则通知下一个资源，进行fresh刷写操作
+
+
+			示例：
+				$ cp /etc/redis.conf /root/
+				$ sed -i 's@127.0.0.1@172.16.1.100@g' redis.conf 
+				$ vim file.pp
+				file{'/etc/redis.conf':
+					ensure 	=> file,
+					source  => '/root/redis.conf',
+					owner 	=> 'redis',
+					group 	=> 'root',
+					mode 	=> '0644',
+				}
+				$ puppet apply --verbose --debug --noop file.pp
+				$ puppet apply --verbose --debug file.pp
+
+				'根据文件的md5值，判断是否一样，一样则不复制'
+
+
+				自定义文件内容：
+					file{'/tmp/test.txt':
+						ensure 	=> file,
+						content => 'Hello World.',
+					}
+
+
+					# 创建链接文件
+					file{'/tmp/test.txt.link':
+						ensure 	=> link,
+
+					}
+
+					# 创建目录
+					file{'/tmp/pam.d':
+						ensure 	=> directory
+						source => '/etc/pam.d',
+						recurse => true,
+					}
+
+
+			通知元参数：
+					A notify B：B依赖于A，接受由A触发refresh；
+					B subscribe A：B依赖于A，接受由A触发refresh；
+					
+					示例1：
+						file{'test.txt':
+							path    => '/tmp/test.txt',
+							ensure  => file,
+							source  => '/etc/fstab',
+						}
+
+						file{'test.symlink':
+							path    => '/tmp/test.symlink',
+							ensure  => link,
+							target  => '/tmp/test.txt',
+							require => File['test.txt'],
+						}
+
+						file{'test.dir':
+							path    => '/tmp/test.dir',
+							ensure  => directory,
+							source  => '/etc/yum.repos.d/',
+							recurse => true,
+						}
+					
+					
+
+					示例2：'链式依赖'
+						service{'httpd':
+							ensure  => running,
+							enable  => true,
+							restart => 'systemctl restart httpd.service',
+						#       subscribe       => File['httpd.conf'],
+						}
+
+						package{'httpd':
+							ensure  => installed,
+						}
+
+						file{'httpd.conf':
+							path    => '/etc/httpd/conf/httpd.conf',
+							source  => '/root/manifests/httpd.conf',
+							ensure  => file,
+							notify  => Service['httpd'],
+						}
+
+						# 链式依赖配置
+						Package['httpd'] -> File['httpd.conf'] -> Service['httpd']							
+
+
+					示例3：链式依赖(2)
+
+
+
+
+
+回顾：
+	puppet：configuration
+		apply：standalone
+		master/agent 
+
+	manifest：资源清单
+		resource
+		node
+
+	资源： 
+		type{'title'
+			attribute1	=> value1,
+			...
+		}
+
+		关系元参数：before/require, notify/subscribe
+		特殊参数：NameVar
+		目标类型：ensure
+
+	资源类型：group，user，package，service，file ; exec，cron，notify...
+		puppet describe
+
+
+
+
+
+
+
+Puppet(2)
+	
+	资源类型： 
+
+		exec ：执行外部命令
+			参数：
+			!!!	command：运行的命令
+					cwd：要切换至哪个目录下，进行'运行命令'
+
+			!!!	creates：文件路径，仅此路径表示的文件不存在时，command方才执行
+				user/group：运行命令的用户身份
+				path ：类似于linux中$PATH功能
+				onlyif：此属性指定一个命令，此命令正常(退出码为0)运行时，当前command才会运行
+				unless：此属性指定一个命令，此命令非正常(退出码为非0)运行时，当前command才会运行
+				refresh：重新执行当前command的替代命令
+				refreshonly：仅接受到订阅的通知，才进行刷新
+
+
+
+
+			实例：
+				exec{'mkdir':
+					command 	=> 'mkdir /tmp/testdir',
+					path 		=> '/bin:/sbin/:/usr/bin:/usr/sbin',
+					creates 	=> '/tmp/testdir',
+				}
+
+
+				exec{''
+
+				}
+
+
+
+
+		cron：计划任务
+
+			command：要执行的任务；
+			ensure：present/absent；
+			hour：
+			minute:
+			monthday:
+			month:
+			weekday：
+			user：以哪个用户的身份运行命令
+			target：添加为哪个用户的任务
+			name：cron job的名称；
+			
+			示例：
+				cron{'timesync':
+					command => '/usr/sbin/ntpdate 10.1.0.1 &> /dev/null',
+					ensure  => present,
+					minute  => '*/3',
+					user    => 'root',
+				}			
+			
+		
+
+		notify：发送消息
+			Sends an arbitrary message to the agent run-time log.
+			
+			属性：
+				message：信息内容
+				name：信息名称；
+
+
+
+
+		核心类型：
+			group：组 
+			user：用户 
+			package：程序包 
+			service：服务 
+			file：文件 
+			exec：执行自定义命令，要求幂等
+			cron：周期性任务计划
+			notify：通知
+
+
+
+
+
+
+
+
+
+
+
+'puppet variable'：变量
+	
+	$variable_name=value
+
+	!!!	puppet的变量名称必须以"$"符号开头('无论赋值还是调用')，赋值操作符为"="号
+		
+		数据类型：
+			字符型：引号可有可无；但单引号为强引用，双引号为弱引用；
+			数值型：默认均识别为字符串，仅在数值上下文才以数值对待；
+			数组：[]中以逗号分隔元素列表；
+			布尔型值：true, false；不能加引号
+			hash：{}中以逗号分隔k/v数据列表； 键为字符型，值为任意puppet支持的类型；{ 'mon' => 'Monday', 'tue' => 'Tuesday', }；
+			undef：未定义 ；
+			
+		正则表达式：
+			(?<ENABLED OPTION>:<PATTERN>)
+			(?-<DISABLED OPTION>:<PATTERN>)
+			
+				OPTIONS：
+					i：忽略字符大小写；
+					m：把.当换行符；
+					x：忽略<PATTERN>中的空白字符
+					
+				(?i-mx:PATTERN）
+					
+			不能赋值给变量 ，仅能用在接受=~或!~操作符的位置；
+			
+		
+
+
+
+		'puppet的变量类型：'
+			
+			facts：
+				由facter提供；top scope；
+
+
+			'打印当前系统所有的变量'
+				$ facter -p 
+
+				processorcount => 1
+				operatingsystem => CentOS
+				operatingsystemmajrelease => 7
+
+
+			内建变量：
+				master端变量 
+				agent端变量 
+				parser变量
+			用户自定义变量：
+			
+			变量有作用域，称为Scope；
+				top scope：   $::var_name
+				node scope
+				class scope
+							
+				
+		
+
+		'puppet流程控制语句：'
+			'if语句：'
+				if  CONDITION {
+					...
+				} else {
+					...
+				}
+			
+				CONDITION的给定方式：
+					(1) 变量
+					(2) 比较表达式 
+					(3) 有返回值的函数
+					
+				
+					if $osfamily =~ /(?i-mx:debian)/ {
+						$webserver = 'apache2'
+					} else {
+						$webserver = 'httpd'
+					}
+
+					package{"$webserver":
+						ensure  => installed,
+						before  => [ File['httpd.conf'], Service['httpd'] ],
+					}
+
+					file{'httpd.conf':
+						path    => '/etc/httpd/conf/httpd.conf',
+						source  => '/root/manifests/httpd.conf',
+						ensure  => file,
+					}
+
+					service{'httpd':
+						ensure  => running,
+						enable  => true,
+						restart => 'systemctl restart httpd.service',
+						subscribe => File['httpd.conf'],
+					}			
+				
+				
+			'case语句：'
+				case CONTROL_EXPRESSION {
+					case1: { ... }
+					case2: { ... }
+					case3: { ... }
+					...
+					default: { ... }
+				}
+				
+				 CONTROL_EXPRESSION:
+					(1) 变量
+					(2) 表达式 
+					(3) 有返回值的函数
+					
+				各case的给定方式：
+					(1) 直接字串；
+					(2) 变量 
+					(3) 有返回值的函数
+					(4) 正则表达式模式；
+					(5) default 
+
+					case $osfamily {
+						"RedHat": { $webserver='httpd' }
+						/(?i-mx:debian)/: { $webserver='apache2' }
+						default: { $webserver='httpd' }
+					}
+
+					package{"$webserver":
+						ensure  => installed,
+						before  => [ File['httpd.conf'], Service['httpd'] ],
+					}
+
+					file{'httpd.conf':
+						path    => '/etc/httpd/conf/httpd.conf',
+						source  => '/root/manifests/httpd.conf',
+						ensure  => file,
+					}
+
+					service{'httpd':
+						ensure  => running,
+						enable  => true,
+						restart => 'systemctl restart httpd.service',
+						subscribe => File['httpd.conf'],
+					}					
+										
+			'selector语句：'
+				CONTROL_VARIABLE ? {
+					case1 => value1,
+					case2 => value2,
+					...
+					default => valueN,
+				}
+				
+				CONTROL_VARIABLE的给定方法：
+					(1) 变量
+					(2) 有返回值的函数
+					
+				各case的给定方式：
+					(1) 直接字串；
+					(2) 变量 
+					(3) 有返回值的函数
+					(4) 正则表达式模式；
+					(5) default 
+					
+					注意：不能使用列表格式；但可以是其它的selecor；
+					
+					$pkgname = $operatingsystem ? {
+						/(?i-mx:(ubuntu|debian))/       => 'apache2',
+						/(?i-mx:(redhat|fedora|centos))/        => 'httpd',
+						default => 'httpd',
+					}
+
+					package{"$pkgname":
+						ensure  => installed,
+					}			
+
+					示例2：
+					$webserver = $osfamily ? {
+						"Redhat" => 'httpd',
+						/(?i-mx:debian)/ => 'apache2',
+						default => 'httpd',
+					}
+
+
+					package{"$webserver":
+						ensure  => installed,
+						before  => [ File['httpd.conf'], Service['httpd'] ],
+					}
+
+					file{'httpd.conf':
+						path    => '/etc/httpd/conf/httpd.conf',
+						source  => '/root/manifests/httpd.conf',
+						ensure  => file,
+					}
+
+					service{'httpd':
+						ensure  => running,
+						enable  => true,
+						restart => 'systemctl restart httpd.service',
+						subscribe => File['httpd.conf'],
+					}					
+
+	
+	$ vim create.pp
+	$username = 'fdfs'
+
+	group{"$username":
+		ensure 	=> present,
+		system 	=> true,
+	} ->
+ 
+	user{"$username":
+		ensure => present,
+		gid    => "$username",
+	}
+
+	$ puppet apply -v -d create.pp
+
+
+
+
+
+
+	
+
+
+
+
+
+
+'类很重要'
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+'puppet的类：' --> 类似于shell中的函数功能 function
+
+	'类：'puppet中命名的代码模块，常用语定义一组通用目标的资源，可在puppet全局调用
+		类可以被集成，也可以包含子类
+
+		'无需手动创建实例' -> 与对象式编程不同
+
+
+	'继承：'
+		把多个功能，定义成一个类。 --> 实现代码重用
+			父类：多个功能定义成一个类
+			子类：继承父类，还可以自己创建新的功能添加到子类中
+				子类可以继承父类，并根据不同的情况来配置自己的配置文件
+				子类还可以修改父类的中的功能，也就是代码重构
+			--> '继承'
+
+
+	'语法格式：'
+		# 自定义类
+		class NAME {
+			...puppet code...
+		}
+
+		# 类可以带参数，parameter
+		class NAME(parameter1,parameter2){
+			...puppet code....
+		}
+
+	!!!	'类不会自己运行，需要调用'
+
+
+
+
+	类代码只有声明后才会执行，'调用方式'：
+		(1) include CLASS_NAME1,CLASS_NAME2,...
+			'无参数的类'
+
+		(2)	class{'CLASS_NAME':
+			attribute 	=> value,
+			}
+			'有参数的类'
+
+
+
+	'示例：'
+		
+		示例1：
+			$ vim class1.pp
+			class nginx {
+				package{'nginx':
+					ensure => latest,
+				} ->
+
+				service{'nginx':
+					ensure => running,
+					enable => true,
+				}
+			}
+
+			# 开始调用
+			$ vim nginx.pp
+			# 调用类nginx
+			include nginx
+
+			或者
+			$ puppet apply -v -d -e 'include nginx' --noop class1.pp 
+			但是这里找类的路径是puppet的模块路径下进行查找，所以会报错
+
+
+
+		示例2：'进阶配置，根据6、7版本不同进行调用  --> 手动传参数'
+			$ vim nginx.pp
+			# $pkgname='mariadb-server' 给定默认变量的值；如果没有设置变量的值，则使用默认值
+			class dbserver($pkgname='mariadb-server') {
+				package{"$pkgname":
+					ensure 	=> latest,
+				}
+
+				service{"$pkgname":
+					ensure 	=> running,
+					enable 	=> true,
+				}
+			}
+
+			# 实例化类 
+			class{'dbserver':
+				# 向pkgname形参 传参数
+				pkgname => 'mariadb-server',
+			}
+
+
+
+			if $operatingsystem == "CentOS" {
+				$dbpkg = $operatingsystemmajrelease ? {
+					7 => 'mariadb-server',
+					default => 'mysqld-server',
+				}
+			}
+
+
+
+
+		示例3：'实现不同linux版本安装不同mysql' --> 自动判断版本
+			$ vim nginx.pp
+			# $pkgname='mariadb-server' 给定默认变量的值；如果没有设置变量的值，则使用默认值
+			class dbserver($pkgname='mariadb-server') {
+				package{"$pkgname":
+					ensure 	=> latest,
+				}
+
+				service{"$pkgname":
+					ensure 	=> running,
+					enable 	=> true,
+				}
+			}
+
+
+			if $operatingsystem == "CentOS" {
+				$dbpkg = $operatingsystemmajrelease ? {
+					7 => 'mariadb-server',
+					default => 'mysqld-server',
+				}
+			}
+
+
+			# 实例化类 
+			class{'dbserver':
+				# 向pkgname形参 传参数
+				pkgname => $dbpkg,
+			}
+
+
+
+
+
+	'类继承的方式：'
+		class SUB_CLASS_NAME
+
+
+		在子类中为父类的资源新增属性或覆盖指定的属性的值：
+			Type['titile']{
+				attribute1 => value,
+			}
+
+		在子类中为父类的资源的某属性增加新值：
+			Type['titile']{
+				attribute1 +>value,
+			}
+
+
+
+		'示例：'
+			1、
+				$ vim nginxclass.pp
+				class nginx {
+					package{'nginx'
+						ensure => latest,
+					} ->
+
+					service{'nginx':
+						ensure => running,
+						enable => true,
+					}
+				}
+
+				class nginx::web inherits nginx {
+					file{'nginx.conf':
+						path 	=> '/etc/nginx/nginx.conf',
+						source  => '/root/manifest/nginx.conf',
+					}
+
+					Package['nginx'] -> File['nginx.conf'] ~> Service['nginx']
+				}
+
+				class nginx::webproxy inherits nginx {
+					file{'nginx.conf':
+						path 	=> '/etc/nginx/nginx.conf',
+						source  => '/root/manifest/nginx-webproxy.conf',
+					}
+
+					# 覆盖父类中指定资源的值
+					Service['nginx']{
+						enable => false
+					}
+
+					Package['nginx'] -> File['nginx.conf'] ~> Service['nginx']
+				}
+
+				class nginx::mysqlproxy inherits nginx {
+
+				}
+
+				include nginx::webproxy
+
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+
+
+
+
+
+
+
+'puppet模板：'
+	erb：模板语言 ，embedded ruby;
+		内嵌式语言
+
+	puppet兼容的erb语法
+		https://docs.puppet.com/latest/reference/lang_template_erb.html
+
+
+	file{'title':
+		ensure => file,
+	}
+
+
+
+	'模板语言：'
+		文本文件中内嵌变量替换机制：
+			<%= @VARIABLE_NAME %>
+
+		文本文件中内嵌变量替换机制：
+			<%= @VARIABLE_NAME %>
+
+			<%= Ruby Expression %>：替换为表达式值；
+			<% Ruby code %>：仅执行其中的代码，不执行任何替换；
+			<%# comment %>：注释信息；
+			<%% 或 %%>：转义符，分别用于输入<%和%>；
+			<%- Ruby code %>：忽略空白字符；
+			<% Ruby code -%>: 忽略空白行；
+
+			在模板中可以调用puppet中的任意变量，但变量名要以@开头；
+
+		迭代：
+
+			<% @ArrayName.echo do | Varaible_Name | -%>
+			Some Text with <%= Varialbe_Name %>
+			<% end %>
+
+		注意：'模板语言中对变量算术运算的方法：'
+			<%= @processorcount.to_i - 2 %>
+			<%= Integer(@processorcount) - 2 %>
+
+
+
+	示例： 
+		$ vim template.pp
+		package{'nginx':
+			ensure => latest,
+		}
+
+		file{'nginx.conf':
+			path 	=> '/etc/nginx/nginx.conf',
+			content => template('/root/manifests/nginx.conf.erb'),
+		}
+
+
+		$ vim /root/manifests/nginx.conf.erb
+		...
+	!!!	worker_process <%= @processorcount %>
+	#这里应该支持算数运算 @processorcount -1 +1 之类的，自己测试
+	# http://cuchadanfan.blog.51cto.com/9940284/1700070
+	# https://my.oschina.net/fufangchun/blog/266398
+		...
+
+		$ puppet apply -d -v --noop template.pp
+		$ puppet apply -d -v template.pp
+
+
+
+
+
+
+
+
+
+'pp文件归置：'
+	使用模块，自包含功能
+
+	将多个pp文件需要的依赖文件，放在一起
+
+
+
+
+
+
+
+
+
+
+
+
+'puppet模块：'
+	puppet会在配置的路径下查找所需要的模块：
+
+		MODULES_NAME:
+			manifests/
+				init.pp 
+			files/
+			templates/
+			lib/
+			spec/
+			tests/
+	
+	
+
+		模块名只能以小写字母开头，可以包含小写字母、数字和下划线；但不能使用'main'和'settings';
+
+
+		MODULE_NAME：
+			manifests/：资源清单文件存放路径
+				init.pp：必须定义一个类，类名称必须与模块名称相同；
+					自举入口
+
+			files/：静态文件，清单文件依赖的外部文件
+				puppet URL：
+					puppet:///modules/MODULE_NAME/FILE_NAME
+					http:///modules/MODULE_NAME/FILE_NAME
+						eg：http://modules/nginx/nginx.conf
+
+			templates/：资源清单依赖的模板文件
+				template('MO_NAME/TEMPLATE_FILE_NAME')
+					template('nginx/nginx.conf.erb')
+
+			lib/：插件目录，常用语存储自定义的facts以及自定义类型；
+			spec/：类似于tests目录，存储lib/目录下插件的使用帮助和范例
+			tests/：当前模块的使用帮助或使用范例文件
+
+
+			'注意：'
+				1、puppet3.6或者3.8及以后的版本，资源清单文件的文件名要与文件类名保持一致，例如某子类名为"base_class::child_class"，其文件名应该为child_calss.pp
+				2、无需在资源清单文件中使用import语句，如果使用了1的方式
+				3、manifests目录下可存在多个清单文件，每个清单文件包含一个类，其文件名同类名
+
+
+	'puppet config命令：'
+
+		'获取或设定puppet配置参数'
+			puppet config print [argument]
+
+
+			puppet'查找模块文件'的路径：modulepath
+				$ puppet config print modulepath
+
+			
+			puppet module search MODULE_NAME：
+				搜索模块，联网
+
+			puppet module install MODULE_NAME：
+				根据搜索出的模块，进行安装。或者自己把下载好的模块放到默认的模块目录下， 进行安装
+
+
+		'mariadb模块中的清单文件示例：'
+			class mariadb($datadir='/var/lib/mysql') {
+					package{'mariadb-server':
+					ensure  => installed,
+				}
+
+				file{"$datadir":
+					ensure  => directory,
+					owner   => mysql,
+					group   => mysql,
+					require => [ Package['mariadb-server'], Exec['createdir'], ],
+				}
+
+				exec{'createdir':
+					command => "mkdir -pv $datadir",
+					require => Package['mariadb-server'],
+					path => '/bin:/sbin:/usr/bin:/usr/sbin',
+					creates => "$datadir",
+				}
+
+				file{'my.cnf':
+					path    => '/etc/my.cnf',
+					content => template('mariadb/my.cnf.erb'),
+					require => Package['mariadb-server'],
+					notify  => Service['mariadb'],
+				}
+
+				service{'mariadb':
+					ensure  => running,
+					enable  => true,
+					require => [ Exec['createdir'], File["$datadir"], ],
+				}
+			}
+
+
+
+
+		
+		'chrony模块中的清单文件示例：'
+			class chrony {
+				package{'chrony':
+					ensure => latest,
+				}
+
+				file{'chrony.conf':
+					path => '/etc/chrony.conf',
+					source => 'puppet:///modules/chrony/chrony.conf',
+				} ~>
+
+				service{'chrony':
+					ensure 	=> running,
+					enable 	=> true,
+				}
+			}
+
+			$ cp /etc/chrony.conf ../files/
+			$ vim ../files/chrony.conf 
+			server 172.16.0.1 iburst
+
+			$ cp -a chrony /etc/puppet/modules
+			# 列出模块表
+			$ puppet module list 
+
+			#执行模块
+			$ puppet apply -d -v --noop -e 'include chrony'
+			$ puppet apply -d -v -e 'include chrony'
+
+
+
+
+
+
+
+
+		'nginx模块中的清单文件示例：'
+			$ 
+			$ mkdir -pv nginx/{manifests,files,templates,spec,lib,tests}
+			$ cd nginx 
+			$ vim manifests/init.pp
+			class nginx {
+				package{'nginx'
+					ensure => latest,
+				} -> 
+
+				service{'nginx':
+					ensure => running,
+					enable => true,
+				}
+			}
+
+			#导入
+			#import 'manifests/*.pp'
+
+			'# 子类的pp文件需要与子类名相同'  --> 这样就无需在 init.pp中使用import调用了
+			$ vim manifests/webproxy.pp
+			class nginx::webproxy inherits nginx{
+				file{'nginx.conf':
+					path => '/etc/nginx/nginx.conf',
+					source => 'puppet:///modules/nginx/nginx-webproxy.conf',
+				}
+
+				Package['nginx'] -> File['nginx.conf'] ~> Service['nginx']
+			}
+
+			$ cp /root/manifests/nginx-webproxy.conf ../files/
+
+			$ cp -a /root/modules/nginx /etc/puppet/modules
+
+			$ puppet module list 
+
+			# 运行
+			$ puppet apply -v -d --noop -e 'include nginx'
+			# 调用子类
+			$ puppet apply -v -d --noop -e 'include nginx::webproxy'
+
+
+
+			# 新增一个子类web，使用模板文件
+			$ vim manifests/web.pp
+			class nginx::web inherits nginx{
+				file{'nginx.conf':
+					path 	=> '/etc/nginx/nginx.conf',
+					content => template('nginx/nginx.conf.erb'),
+				}
+
+				Package['nginx'] -> File['nginx.conf'] ~> Service['nginx']
+			}
+			$ cp /root/manifests/nginx.conf.erb ../templates/
+
+			$ puppet apply -v -d --noop -e 'include nginx::web'
+
+
+
+
+
+
+		'redis模块中的清单文件示例：'
+			$ cd /root/modules
+			$ mkdir -pv redis/{manifests,files,templates,spec,lib,tests}
+
+			$ wget ftp://172.16.0.1/pub/Sources/7.x86_64/redis/redis-3.2.3-1.el7.x86_64.rpm
+
+			$ cd redis 
+			$ vim manifests/init.pp 
+			class redis{
+				package{'redis'
+					ensure => installed,
+					provider => yum,
+					source => 'puppet:///modules/redis/'
+				}
+
+				service{'redis':
+					ensure => running,
+					enable => true,
+				}
+			}
+
+			$ cp -a redis/ /etc/puppet/modules
+			$ puppet module list
+
+			#执行
+			$ puppet apply -v -d --noop -e 'include redis'
+
+
+
+
+
+'实践作业：'
+
+	构建出lnamt：nginx + http + tomcat + jdk + mysql 
+
+		mysql：主从
+		nginx：反代
+		tomcat + memcached：会话保持
+
+
+	开发模块：
+		memcached
+		nginx（反代动态请求至httpd，work_process的值随主机CPU数量而变化）
+		jdk（输出JAVA_HOME环境变量）
+		tomcat
+		mariadb 
+		httpd(反代请求至tomcat，ajp连接器；mpm允许用户通过参数指定)
+			
+	
+
+
+
+
+
+
+
+
+
+'7.21'
+
+
+
+回顾：
+
+	ansible --> 20~30台服务器
+	puppet --> 大型集群，超过20~30个
+
+	建议使用puppet
+
+	ansible大多使用command
+
+
+
+	puppet资源类型：group，user，file，package，service，exec，cron，notify
+
+		puppet describe -l [type] ：查看资源类型/资源的详细用法
+
+
+	资源清单：manifests，*.pp
+		type{'titile':
+			attribute => value,
+			...
+		}
+
+	引用：Type['titile']
+
+	元参数：
+		before/require
+			before：前资源使用
+			require：后资源
+		notify/subscribe
+
+			->：要在某个资源之前运行
+			~>：通知
+
+
+	数据类型：
+		字符串、数值、布尔型、数组、hash(关联数组)、undef(未定义的类型)
+
+
+	正则表达式：(不能赋值给变量)
+		(?<enable_flag>-<disable_flag>:<PATTERN>)
+			?：标志位
+			i：忽略字符大小写
+			-：区分大小写
+			m：不把.号当做空白符
+			x：忽略空白字符
+
+
+	变量：$variable 
+		FQN:完全限定名称
+			$::scope1::scope2::variable
+
+	编程元素：
+		流程控制：
+			if： 
+			unless：if not 
+			selector：
+
+		类： --> 用户自定义
+			class CLASS_NAME([$parameter1[=value1],$parameter2]){
+				...puppet code...
+			}	
+
+			类可以有默认值
+
+
+			类的继承：
+				class SUB_CLASS_NAME inherits class_name {
+					...puppet code...
+				}
+
+					SUB_CLASS_NAME：
+						base_class::SUB_CLASS_NAME
+
+
+			子类中引用父类的资源：
+				Type['title']{
+					attribute1 => value1,
+					attribute2 +> value2,
+				}
+
+
+			声明类：
+				include class_name 
+				class{'class_name':
+					attribute1 => value1,
+				}
+
+
+	模板： 
+		erb： embedded ruby 
+			<%= erb code %>：替换变量
+			<% erb code %>：不替换变量
+			<%# erb code %>：注释声明
+
+			文件格式 *.erb 
+
+
+		file：
+
+
+	传递模板：
+		RPC over https --> xml(比较重量) 或者  json(键值对，比较轻量)  或者 yaml/yml(更为轻量)
+			'大多数使用yml格式，更为轻量级'
+
+
+	模块： 
+		modulepath配置参数指定的目录路径下：$ puppet config print modulepath
+			manifests/
+				init.pp(至少得存在一个与模块名同名的类) --> 3.6版本之前，需要在此文件中将子类使用 import引用
+				sub_class_name.pp：子类定义
+
+			files/
+				puppet:///modules/MOD_NAME/FILE_NAME
+
+			tests/
+			lib/	：插件
+			spec/	：插件帮助
+
+
+		standalone：单机模式
+			运行模块 --> $ puppet apply -d -v -e 'include CLASS_NAME'
+
+
+
+
+
+
+
+
+
+
+
+
+puppet(3)
+	
+	任何一主机只要配置了，都可以调用模块 
+		--> 所以我们要定义主机配置(使用主机名区别) 
+		--> 根据主机名的不同来进行调用，这里定义的为 '主机清单' 
+		--> 定义主机调用的类有哪些
+
+
+
+
+	standalone：puppet apply
+	
+
+	'master/agent'：agent'每隔30分钟'到master端请求与自己相关的catalog  --> 要求目标主机 必须处于目标状态
+		master: site manifest
+
+			# node + 节点名称
+			node 'node_name' {
+				# 调用模块中定义的类
+				...puppet code...
+			}
+			
+			'发送给agent的都是编译好的结果，而非源代码'
+
+		node_name
+	
+	
+		程序包下载路径：
+			https://yum.puppetlabs.com/
+			
+		官方文档：
+			https://docs.puppet.com/puppet/3/reference/
+			
+		内建函数：
+			https://docs.puppet.com/puppet/3/reference/function.html
+			
+		配置参数列表：
+			https://docs.puppet.com/puppet/3/reference/configuration.html
+			
+	
+
+
+
+	'master/agent通信：'
+		master -> agent ： 通过https通信
+			--> master节点：监听在tcp/8140端口 --> 接收agent请求
+			--> agent节点： 每隔30分钟请求master --> 运行为一个进程(可以运行为守护进程)
+			--> 为了使用https，master节点必须为一个CA。
+				master自签证书
+				agent发送签署请求 ： master自动签署(不安全)，或者手动使用puppet ca命令进行手动签署
+
+
+
+
+
+	'部署master：'
+		安装程序包：facter, puppet, puppet-server 
+			
+
+		初始化master：(不是必须要执行，可以直接使用 systemctl start puuppetmaster.service)
+			puppet master --no-daemonize --verbose 
+
+
+
+		'master命令用法'：
+			puppet master [-D|--daemonize|--no-daemonize] [-d|--debug] [-h|--help]
+			  [-l|--logdest syslog|<FILE>|console] [-v|--verbose] [-V|--version]
+			  [--compile <NODE-NAME>]
+
+		'agent命令用法：'
+			puppet agent [--certname <NAME>] [-D|--daemonize|--no-daemonize]
+			  [-d|--debug] [--detailed-exitcodes] [--digest <DIGEST>] [--disable [MESSAGE]] [--enable]
+			  [--fingerprint] [-h|--help] [-l|--logdest syslog|eventlog|<FILE>|console]
+			  [--masterport <PORT>] [--no-client] [--noop] [-o|--onetime] [-t|--test]
+			  [-v|--verbose] [-V|--version] [-w|--waitforcert <SECONDS>]
+			
+		
+
+		生成一个完整的配置参数列表：
+			puppet master --genconfig 
+			puppet agent --genconfig 
+			...
+			
+		打印基于默认配置生效的各配置参数列表：
+			puppet config <action> [--section SECTION_NAME]
+			
+			puppet  config  print 
+			
+		基于命令行设定某参数的值：
+			puppet config set 
+			
+			
+	'master端管理证书签署：'
+		puppet cert <action> [--all] [<host>]	
+			action：
+				list：列出待签署的请求
+				sign：签署请求
+				revoke：
+				clean：吊销指定的客户端的证书，并删除与其相关的所有文件；
+				
+			
+	
+
+
+
+
+	'站点清单的定义：'
+		主机名定义： 自定义主机名，!!!'方便辨识'!!!
+			主机名(主机角色)#-机架-机房-运营商-区域.域名
+				www1-rack1-yz-unicom-bj.magedu.com 
+			
+
+
+	'节点定义配置：'
+		/etc/puppet/manifests/site.pp
+			node 'base' {
+				include ntp 
+			}
+		
+
+			'精确主机定义'
+			node 'HOSTNAME' {
+				...puppet code...
+			}
+			
+	!!!		'根据模式匹配定义主机 ' --> node /node[0-9]+.*\.maxie\.io/    --> \ 转义功能
+				模式匹配为
+			node /PATTERN/ {
+				...puppet code...
+			}
+			
+			
+	!!!		'节点定义的继承：' --> 继承父类节点
+				node NODE inherits PAR_NODE_DEF {
+					...puppet code...
+				}
+				
+				nodes/
+			
+			'清单配置信息可模块化组织：'
+				databases.d/
+				tomcat.d/
+				nginx.d/				
+				nodes.d/：可通过多个pp文件分别定义各类站点的清单；而后统一导入site.pp，方法如下：
+				
+				site.pp文件使用中如下配置：	
+					import 'nodes/*.pp'
+				
+	
+
+
+
+
+
+	'多环境配置：' --> master端配置
+		默认环境是production； --> 默认都是生产环境
+
+		依赖的安装包： puppet puppet-server
+
+		目录：/etc/puppet/environments
+		
+		environmentpath =
+		
+		'puppet 3.4 之前的版本'配置多环境的方法： 
+			
+			各环境配置： 
+				/etc/puppet/environments/{production,development,testing}
+				
+			master支持多环境：
+				[master]
+				# modulepath=
+				# manifest=
+				environments = production, development, testing
+				
+				[production]
+				# 模块路径
+				modulepath=/etc/puppet/environments/production/modules/
+				# 站点清单文件
+				manifest=/etc/puppet/environments/production/manifests/site.pp
+				
+				[development]
+				modulepath=/etc/puppet/environments/development/modules/
+				manifest=/etc/puppet/environments/development/manifests/site.pp	
+				
+				[testing]
+				modulepath=/etc/puppet/environments/testing/modules/
+				manifest=/etc/puppet/environments/testing/manifests/site.pp	
+				
+		
+
+		'puppet 3.6之后的版本'配置多环境的方法：
+			master支持多环境：
+				(1) 配置文件puppet.conf
+				[master]
+				# 配置到某个目录即可，使用子目录作为不同环境的配置
+				environmentpath = $confdir/environments
+
+				$ puppet config print | grep 'confdir'
+				confdir = /etc/puppet
+				
+				(2) 在多环境配置目录下为每个环境准备一个子目录
+				ENVIRONMENT_NAME/
+					# 站点清单文件
+					manifests/
+						site.pp
+					#模块目录
+					modules/
+												
+		agent端：
+			[agent]
+			environment = { production|development | testing }
+			
+
+
+		
+
+	'额外配置文件：'
+		路径： /etc/puppet下
+			文件系统：fileserver.conf --> 一般无需修改 
+				auth yes：开启认证
+			认证（URL）：auth.conf  --> 类似认证的定义，配置某些URL不允许某些IP访问
+				'可以配置自动签署' --> 不建议使用
+	
+
+
+
+
+
+
+	'puppet kick：'  --> 推送通知命令
+
+		agent：
+			'puppet.conf'
+				[agent]
+				# 开启监听
+				listen = true
+			
+			'auth.conf'
+				path /run
+				method save 
+				auth any 
+				allow master.magedu.com 
+			
+			path /
+			auth any
+			
+		master端：
+			puppet kick 
+				puppet kick [--host <HOST>] [--all]
+				
+	
+
+		
+		'配置kick'：
+			agent
+				$ vim /etc/puppet/puppet.conf 
+				[main]
+				listen = true 
+
+				$ vim /etc/puppet/auth.conf 
+				行尾添加
+				path /run
+				method save
+				auth any 
+				allow master.maxie.io
+
+			master节点： 
+				# 通知node1节点，使其更新同步配置信息
+				$ puppet kick node1.maxie.io	 
+
+
+
+
+'发布：' --> puppet 不适合发布
+	'发布新版本：'
+		1、定义一个软连接
+		2、让软连接至新版本
+
+
+	'回滚：'
+		1、将之前的新的软连接 连接到旧版本目录上
+
+
+	'灰度发布：'
+		1、站点清单中，一批一批的上线
+
+
+	或者使用 'jenkins 进行发布'  
+
+	'打补丁'：
+		定义一个资源使用 --> base_class
+
+
+
+
+
+'拓展puppet：'
+	
+	使用ruby语言专用的反代工具： 
+		使用nginx编译 + passger模块 实现反代
+
+		但是反代，两台都有CA，就是不同的CA，这样还需要 自己再找一台做CA
+
+		这样还需要nginx理解CA协议 。。。
+
+
+'高可用puppet' -->  拷贝 /var/lib/ssl 目录  -> 支持挂载的文件系统 / rsync同步
+
+
+'collectivemq'：消息队列 --> puppet收购
+	有了队列，就可以阻挡超多请求到puppet，使得puppet压力过大，宕机
+
+
+
+
+
+GUI：
+	dashboard：面板 --> 展示puppet界面
+	foreman：第三方面板 --> 同样能展示puppet的report
+		--> '方便做报告'
+
+
+
+
+
+'注意：' 
+	模块可能需要升级 -->  各种版本  --> git 
+
+	支持回滚puppet 
+
+
+
+'开发模块：'
+	memcached  --> 可以替换成redis 
+	nginx（反代动态请求至httpd，work_process的值随主机CPU数量而变化）
+	jdk（输出JAVA_HOME环境变量）
+	tomcat
+	mariadb 
+	httpd(反代请求至tomcat，ajp连接器；mpm允许用户通过参数指定)
+	
+
+
+	zabbix 推送
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+!!!	'部署master/agent构建过程：'  --> 可以没有模块，也可以有模块
+		master/agent通信使用的是主机名 --> DNS解析/hosts文件
+			--> 公司最好是DDNS ，能够调用API，自动更改/追加主机名和IP地址
+
+		1、'部署好master '
+			1) 开发好模块文件
+			2) 配置好主机清单
+
+			$ vim /etc/hosts
+			172.16.1.100 master 
+			172.16.1.70 node1
+			172.16.1.30	node2
+
+			$ hostnamectl set-hostname master 
+
+			# 将配置好的hosts文件发送到其他节点
+
+			'开始安装puppet并配置'
+
+			$ yum install -y ./facter-2.4.6-1.el7.x86_64.rpm
+			$ yum install -y ./puppet-3.8.7-1.el7.noarch.rpm
+			$ yum install -y ./puppet-server-3.8.7-1.el7.noarch.rpm
+
+
+			$ rpm -ql puppet-server 
+			/etc/puppet/manifests  # 主机清单目录
+
+			# 主机清单格式master: site manifest
+
+			'# 初始化 --> 一般无需使用，只是学习使用，连接运行原理'
+				$ puppet master --no-daemonize --verbose 			
+				Info: Creating a new SSL key for ca
+				Info: Creating a new SSL certificate request for ca
+				Info: Certificate Request fingerprint (SHA256): 60:F3:70:56:6F:37:63:05:12:81:FB:F0:56:DD:0E:91:76:AB:CF:34:5C:8C:CE:E9:80:FA:49:9C:26:46:4B:29
+				Notice: Signed certificate request for ca
+				Info: Creating a new certificate revocation list
+				Info: Creating a new SSL key for localhost
+				Info: csr_attributes file loading from /etc/puppet/csr_attributes.yaml
+				Info: Creating a new SSL certificate request for localhost
+				Info: Certificate Request fingerprint (SHA256): 5D:A9:73:81:F7:AF:24:EE:FB:01:B0:E7:35:07:DC:B4:3D:32:74:DB:07:A1:97:4B:9E:EC:12:74:AD:B3:4B:A4
+				Notice: localhost has a waiting certificate request
+				Notice: Signed certificate request for localhost
+				Notice: Removing file Puppet::SSL::CertificateRequest localhost at '/var/lib/puppet/ssl/ca/requests/localhost.pem'
+				Notice: Removing file Puppet::SSL::CertificateRequest localhost at '/var/lib/puppet/ssl/certificate_requests/localhost.pem'
+				Notice: Starting Puppet master version 3.8.7
+
+				```如果想初始化ca,删除/var/lib/puppet/ssl 目录即可``` --> 生产环境不建议使用，会导致agent节点连接失败
+
+
+		2、'配置agent'
+			$ yum install ./facter-2.4.6-1.el7.x86_64.rpm  ./puppet-3.8.7-1.el7.noarch.rpm
+
+			$ puppet helo agent
+
+			# 修改配置文件，添加server端(master节点)
+			$ vim /etc/puppet/puppet.conf
+
+			# 测试agent命令
+			$ puppet agent -server master.maxie.io --no-daemonize -v --noop
+
+			但是现在master应该受到我们的请求了，但是还未签署证书，需要我们手动签署
+
+
+		3、'签署agent请求'
+			# 查看需要签署的CA请求列表
+			$ puppet cert list 
+
+			# 所有证书
+			$ puppet cert list --all
+
+			# 签署某个节点的请求
+			$ puppet cert sign node1.maxie.io
+				--all ：签署所有请求
+
+
+			但是签署完成后，在agent节点需要重新启动agent服务，如果报错 warning，应该是master节点没有定义主机清单和模块
+
+		4、'配置master节点的主机清单'
+			# 固定格式为 site.pp
+			$ vim /etc/puppet/manifests/site.pp
+			node 'node1.maxie.io' {
+				include chrony
+			}
+
+			node 'node2.maxie.io' {
+				include tomcat
+			}
+
+
+		5、'agetn节点启动agent服务'
+			$ puppet agent -server master.maxie.io --no-daemonize -v --noop
+
+			'如果测试没有问题，则修改agent配置文件即可'
+			$ vim /etc/puppet/puppet.conf 
+			在[agent]最下面加上：
+			server = master.maxie.io
+
+		6、master/agent配置都完成之后，使用systemctl启动其服务即可
+			master: 
+				$ systemctl start puppetmaster.service 
+
+			agent：
+				$ systemctl start puppetagent.service 
+
+
+		7、现在就可以自己创建模块了。
+			'注意'：如果要定义多个包，文件时，只能在 'titile'中使用 ['title1','title2']这样定义，而非在资源清单中定义
+
+
+		8、搭建一个DNS，做服务发现功能
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+		
+
+
+
+
+
+'配置多环境：'
+			'master节点： '
+				$ cd /etc/puppet 
+				$ mkdir -pv environments/{production,testing,development}/{manifests,modules}
+				$ cp -a modules/nginx environments/production/modules
+				$ cp -a modules/tomcat environments/production/modules
+				$ cp -a modules/chrony environments/production/modules
+
+				$ cp -a modules/nginx environments/development/modules
+				$ cp -a modules/chrony environments/development/modules
+
+			# 编辑puppet配置文件
+				$ vim /etc/puppet/puppet.conf 
+				# 在main段添加一行，如果想设置默认环境：environment = production
+				[main]
+					environmentpath = $confdir/environments
+
+			# 编辑站点文件
+				$ vim environments/production/manifests/site.pp
+				node 'node1.maxie.io' {
+					include nginx::web
+				}
+
+				$ vim environments/development/manifests/site.pp
+				node 'node1.maxie.io' {
+					include nginx::web 
+				}	
+
+
+			'agent节点：'
+			# 编辑puppet配置文件
+				$ vim /etc/puppet/puppet.conf 
+				[agent]
+				environment = production
+
+			# 启动测试
+				$ puppet agent -d -v --noop --no-daemonize 
+			# 启动
+				$ puppet agent -d -v --no-daemonize 
+
+				现在应该使用的环境为：production 
+
+
+			下面使用'development环境'：
+			# 编辑puppet配置文件
+				$ vim /etc/puppet/puppet.conf 
+				[agent]
+				environment = development
+
+			# 启动测试
+				$ puppet agent -d -v --noop --no-daemonize 
+			# 启动
+				$ puppet agent -d -v --no-daemonize 
+
+				现在应该使用的环境为：development
+
+
+
+
+
+
+
+
+
+
+
+
+项目实践：
+		haproxy(keepalived)
+			cache --> varnish
+			imgs--> nginx server
+			app --> httpd+tomcat
+				--> mariadb-server
+				
+			zabbix -->
+				zabbix-server 
+				zabbix-agent
+				
+		
+		
+		
+		生产环境案例：haproxy.pp
+
+		class haproxy {
+		  # init haproxy
+		  class init {
+		    file { '/etc/init.d/haproxy': 
+		      ensure        => present,
+		      source        => "puppet:///modules/haproxy/haproxy/init.d/haproxy.init",
+		      group         => "root",
+		      owner         => "root",
+		      mode          => "0755",
+		    }
+		    exec { 'init_haproxy_service':
+		      subscribe     => File['/etc/init.d/haproxy'],
+		      refreshonly   => true, 
+		      command       => "/sbin/chkconfig --add haproxy; /sbin/chkconfig --level 235 haproxy off;",
+		    }
+		    service { 'haproxy':
+		      ensure      => running,
+		      enable      => true, 
+		      hasrestart  => true, 
+		      hasstatus   => true, 
+		#       restart     => true,
+		    }
+		  }
+
+		  # init haproxy.cfg
+		  class conf {
+		#     file { '/usr/local/haproxy','/usr/local/haproxy/etc': 
+		    file { ['/usr/local/haproxy','/usr/local/haproxy/etc']: 
+		      ensure        => directory,
+		      before        => File['/usr/local/haproxy/etc/haproxy.cfg'],
+		      group         => "root",
+		      owner         => "root",
+		      mode          => "0755",
+		    }
+
+		    class piccenter {
+		      file { '/usr/local/haproxy/etc/haproxy.cfg': 
+		        ensure        => present,
+		        source        => "puppet:///modules/haproxy/haproxy/conf/haproxy_piccenter.cfg",
+		        group         => "root",
+		        owner         => "root",
+		        mode          => "0644",
+		      }
+		    }
+		  }
+		}
+
+
+
+
+
+
+		keepalived.pp
+
+		class keepalived {
+		  # init haproxy
+		  class init {
+		    file { '/etc/init.d/keepalived': 
+		      ensure        => present,
+		      source        => "puppet:///modules/haproxy/keepalived/init.d/keepalived.init",
+		      group         => "root",
+		      owner         => "root",
+		      mode          => "0755",
+		    }
+		    exec { 'init_keepalived_service':
+		      subscribe     => File['/etc/init.d/keepalived'],
+		      refreshonly   => true, 
+		      command       => "/sbin/chkconfig --add keepalived; /sbin/chkconfig --level 235 keepalived off;",
+		    }
+		    service { 'keepalived':
+		      ensure      => running,
+		      enable      => true, 
+		      hasrestart  => true, 
+		      hasstatus   => true, 
+		      restart     => true,
+		    }
+		  }
+		}
+				
+				
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

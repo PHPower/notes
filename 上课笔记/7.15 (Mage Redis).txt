@@ -1,0 +1,1031 @@
+7.15 (Mage Redis)
+
+
+'解决分散数据库的写请求：'
+	分发写请求 --> 每个写请求存放在不同的数据库中 --> 降低写请求负载
+		
+		'分布式存储'：
+			分片框架 --> 将写请求分散
+			多节点 --> 执行写操作
+
+			分散后，进行'查询操作' --> 根据数据的范围划分 (可以在一段区间内进行查询) --> 也可以通过对用户的ID进行HASH
+
+
+
+
+
+'NoSQL:'
+
+	ACID：
+		原子性、一致性、隔离性、持久性；
+		2phase commit, 3phase comit, ...
+		2段式提交、3段式提交
+		
+	
+	non SQL, Not Only SQL; Web 2.0
+	
+		www.nosql-databases.org
+		https://db-engines.com/en/ranking
+	
+	
+	'特性：'数据量大、数据变化非常快（数据增长快、流量分布变化大、数据间耦合结构变化快）、数据源很多；
+	
+		
+
+		CAP、BASE
+			'CAP：'
+				2000年，PODC(Principle of Distributed Computing)会议, Brewer
+					Consistency、Availablity、Partition tolerence
+						
+						C：多个数据节点上的'数据一致'；
+						A：用户发出请求后的'有限时间范围内返回结果'；
+						P：network partition，网络发生分区后，服务'是否依然可用'； --> 分区容错性
+				
+!!!				'CAP理论' ：一个分布式系统不可能同时满足C、A、P三个特性，最多可同时满足其中两者；对于分布式系统满足'分区容错性几乎是必须的'。		
+					AP:  
+						C：弱一致性； --> 最终一致性
+
+					CP:放弃可用性，使用一致性 *(没有什么卵用。。。)
+					
+
+		
+!!!		'BASE：BA，S，E，基于CAP演化而来'
+			BA：Basically Available，'基本可用；'
+			S：Soft state，'软状态/柔性事务'，即状态可以在一个时间窗口内是不同步的；
+			E：Eventually consistency，'最终一致性'；
+		
+		'网络发生分区后：'
+			避免发生脑裂 --> 使用 quorum机制 --> 根据法定票数：with quorum(满足法定票数，大于半数，必须大于，而非大于等于)、without quorum(不满足)
+				'quorum：' votes > total/2
+					集群个数：建议为奇数个
+					当发生网络分区后，只有votes > total/2的集群，才能承担服务运行。
+
+
+			'有无中心节点'：选举节点成为主节点
+				有中心节点： 需要主节点
+				无中心节点： 无需主节点 --> redis Cluster
+
+
+			'分布式多节点：'
+				使用DNS进行解析 --> 使用主机名解析 --> 无需使用IP地址
+
+			
+			'paxos协议'：
+				分布式系统使用
+					--> chuuby (google开发) --> 分布式锁服务
+					--> zookeeper,zk '分布式事务协调' --> 属于hadoop --> java开发
+						帮助分布式集群选举主节点 --> 'zab协议' 
+						zk本身是分布式的，自身可以解决选举问题
+
+					--> etcd --> raft协议(paxos协议的简装版)
+							raft动画 --> 描述的比较形象
+
+
+	
+	'NoSQL：Not Only SQL  --> 不仅仅是SQL'
+		www.nosql-databases.org
+
+		'k/v' / Tuple Store：DynamoDB(Amzon), Riak, redis --> 键值存储  --> redis的value支持很多的'数据类型' --> 支持数据交集/差集
+		'column Family'：列式数据库, hbase
+		'document'：文档数据库，mongodb, --> json格式的文档 --> 每一个数据 自带元数据信息 --> { 'id':2 , 'name':'tom'} 类似这样的存储格式 --> 无schema限制
+		'GraphDB'：图式数据库，Neo4j
+		'Mutilmode Database'：多模式
+		'Time Series / Streaming Database'：时间序列存储/流式序列, Influxdata  --> 监控
+ 
+
+
+
+
+
+
+
+
+'Redis：'
+
+	'无中心节点'
+
+	Redis is an open source (BSD licensed), in-memory data structure store, used as a database, cache and message broker. 
+		message broker：
+		开源、内存存储、数据结构存储；
+		数据库、缓存、消息队列；
+		
+		It supports data structures such as strings, hashes, lists, sets, sorted sets with range queries, bitmaps, hyperloglogs and geospatial indexes with radius queries.
+			'数据结构：字符串、列表（数组）、hashes（关联数组）、集合、有序集合、bitmaps、hyperloglogs、空间索引(最新版)；'
+
+		
+		Redis has built-in replication, Lua scripting, LRU eviction, transactions and different levels of on-disk persistence, and provides high availability via Redis Sentinel and automatic partitioning with Redis Cluster.
+			內建的复制功能、Lua脚本、LUR存储淘汰算法、单语句事务、不同级别的基于磁盘的存储 --> 持久存储、高可用 (Sentinel哨兵，自带、Redis Cluster 分片机制) 
+		
+	
+	REmote DIctionary Server：'远程字典服务器'；数据结构服务器，k/v，数据结构；
+		'核心特点：'
+			内存存储：in-memroy
+			持久化
+			主从（sentinel）
+			Cluster（shard分片）
+		
+
+
+	数据结构服务器：
+		Strings, Lists, Hashs, Sets, Sorted Sets, Bitmaps, Hyperloglogs
+		PUB/SUB
+	
+	
+	'单进程：'
+		CPU并非瓶颈；
+	
+
+	'持久化：'
+		snapshotting：快照
+		AOF：Append Only File --> 仅追加文件
+			
+		
+	'Replication：'
+		主/从
+			主：rw
+			从：read-only
+			
+	
+
+
+	'Redis Cluster'
+
+		C/S：
+			Server：
+				redis-server
+					socket
+
+
+			
+		程序环境：
+			配置                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           
+			文件：/etc/redis.conf
+			主程序：/usr/bin/redis-server
+					监听的端口：6379/tcp
+			其他程序：
+				/usr/bin/redis-benchmark：压测工具
+				/usr/bin/redis-cli：客户端工具
+	                                                                                                                                                                                                                                                                                                               		Unit File:/usr/lib/systemd/system/redis.service
+			数据目录：/var/lib/redis
+
+
+
+		'配置文件：'
+			配置段信息：
+				INCLUDES
+				NETWORK：网络
+					bind 127.0.0.1  --> bind 127.0.0.1 172.16.1.100  ：可以bind网卡，IP地址
+					protected-mode yes ：保护模式开启
+					timeout 0 ： 超时时间，永不超时
+					tcp-keepalive 300 ： tcp长连接时间
+
+					只需修改 bind 的IP地址为外网IP地址即可，其他无需修改
+				
+				GENERAL
+				
+				SNAPSHOTTING：快照
+				
+				REPLICATION：主从复制
+				
+				SECURITY：安全 --> 设置远程连接认证
+				
+				LIMITS：资源限制
+				
+				APPEND ONLY MODE：
+				
+				LUA SCRIPTING：LUA脚本 
+				
+				REDIS CLUSTER：redis集群
+				
+				SLOW LOG：慢查询日志
+				
+				LATENCY MONITOR：延迟监控器
+				
+				EVENT NOTIFICATION：事件通知
+				
+				ADVANCED CONFIG：高级配置
+
+
+		'redis-cli命令'：
+			选项：
+				-a password：指定密码
+				-h hostname：指明主机地址
+				-p PORT：指明监听的端口 ，默认无需指定
+			
+			'子命令：'
+				SELECT ID：切换到指定的库  0-16个库；默认使用0号库
+				
+				HELP TAB键：多次TAB键，出现不同的帮助选项
+					@generic：查看通用命令帮助 
+						since：出现的版本(兼容)
+					@connection：连接相关的命令
+					@transactions：事务相关配置
+					@geo：空间相关的命令
+					@server：服务相关的命令
+					@cluster：集群相关的命令
+					
+					@string：字符类型  --> strings字符串类型
+						SET key value [EX seconds] [PX milliseconds] [NX|XX]
+							[EX seconds]：过期时间
+							NX：not exists ；只有键不存在，才创建
+						MSET：设定多个键
+						GET
+						EXISTS
+
+						DECR：自减
+						INCR：自增
+
+						'示例：'
+							127.0.0.1:6379> SET testkey 'tom'
+							OK
+							127.0.0.1:6379> GET testkey
+							"tom"
+							127.0.0.1:6379> SETNX testkey 'jerry'
+							(integer) 0
+							127.0.0.1:6379> GET testkey
+							"tom"
+							127.0.0.1:6379> SETNX testkey1 'jerry'
+							(integer) 1
+							127.0.0.1:6379> GET testkey1
+							"jerry"
+							127.0.0.1:6379> DEL testkey
+							(integer) 1
+							127.0.0.1:6379> DEL testkey1
+							(integer) 1
+							127.0.0.1:6379> GET testkey
+							(nil)
+
+							127.0.0.1:6379> SET counts 1
+							OK
+							127.0.0.1:6379> DECR counts
+							(integer) 0
+							127.0.0.1:6379> DECR counts
+							(integer) -1
+							127.0.0.1:6379> DECR counts
+							(integer) -2
+							127.0.0.1:6379> GET counts
+							"-2"
+							127.0.0.1:6379> INCR counts
+							(integer) -1
+							127.0.0.1:6379> GET counts
+							"-1"
+
+
+					@list ： 数组
+						栈stack：后进先出
+						FIFO：先进先出
+
+						LSET key index value ：设定值或者修改值
+						LPUSH key value [value ...]：向一个列表增加值；从左侧插入
+						RPUSH key value [value ...]：从右侧插入
+						LINSERT key BEFORE|AFTER pivot value：指定位置插入
+						LPOP key：从左侧删除；弹栈
+						RPOP key：从右侧删除；弹栈
+						LINDEX key index：查看数组中数据
+						LLEN key：查看元素个数
+
+					
+					@hash ：
+						HSET key field value ：设定值
+						HSETNX key field value
+						HMSET key field value [field value ...] ：设定多个值
+						HGET key field ： 获取值
+						HGETALL key ： 获取所有值
+						HVALS key ： 获取所有值
+
+						hset(key, field, value)：向名称为key的hash中添加元素field<—>value
+						hget(key, field)：返回名称为key的hash中field对应的value
+						hmget(key, field1, …,field N)：返回名称为key的hash中field i对应的value
+						hmset(key, field1, value1,…,field N, value N)：向名称为key的hash中添加元素field i<—>value i
+						hincrby(key, field, integer)：将名称为key的hash中field的value增加integer
+						hexists(key, field)：名称为key的hash中是否存在键为field的域
+						hdel(key, field)：删除名称为key的hash中键为field的域
+						hlen(key)：返回名称为key的hash中元素个数
+						hkeys(key)：返回名称为key的hash中所有键
+						hvals(key)：返回名称为key的hash中所有键对应的value
+						hgetall(key)：返回名称为key的hash中所有的键（field）及其对应的value
+
+
+					@set ： 集合
+						SADD key member [member ...]：设定一个集合
+						SPOP key [count] ：随机弹出元素，指定个数
+						SRANDMEMBER key [count] ： 随机取出成员，指定取出的个数
+						SREM key member [member ...]：移除(弹出)某个元素
+						SCARD key ：查看元素成员个数
+						SINTER key [key ...] ： 取出几个集合的交集
+						SINTERSTORE destination key [key ...]：取出交集并存储
+						SUNION key [key ...]：取出并集
+						SUNIONSTORE destination key [key ...]：取出并集并存储
+						SDIFF key [key ...]：差集 --> 顺序很关键
+						SDIFFSTORE destination key [key ...]：差集存储
+						SISMEMBER key member ： 判断某个集合是否存在某个成员
+						SMEMBERS key：查看一个集合的所有成员
+						SMOVE source destination member：移动成员到另一个集合中
+
+
+					@sorted_set：有序集合
+						ZADD key [NX|XX] [CH] [INCR] score member [score member ...]：设定成员和优先级
+							score：优先级/权重
+						ZCARD key：获取成员个数
+						ZRANGE key start stop [WITHSCORES]：指明索引的起始值和结束值，获取成员
+						ZREMRANGEBYSCORE key min max：根据得分高低，进行获取成员
+						ZRANK key member：获取指定成员的排序索引;获取索引
+						ZREMRANGEBYLEX key min max：删除
+						ZREMRANGEBYRANK key start stop：排完序，再删除
+
+						zadd(key, score, member)：向名称为key的zset中添加元素member，score用于排序。如果该元素已经存在，则根据score更新该元素的顺序。
+						zrem(key, member) ：删除名称为key的zset中的元素member
+						zincrby(key, increment, member) ：如果在名称为key的zset中已经存在元素member，则该元素的score增加increment；否则向集合中添加该元素，其score的值为increment
+						zrank(key, member) ：返回名称为key的zset（元素已按score从小到大排序）中member元素的rank（即index，从0开始），若没有member元素，返回“nil”
+						zrevrank(key, member) ：返回名称为key的zset（元素已按score从大到小排序）中member元素的rank（即index，从0开始），若没有member元素，返回“nil”
+						zrange(key, start, end)：返回名称为key的zset（元素已按score从小到大排序）中的index从start到end的所有元素
+						zrevrange(key, start, end)：返回名称为key的zset（元素已按score从大到小排序）中的index从start到end的所有元素
+						zrangebyscore(key, min, max)：返回名称为key的zset中score >= min且score <= max的所有元素 zcard(key)：返回名称为key的zset的基数 zscore(key, element)：返回名称为key的zset中元素element的score zremrangebyrank(key, min, max)：删除名称为key的zset中rank >= min且rank <= max的所有元素 zremrangebyscore(key, min, max) ：删除名称为key的zset中score >= min且score <= max的所有元素
+						zunionstore / zinterstore(dstkeyN, key1,…,keyN, WEIGHTS w1,…wN, AGGREGATE SUM|MIN|MAX)：对N个zset求并集和交集，并将最后的集合保存在dstkeyN中。对于集合中每一个元素的score，在进行AGGREGATE运算前，都要乘以对于的WEIGHT参数。如果没有提供WEIGHT，默认为1。默认的AGGREGATE是SUM，即结果集合中元素的score是所有集合对应元素进行SUM运算的值，而MIN和MAX是指，结果集合中元素的score是所有集合对应元素中最小值和最大值。
+
+
+					@hyperloglog 
+						PFADD key element [element ...]
+						PFCOUNT key [key ...]
+						PFMERGE destkey sourcekey [sourcekey ...]
+
+					@pubsub ：发布订阅队列 --> 消息队列
+						PUBLISH channel message：发布
+						PSUBSCRIBE pattern [pattern ...]：发布订阅
+						SUBSCRIBE channel [channel ...]：订阅
+						UNSUBSCRIBE [channel [channel ...]]：撤掉订阅
+
+					@connection
+
+					持久化命令
+						save：将数据同步保存到磁盘
+						bgsave：将数据异步保存到磁盘
+						lastsave：返回上次成功将数据保存到磁盘的Unix时戳
+						shundown：将数据同步保存到磁盘，然后关闭服务
+
+					远程服务命令
+						info：提供服务器的信息和统计
+						monitor：实时转储收到的请求
+						slaveof：改变复制策略设置
+						config：在运行时配置Redis服务器
+
+
+
+
+					
+		redis：k/v
+			key：直接ASCII字符串；
+			value：strings, lists, hashes, sets, sorted sets, bitmaps, hyperloglogs
+			
+				To get help about Redis commands type:
+					"help @<group>" to get a list of commands in <group>
+					"help <command>" for help on <command>
+					"help <tab>" to get a list of possible help topics
+					"quit" to exit		
+			
+			group：
+				@generic, @string, @list, @...
+				
+			@string
+				SET
+				GET
+				EXISTS
+				INCR
+				DECR
+				SETNX
+				SETEX
+				INCRBYFLOAT
+				MGET
+				MSET
+				
+			@list
+				LPUSH
+				RPUSH
+				LPOP
+				RPOP
+				LPUSHX
+				RPUSHX
+				LRANGE
+				LINDEX
+				LSET
+				
+			@set 
+				SADD
+				SPOP
+				SREM 
+				SRANDMEMBER
+				SINTER
+				SUNION
+				
+			@sorted_set
+				ZADD
+				ZCARD
+				ZCOUNT
+				ZRANK
+				...
+				
+			@hash 
+				HSET
+				HMSET
+				HGET
+				HMGET
+				HKEYS
+				HVALS
+				HDEL
+				HGETALL
+				...
+
+
+		
+
+
+	
+
+
+				
+		
+'回顾：'
+	分布式系统两个基础理论：CAP/BASE
+		CAP：AP，CP
+			C、A、P：三者其中之二；
+				AP：可用性、分区容错性、弱一致性；
+		BASE：BA，S，E
+			BA：基本可用、S：软状态、E：最终一致性；
+			
+	'分布式系统'：			
+		1、分布式存储： 
+			NoSQL：
+				kv、document(文件存储)、column families(列式存储)、GraphDB
+			分布式文件系统：文件系统接口
+				分布式存储：API、不能挂载；
+		
+		2、分布式运算：mapreduce, ...
+
+		3、NewSQL：
+			PingCAP：TiDB(MySQL protocol)...
+			
+
+	redis：REmote DIctionary Server
+		数据结构：String, List, Set, sorted_set, Hash, pubsub...
+
+
+
+
+
+
+
+
+
+
+
+
+
+Redis(2)
+
+
+	'配置和使用Redis：' /etc/redis.conf
+		基本配置项
+		网络配置项
+		持久化相关配置
+		复制相关的配置
+		安全相关配置
+		Limit相关的配置
+		SlowLog相关的配置
+		INCLUDES
+		Advanced配置
+		
+		
+		'通用配置项：' GENERAL
+
+			daemonize ：运行为守护进程, Centos7为no，6为yes
+
+			supervised ：模拟init，用户空间的第一个进程
+
+			loglevel
+			pidfile ：pid文件
+			logfile ：日志文件
+
+			databases：设定数据库数量，默认为16个，每个数据库的名字均为整数，从0开始编号，默认操作的数据库为0；
+				切换数据库的方法：
+					 SELECT <dbid>
+				 
+		
+		'网络配置项：'
+			bind IP ：监听在哪个IP地址上
+			port PORT ：监听的端口
+			protected-mode：安全模式(如果需要远程连接，但没有配置密码，需要将此项修改为no)
+			tcp-backlog：后援队列
+			unixsocket ：本地通信时使用的unitsock文件
+			timeout：连接的空闲超时时长；
+			tcp-keepalive 300：隔300s探测连接对方是否在线，类似于heartbeat功能
+			
+		
+		'安全配置：'
+			requirepass <PASSWORD> ：远程登陆redis的密码，可以自定义
+				$ redis-cli -a PASSWORD
+				或者
+				$ redis-cli 
+				> AUTH PASSWORD
+
+			rename-command <COMMAND> <NEW_CMND_NAME>  :重命名某个命令为自定义的名字
+				在AOF或Replication环境中，不推荐使用；
+				
+		
+		'Limits相关的配置：' 资源限制
+		!!!	maxclients ：最大并发连接数；只有当redis作为公有存储时，才会配置
+			maxmemory <bytes> ：系统分配给redis的内存，用于redis存储数据使用
+			maxmemory-policy noeviction ：内存淘汰算法/策略
+			!!!	'淘汰策略'：
+						volatile-lru(基于LRU算法，对拥有过期时间的KEY进行淘汰)
+					    allkeys-lru(对所有KEY进行LRU淘汰)
+					    volatile-random(对设定了过期时间的KEY进行随机淘汰)
+					    allkeys-random(对所有键进行随机淘汰)
+					    volatile-ttl(根据设置了过期时间，按照TTL值(可用时间)，进行淘汰)
+					    noeviction(内存空间使用满了，告诉客户端内存已满，不执行操作)
+			 	'建议使用'： volatile-lru、volatile-ttl
+
+
+			 '最大内存采样配置'
+			 	maxmemory-samples 5
+					淘汰算法运行时的采样样本数；一次淘汰采样几个。
+					采样范围越大，精度越高，越消耗资源
+					采样范围越小，精度越小，速度越快
+
+				
+		
+		'SlowLog相关的配置:'
+			slowlog-log-slower-than 10000
+				单位是微秒；0.01s --> 
+
+			slowlog-max-len 128
+				SlowLog记录的日志最大条目；
+
+
+		'LATENCY MONITOR：延迟监控器'
+			默认值即可
+				
+		
+		'ADVANCED配置：'
+			hash-max-ziplist-entries 512 ：某一个数据类型出现的项数 
+			hash-max-ziplist-value 64	 ：每一项的值最多存储多长
+			
+				设置ziplist的键数量最大值，每个值的最大空间； 
+			
+			client-output-buffer-limit normal 0 0 0 			：正常客户端(redis-cli)
+			client-output-buffer-limit slave 256mb 64mb 60		：从服务器客户端
+			client-output-buffer-limit pubsub 32mb 8mb 60 		： Pubsub客户端
+				<soft-limit> ：软限制
+				<hard-limit> ：硬限制
+				<soft-limit seconds> ：超时时间
+
+
+
+
+
+
+
+	'redis-cli命令：'
+		Usage: redis-cli [OPTIONS] [cmd [arg [arg ...]]]
+			
+			-h HOST 	：IP
+			-p PORT 	：端口
+			-a PASSWORD ：密码
+			-n DBID 	：默认数据库
+			
+		与Connection相关命令：
+			help @connection
+			
+			AUTH <password>  ：认证
+			ECHO <message>	 ：回显
+			PING  			 ：ping探测
+			QUIT 			 ：退出
+			SELECT dbid 	 ：选择数据库
+			
+	
+	!!!	'清空数据库：'(建议谨慎使用。。。)
+			 FLUSHDB：Remove all keys from the current database
+				清空当前数据库；
+			 FLUSHALL：Remove all keys from all databases
+				清空所有数据库；
+			 
+	
+		
+		'Server相关的命令：' HELP @server
+
+			 CLIENT GETNAME：获取客户端名
+		!!!	 CLIENT KILL  ：杀死客户端/关闭客户端
+				CLIENT KILL [ip:port] [ID client-id] [TYPE normal|master|slave|pubsub] [ADDR ip:port] [SKIPME yes/no]
+		
+		!!!	 CLIENT LIST  ：客户端列表
+				name=客户端名
+				age=连接时长
+				????
+
+			 CLIENT PAUSE timeout ：暂停客户端多少秒
+				
+			 CLIENT REPLY ON|OFF|SKIP：设定服务器是否响应命令
+
+			 CLIENT SETNAME：Set the current connection name
+			 	设定当前客户端名字
+			 
+			SHUTDOWN [NOSAVE|SAVE]：停止redis
+				NOSAVE：不将数据同步至磁盘
+				SAVE：保存内存中的数据保存至磁盘中
+			 
+
+			 CONFIG GET 		：获取配置信息 
+			 CONFIG RESETSTAT	：使INFO命令的输出信息，重新计数
+			 CONFIG REWRITE 	：把内存当前的配置写入到配置文件中
+			 CONFIG SET 		：
+
+			 DBSIZE ：查看DB大小
+			 
+???		!!!	 INFO：服务器状态信息查看；分为多个secion；   (第三个视频30分钟以后)
+				INFO [section] ：指定段
+					Memory 
+					Clients
+					Stats
+					Replication
+					CPU
+					Cluster
+					Keyspace
+
+			MONITOR：实时监控状态
+			 
+	
+
+
+
+
+
+	'Redis的持久化:'
+		
+		'RDB：snapshotting', 二进制格式；按事先定制的策略，周期性地将数据从内存同步至磁盘；数据文件默认为dump.rdb；
+			客户端显式使用SAVE或BGSAVE命令来手动启动快照保存机制；
+			
+			'客户端命令：'
+				SAVE：同步，即在主线程中保存快照，此时'会阻塞所有客户端请求'；
+				BGSAVE：异步；启动另一个线程，进行读取操作，类似热备
+			
+			数据量大时，不太合适
+
+
+		
+		'AOF：Append Only File', fsync，仅追加文件 --> 类似于MySQL二进制日志
+
+			记录每次写操作至指定的文件尾部实现的持久化；当redis重启时，可通过重新执行文件中的命令在内存中重建出数据库；
+				
+				'BGREWRITEAOF：AOF文件重写；' 后台运行
+					--> 定期执行；可以手动重写
+				
+					不会读取正在使用AOF文件，而是通过将内存中的数据以命令的方式保存至临时文件中，完成之后替换原来的AOF文件； 
+				
+				基本没有数据丢失 --> 取决于多长时间间隔 将数据写入到 AOF文件内
+
+		
+
+
+
+
+		'RDB相关的配置：'
+		!!!	save <seconds> <changes>
+			
+				save 900 1 		： 900s的时间内，只要有1key的值变化，就做一次快照
+				save 300 10 	： 300s内，10个key变化，做一次快照
+				save 60 10000 	： 60s内，1w个key变化，就做一次快照
+				
+				表示：三个策略满足其中任意一个均会触发SNAPSHOTTING操作；900s内至少有一个key有变化，300s内至少有10个key有变化，60s内至少有1W个key发生变化；
+				
+			stop-writes-on-bgsave-error yes --> 当redis作为缓存时，无需开启此项
+				保存快照时，dump操作出现错误时，是否禁止新的写入操作请求；
+				
+
+			rdbcompression yes	：压缩
+			rdbchecksum yes 	：校验
+			
+			dbfilename dump.rdb：指定rdb文件名；保存在dir设定的目录下
+			*dir /var/lib/redis：rdb文件的存储路径
+
+
+			'备份RDB'
+				只需拷贝/var/lib/redis/dump.rdb文件即可
+			
+
+
+		'AOF相关的配置：APPEND ONLY MODE '
+			*appendonly no ：是否开启AOF
+			appendfilename "appendonly.aof" ：仅追加的文件名，存放在dir定义的目录下
+			
+			*appendfsync ：内存同步至磁盘中
+				Redis supports three different modes:
+					no：redis不执行主动同步操作，而是OS进行；内核决定多长时间进行同步操作
+					everysec：每秒一次；
+					always：每语句一次；IO压力大
+					
+			no-appendfsync-on-rewrite no
+				是否在后台执行aof重写期间不调用fsync，默认为no，表示调用；
+				
+		
+		!!!	auto-aof-rewrite-percentage 100  :变化比例达到100%，触发 --> 某个键的所有字符串都变化了，达到100% 或者 某个键有100个值，100个值都变化了，达到100%
+		!!!	auto-aof-rewrite-min-size 64mb	 :大于64mb时，触发(数据量小时，可能会用到此限制)
+				'上述两个条件同时满足时'，方会触发重写AOF；与上次aof文件大小相比，其增长量超过100%，且大小不少于64MB; 
+				
+
+			aof-load-truncated yes ：装载时，自动truncated
+			
+		注意：'持久机制本身不能取代备份'；应该制订备份策略，对redis库定期备份；
+		
+		
+
+
+
+		'RDB与AOF同时启用： ' --> IO使用会很频繁  --> 尽量不要同时使用
+			(1) BGSAVE和BGREWRITEAOF'不会同时进行；'
+			(2) Redis服务器启动时用持久化的数据文件恢复数据，会优先使用AOF；
+				AOF还原的数据更为精确
+
+
+
+
+
+
+
+	
+	'redis replication复制：'
+		主节点要开启认证功能，监听在指定内网网卡上
+
+		特点：
+			一个Master可以有多个slave主机，'支持链式复制'；一个SLAVE 还可以有它自身的SALVE节点
+			Master以非阻塞方式同步数据至slave主机；
+
+
+		'主从同步：'
+			主节点创建快照 --> 从节点读取快照 --> 实现主从同步
+		!!!	确保时间同步、正确非常重要
+			
+
+		
+		'配置slave节点：'
+			redis-cli> SLAVEOF <MASTER_IP> <MASTER_PORT>
+				配置从节点
+
+			redis-cli> CONFIG SET masterauth <PASSWORD>
+				设定MASTER认证
+			
+		
+		
+		'配置文件参数：'
+			*slaveof 					：
+			*masterauth 
+			
+			slave-serve-stale-data yes 	：slave节点无法连接主节点时，能否使用从节点响应客户端。默认为响应给客户端
+			slave-read-only yes 		：从节点为只读
+			*repl-diskless-sync no 		：
+				no, Disk-backed(基于磁盘传输), Diskless(不基于磁盘传输)
+				
+				新的从节点或某较长时间未能与主节点进行同步的从节点重新与主节点通信，需要做"full synchronization"，此时其同步方式有两种style：
+					Disk-backend：主节点新创建快照文件于磁盘中，而后将其发送给从节点；慢慢传，网络带宽不够时使用。
+						'有多个SLAVE时，使用此比较有效。可以将快照复用给多个SLAVE节点'
+
+					Diskless：主节点新创建快照后直接通过网络套接字文件发送给从节点；为了实现并行复制，通常需要在复制启动前延迟一个时间段；
+						网络IO非常快时，使用。
+			
+
+
+			repl-diskless-sync-delay 5 	：延迟5s，等待其他SLAVE到达
+			repl-ping-slave-period 10 	：探测从节点是否在线间隔
+			 
+			*repl-timeout 60 			：从节点超时时间
+			
+			repl-disable-tcp-nodelay no ：不启用nodelay
+			repl-backlog-size 1mb 		：后端队列大小/缓冲大小
+			
+			*slave-priority 100 		：从节点优先级，被选举成为主节点的优先级。 0表示，禁止成为主节点
+				复制集群中，主节点故障时，sentinel应用场景中的主节点选举时使用的优先级；'数字越小优先级越高，但0表示不参与选举； '
+				slave-priority：从节点配置，越低的投票越高，成为MASTER
+			
+			min-slaves-to-write 3 		：主节点仅允许其能够通信的从节点数量大于等于此处的值时接受写操作；
+			min-slaves-max-lag 10 		：主节点允许从节点落后于主节点的时长；从节点延迟时长超出此处指定的时长时，主节点会拒绝写入操作；
+			
+			slave-announce-ip IP 		：从节点对外宣称自己的IP
+
+
+
+
+
+	'sentinel：哨兵'
+		主要完成三个功能：'监控、通知、自动故障转移'
+		
+			'选举'：流言协议、投票协议
+
+
+			
+		'能够监控不只一个redis主从复制集群'
+
+		'只需配置每个集群的主节点即可'
+
+		'至少要3个节点' --> 防止1个节点的sentinel自身的故障
+			判定主从集群节点的MASTER节点不可用：
+				需要sentinel节点大于半数认为MASTER不可用才可以认为主节点不可用
+
+
+		'配置项：' /etc/redis-sentinel.conf
+
+			port 26379 	：监听的端口
+			sentinel monitor <master-name> <ip> <redis-port> <quorum>
+
+			sentinel auth-pass <master-name> <password> ：连接redis master节点的密码
+			
+				<quorum> :如果有3台sentinel，这里写2，则表示至少有2个节点判定主节点为down时，才会进行重新选举主节点的操作
+					表示sentinel集群的quorum机制，即至少有quorum个sentinel节点同时判定主节点故障时，才认为其真的故障；
+					s_down: subjectively down  ：主观down
+					o_down: objectively down   ：客观down
+			
+			
+			sentinel down-after-milliseconds <master-name> <milliseconds>
+				监控到指定的集群的主节点异常状态持续多久方才将标记为"真正故障"；
+				
+			
+			sentinel parallel-syncs <master-name> <numslaves>
+				指在failover过程中，能够被sentinel并行配置的从节点的数量；
+				切换后，一次同步几个节点 --> 根据网络带宽、IO能力进行设置
+				
+			
+			sentinel failover-timeout <master-name> <milliseconds>
+				sentinel必须在此指定的时长内完成故障转移操作，否则，将视为故障转移操作失败；
+					时间不能设置的太短
+
+			
+			sentinel notification-script <master-name> <script-path>
+				通知脚本，此脚本被自动传递多个参数；
+				
+			
+
+
+		'sentinel连接'
+			$ redis-cli -h SENTINEL_HOST -p SENTINEL_PORT 
+				redis-cli> 
+					> SENTINEL masters     查看详细信息MASTER
+
+					> SENTINEL slaves <MASTER_NAME>  	查看从节点信息，指明哪个集群的从节点
+					> SENTINEL failover <MASTER_NAME>	手动故障转移 --> 如果之前主节点没有配置 SLAVEOF，需要手动配置
+					> SENTINEL get-master-addr-by-name <MASTER_NAME>
+
+		failover之后，会在自己的配置文件中重写：
+			$ tail /etc/redis-sentinel.conf
+
+
+
+
+
+
+
+
+	'redis的集群技术：'
+		客户端分片
+		代理分片：
+			豌豆荚(国内)：codis -->  有中心节点 
+			twitter：twemproxy --> 性能较差  --> 有中心节点 
+			
+			芒果TV：cerberus ->> 无中心节点
+		
+		'redis cluster：无中心节点'
+			查找集群内的每一个节点：都持有每个集群的元数据信息，但是只存储一部分数据
+			每个节点做其的从节点，防止宕机
+			3.0 或更高版本
+
+				优点：
+					无中心节点的P2P Goosip分散式模式
+					更少的来回次数并降低延迟
+					自动与多个redis节点进行分片
+				缺点：
+					依赖于3.0或更高版本
+					需要时间验证其稳定性
+					没有后台界面
+					较codis有更高的维护升级成本
+
+
+		'codis：' --> 需要懂zookeeper
+			使用zookeeper、etcd支持协调机制：
+			codis采用了proxy的方案，带来单机性能的损失
+
+
+
+		'cerberur(芒果TV)'
+			优点：
+				数据自动平衡
+				本身实现了redis的smart client
+				支持读写分离
+
+			缺点：
+				依赖redis3.0或更高版本
+				代理分片机制引入更多的来回次数并增大延迟
+
+
+
+		'建议使用'：codis、redis cluster
+
+
+		
+
+
+'配置redis cluster：' --> 每个节点都是主节点
+	取模(映射法)、一致性hash(可以采用虚拟节点)
+	
+	基于slot的工作机制
+		slot：槽片 --> 16384个槽数 0-16383
+			根据节点数量，平均分配槽
+
+
+	修改配置文件：
+		1、修改bind
+		2、修改REDIS CLUSTER 
+			cluster-enabled yes 
+			cluster-config-file  --> 无需修改 --> /var/lib/redis/nodes-6379.conf
+			cluster-node 3600 -> 无需修改，默认即可
+
+	启动redis：
+		1、查看日志/var/log/redis/redis.log
+		2、查看/var/lib/redis/node...
+
+	复制配置文件到其他节点：
+		$ scp /etc/redis.conf 172.16.1.70:/etc/
+
+	其他节点开启redis服务；
+		$ systemctl start redis 
+
+	连接到redis-cli
+		$ redis-cli 
+		> INFO
+		cluster_enabled=1
+
+
+	使3个节点成为一个集群：
+		> CLUSTER INFO # 查看集群信息
+		> CLUSTER MEET 172.16.1.70 6379 # 加入到集群中
+		> CLUSTER MEET 172.16.1.21 6379
+		> CLUSTER NODE # 查看集群节点
+
+
+	设定每个节点的SLOT --> 要在每个节点上配置
+		node1 :
+		> CLUSTER ADDSLOTS 0 5461
+
+		node 2:
+		> CLUSTER ADDSLOTS 5462 10922
+
+		node 3:
+		> CLUSTER ADDSLOTS 10923 16383
+
+
+
+
+
+
+
+
+
+		课外实践：codis的测试和应用；
+					
+					
+					
+					
+					
+					
+					
+					
+		博客作业：
+			(1) replication, sentinel
+			(2) rdb, aof 
+			
+		课外实践：
+			(1) codis
+			(2) redis cluster
+			
+		
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

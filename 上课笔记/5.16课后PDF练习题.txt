@@ -1,0 +1,324 @@
+5.16课后PDF练习题（出的题）
+
+1、分别设置CentOS 6与CentOS 7的开机启动为3模式
+
+	6：$ vim /etc/inittab
+		修改5为3即可
+			id:5:initdefault:
+	7：$ systemctl set-default multi-user.target
+
+
+2、将httpd 服务的软件包安装，将服务启动，并设置服务为开机启动。分别在CentOS 6 与CentOS 7 中实现。
+
+	6:
+		$ tar -xvf httpd-2.2.32.tar.bz2
+		$ cd httpd-2.2.32
+		$ mkdir -p /app/httpd 
+		$ ./configure --prefix=/app/httpd 
+		$ make
+		$ make install
+		$ vim /etc/rc.d/init.d/httpd
+			#!/bin/bash
+			# chkconfig: 345 98 02
+			# description:httpd service
+			#
+			# exit status code:
+			# 1:
+			# 2:
+			# 3:
+			# 4: program is not exist
+			# 5: program is not Executable file.
+			exec=/app/httpd/bin/apachectl
+			prog="httpd"
+			lockfile=/var/lock/subsys/$prog
+
+			start() {
+				[ -x $exec ] ||  (echo "not executable file"; exit 5)
+				[ -f $exec ] || (echo "no such file"; exit 4)
+				echo -n "Starting $prog: "
+				daemon $exec start
+				#`echo$exec` 
+				retval=$?
+				echo
+				[ $retval -eq 0 ] && echo "Starting $prog success." && touch $lockfile
+			}
+
+			stop() {
+				echo -n "Stoping $prog ..."
+				if [ -f $lockfile ];then
+					killall $prog
+					RETVAL=3
+				else 
+					failure "Stoping $prog"
+				fi
+				retval=$?
+				echo
+				[ $retval -eq 0 ] && rm -f $lockfile
+			}
+
+			restart() {
+				stop 
+				start
+			}
+
+			status() {
+				if [ -f $lockfile ];then 
+					echo "$prog is running..." 
+				else
+					echo "$prog is not running..."  && return 1
+				fi
+			}
+
+			status_req() {
+				status &> /dev/null
+			}
+
+case $1 in
+start)
+	status_req && exit 0
+	$1
+	;;
+stop)
+	status_req && $1
+	;;
+restart)
+	$1
+	;;
+status)
+	$1
+	;;
+*)
+	echo "Usage: {start|stop|restart|status}"
+	;;
+esac
+
+unset exec 
+unset prog 
+unset lockfile 
+
+				
+				
+
+	7:
+	$ vim /usr/lib/systemd/system 
+	[Unit]
+	Description=Maxies httpd service
+	After=network.target remote-fs.target
+	[Service]
+	Type=notify
+	ExecStart=/app/httpd/bin/apachectl -k start -DFOREGROUND
+	ExecReload=/app/httpd/bin/apachectl restart
+	ExecStop=/app/httpd/bin/apachectl stop
+	[Install]
+	WantedBy=multi-user.target
+
+
+3、临时关闭和永久关闭selinux,请写出方法。 
+
+	临时关闭：
+		$ setenforce 0
+	永久关闭：
+		$ vim /etc/selinux/config 
+		SElinux=disable
+		或者
+		$ sed -i 's@^\(SELINUX\)=permissive@\1=disable@' /etc/selinux/config
+
+
+4、CentOS 7 中查看服务的运行状态 
+
+	$ systemctl status NAME.service
+
+
+
+5、在CentOS7中查看所有已经激活的服务，及系统已有的所有服务
+
+	$ systemctl list-units -t service --all 
+
+
+6、编写函数实现数字的加减乘除运算，例如输入 1 + 2 ，将得正确结果
+
+	[root@centos7 0516shell-homework]# cat bc-shell.sh
+	#!/bin/bash
+	# Author: Maxie
+	# Date: 2017-05-16-23:16:56
+	# Description:编写函数实现数字的加减乘除运算，例如输入 1 + 2 ，将得正确结果
+
+	sum=
+
+	add() {
+	    echo "sum=$[$1+$2]"
+	}
+
+	subtract() {
+	    echo "sum=$[$1-$2]"
+	}
+
+	multiply() {
+	    echo "sum=$[$1*$2]"
+	}
+
+	devide() {
+	    echo "sum=$[$1/$2]"
+	}
+
+	read -p "input number: " n j m
+
+	case $j in
+	+)
+	    add $n $m
+	    ;;
+	-)
+	    subtract $n $m
+	    ;;
+	\*)
+	    multiply $n $m
+	    ;;
+	/)
+	    devide $n $m
+	    ;;
+	*)
+	    echo "error"  && exit 1
+	    ;;
+	esac
+
+	unset sum 
+
+
+
+	第二种方法：
+		[root@centos7 0516shell-homework]# cat bc2-shell.sh
+		#!/bin/bash
+		# Author: Maxie
+		# Date: 2017-05-16-23:16:56
+		# Description:编写函数实现数字的加减乘除运算，例如输入 1 + 2 ，将得正确结果
+
+		#!/bin/bash
+		#
+		jisuanqi() {
+		    echo $@ | bc
+		    }
+
+		read -p "Please input u want calc: " CALC
+
+		jisuanqi $CALC
+
+
+7、编写函数实现两个数字做为参数，返回最大值
+
+	[root@centos7 0516shell-homework]# cat two-args-max.sh
+	#!/bin/bash
+	# Author: Maxie
+	# Date: 2017-05-16-23:38:41
+	# Description:编写函数实现两个数字做为参数，返回最大值
+
+	_max() {
+	    if [ $1 -lt $2 ];then
+	        echo "MAX: $2"
+	    else
+	        echo "MAX: $1"
+	    fi
+	}
+
+	_max $1 $2
+
+
+8、启用SELinux 策略并安装httpd 服务，改变网站的默认主目录为/website, 添加SELinux 文件标签规则，使网站可访问
+
+	$ setenforce 1
+	$ vim /etc/httpd/conf/httpd.conf
+		#DocumentRoot "/var/www/html"
+		DocumentRoot "/website"
+
+		#
+		# Relax access to content within /var/www.
+		#
+		#<Directory "/var/www">
+		<Directory "/website">
+		    AllowOverride None
+		    # Allow open access:
+		    Require all granted
+		</Directory>
+
+		# Further relax access to the default document root:
+		#<Directory "/var/www/html">
+		<Directory "/website">
+	$ systemctl reload httpd.service 
+	$ ll -dZ /var/www/html/
+	drwxr-xr-x. root root system_u:object_r:httpd_sys_content_t:s0 /var/www/html/
+	$ chcon -Rt httpd_sys_content_t /website
+
+
+9、修改上述网站的http 端口为9527 ，增加SELinux 端口标签，使网站可访问
+	
+	$ sed -i 's/^\([[:space:]]*Listen\)[[:space:]]\+[0-9]\+/\1 9527/' /etc/httpd/conf/httpd.conf 
+	$ sed -n '/^[[:space:]]*Listen[[:space:]]\+[0-9]\+/p' /etc/httpd/conf/httpd.conf 
+	Listen 9527
+
+	#因为上面已经重启了服务，这次使用发送SIGHUP信号来重新调用httpd服务
+	$ pkill -SIGHUP 'httpd'
+	
+	#查看原来的httpd默认监听端口80的端口标签类型
+	$ semanage port -l | grep '\<80\>'
+	http_port_t                    tcp      80, 81, 443, 488, 8008, 8009, 8443, 9000
+	
+	#添加9527端口进入此标签类型
+	$ semanage port -a -t http_port_t -p tcp 9527
+	
+	#查看9527端口是否在此列表
+	$ semanage port -l | grep '\<9527\>'
+	http_port_t                    tcp      9527, 80, 81, 443, 488, 8008, 8009, 8443, 9000
+	
+	#使用其它主机通过links统计进行访问9527端口
+	$ links http://192.168.20.136:9527
+
+10、编写脚本/root/bin/copycmd.sh
+	(1)  提示用户输入一个可执行命令名称
+	(2)  获取此命令所依赖到的所有库文件列表
+	(3)  复制命令至某目标目录( 例如/mnt/sysroot) 下的对应路径下；
+	如：/bin/bash ==> /mnt/sysroot/bin/bash
+	/usr/bin/passwd ==> /mnt/sysroot/usr/bin/passwd
+	(4)  复制此命令依赖到的所有库文件至目标目录下的对应路径下：
+	如：/lib64/ld-linux-x86-64.so.2 ==> /mnt/sysroot/lib64/ld-
+	linux-x86-64.so.2
+	(5) 每次复制完成一个命令后，不要退出，而是提示用户键入新的要复制的命
+	令，并重复完成上述功能；直到用户输入quit
+
+		cat /root/Desktop/copycmd.sh
+		#!/bin/bash
+		 
+		ch_root="/mnt/root"
+		[ ! -d $ch_root ] && mkdir $ch_root
+		 
+		bincopy() {
+		    if which $1 &>/dev/null; then
+
+		        local cmd_path=`which --skip-alias $1`
+		        local bin_dir=`dirname $cmd_path`
+		        [ -d ${ch_root}${bin_dir} ] || mkdir -p ${ch_root}${bin_dir}
+		        [ -f ${ch_root}${cmd_path} ] || cp $cmd_path ${ch_root}${bin_dir}
+		        return 0
+		    else
+		        echo "Command not found."
+		        return 1
+		    fi
+		}
+		 
+		libcopy() {
+		    local lib_list=$(ldd `which --skip-alias $1` | grep -Eo '/[^[:space:]]+')
+		    for loop in $lib_list;do
+		        local lib_dir=`dirname $loop`
+		        [ -d ${ch_root}${lib_dir} ] || mkdir -p  ${ch_root}${lib_dir}
+		        [ -f ${ch_root}${loop} ] || cp $loop ${ch_root}${lib_dir}
+		    done
+		}
+		 
+		 
+		read -p "Please input a command: " command
+		 
+		while [ "$command" != "quit" ];do
+		    if bincopy $command ;then
+		        libcopy $command
+		    fi
+		    read -p "Please input a command or quit: " command
+		done
+

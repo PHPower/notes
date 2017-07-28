@@ -1,0 +1,224 @@
+6.12 (Mage ryslog)
+
+
+'rsyslog：'
+	
+	日志：历史事件记录；
+		事件：时间，事件，事件级别
+		
+	'syslog：'
+		klogd：kernel
+		syslogd：system(application)
+		
+
+
+		'事件记录格式：'
+			日期时间 	主机 	进程[pid]: 事件内容
+			
+		C/S架构：通过TCP或UDP提供日志记录服务；
+		
+
+	'rsyslog：'(syslog的升级版)
+		
+		'rsyslogd特性：'
+			多线程；
+			UDP，TCP，SSL，TLS，RELP；
+			存储日志信息于MySQL，PGSQL，Oracle等RDBMS；
+			强大的过滤器，实现过滤日志信息中任何部分的内容；
+			自定义输出格式；
+			
+		'elk stack'：elasticsearch, logstash, kibina
+			专用日志分析工具
+				
+
+	'rsyslog日志收集器的重要术语：'
+		'facility：设施'，从功能或日志信息来源的程序对日志收集进行分类：
+			实现过滤功能
+				內建：auth, authpriv, cron, daemon, kern, lpr, mail, mark(防火墙标记), news, security, user, uucp, syslog, local0-local7(自定义)
+
+		
+		'priority：优先级'；日志的严重性级别
+			debug(最低级别，生产环境不开启), info, notice(注意), warn(warning), err(error), crit(critical), alert(橙色警告), emerg(panic,内核恐慌)
+
+			指定级别：
+				*：所有级别；
+				none：没有级别，不记录日志；
+				priority：此级别高于此级别的所有级别
+				=priority：仅此级别
+
+
+	'程序包：rsyslog'
+		程序环境：
+			配置文件：/etc/rsyslog.conf, /etc/rsyslog.d/*.conf
+			主程序：rsyslogd 
+			服务脚本：/etc/rc.d/init.d/rsyslog
+			Unit File：/usr/lib/systemd/system/rsyslog.service 
+			C6：service rsyslogd {start|stop|restart|status}
+			C7: systemctl start|stop|restart|status rsyslog.service
+			
+		'配置文件格式：'
+			由三部分组成：
+				MODULES
+				GLOBAL DRICTIVES
+				RULES：定义日志记录规则
+
+
+				'其中日志保存地址如果有 "-" 表示：异步写入日志'
+				
+
+			RULES:
+				facility.priority	target 
+				
+				priority：
+					*：所有级别
+					none：没有级别，不记录日志；
+					PRIORITY：此级别（含）及其上所有级别的信息；
+					=PRIORITY：仅记录指定的级别的日志信息；
+					
+				facility：
+					*：所有设施；
+					f1,f2,...：指定的列表；
+					
+				target：
+					文件：将日志信息记录到指定的文件中；-表示异步写入；
+					用户：将日志事件通知给指定的用户；通过将信息发送给登录到系统上的用户终端进行；
+					'日志服务器：@host，把日志通过网络送往指定的服务器；'
+						@172.16.1.70
+
+					管道：| COMMAND
+					
+		
+
+		'运行rsyslog为服务器：'(这里要实现这种功能，必须在两台服务器之间都要开启udp和tcp模块)
+			# Provides UDP syslog reception
+			$ModLoad imudp
+			$UDPServerRun 514
+
+			# Provides TCP syslog reception
+			$ModLoad imtcp
+			$InputTCPServerRun 514
+
+			#指定保存日志的服务器IP地址
+			*.info;mail.none;authpriv.none;cron.none                @172.16.1.70
+
+			
+			重启服务 $ systemctl restart rsyslog.service 
+
+
+		
+		其它的日志文件：
+			/var/log/btmp：当前系统上，用户尝试登录失败相关的日志；
+				lastb命令查看
+				
+			/var/log/wtmp：当前系统上，用户正常 登录的日志；
+				last命令查看
+					-n #：仅查看最近#条记录；
+					
+				lastlog命令：用于查看每个用户最近一次登录时间；
+			
+			/var/log/dmesg：系统引导过程中的日志信息；
+				文本文件查看工具；
+				也可以使用dmesg命令查看；
+				
+	
+
+	'rsyslog记录日志于mysql：'
+		(1) 安装rsyslog连接至mysql的模块；
+			$ yum install rsyslog-mysql 
+		
+		(2) 在mysql中创建专用于rsyslog-mysql的用户账号；
+			mysql> GRANT ALL ON Syslog.* TO 'USERNAME'@'HOST' IDENTIFIED BY 'PASSWORD'
+		
+		(3) 生成所需的数据库和表；
+			$ mysql  -uUSERNAME -hHOST -p < /usr/share/doc/rsyslog-7.4.7/mysql-createDB.sql
+		
+		(4) 配置rsyslog使用ommysql模块
+			$ vim /etc/rsyslog.conf 
+			添加如下信息
+			### MODULES ###
+			$ModLoad  ommysql 
+			
+		(5) 配置RULES，将某facility的日志发往mysql
+			### RULES ###
+			facility.priority 	:ommysql:DBHOST,DB,DBUSERNAME,DBUSERPASS
+				DBHOST：数据库地址
+				DB：数据库名称
+				DBUSERNAME：数据库远程连接用户名
+				DBUSERPASS：数据库远程连接密码
+
+		(6) 重启rsyslog进程
+
+			$ systemctl restart rsyslog.service 
+
+			在数据库查看表：
+				$ mysql 
+				> select * from Syslog.SystemEvents;
+		
+		(7) 提供Web GUI工具loganalyzer
+			(a) 配置amp组合；
+				$ yum install php php-mysql php-gd httpd
+
+
+			(b) 安装loganalyzer
+				$ lftp 172.16.0.1
+				lftp> cd pub/Sources/sources/loganalyzer
+				lftp> get loganalyzer-3.6.5.tar.gz
+				$ tar xf loganalyzer-3.6.5.tar.gz
+				$ cd  loganalyzer-3.6.5
+				$ cp -r loganalyzer-3.6.5/src  /var/www/html/loganalyzer
+				$ cp contrib/*.sh  /var/www/html/loganalyzer
+				$ cd  /var/www/html/loganalyzer
+				$ chmod +x config.php
+				
+			$ systemctl start httpd 
+				
+				
+			通过浏览器访问：
+				http://HOST/loganalyzer/install.php 
+				
+
+				在选择过程中选择：
+					MySQL Native, Syslog Fiel
+					
+					Table type要选择“Monitorware”
+
+				填写数据库各种信息：
+					数据库HOST
+					数据库名字
+					数据库用户名
+					数据库密码
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

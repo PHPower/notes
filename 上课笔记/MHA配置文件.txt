@@ -1,0 +1,26 @@
+MHA配置文件 
+
+
+$ cat /etc/masterha/app1.cnf
+
+[server default]
+user=mhaadmin
+password=mhapass
+manager_workdir=/data/masterha/app1
+manager_log=/data/masterha/app1/manager.log
+remote_workdir=/data/masterha/app1
+ssh_user=root
+repl_user=copyuser
+repl_password=root@123
+ping_interval=1
+
+[server1]
+hostname=172.16.1.100
+candidate_master=1
+
+[server2]
+hostname=172.16.1.70
+candidate_master=1
+
+[server3]
+hostname=172.16.1.21

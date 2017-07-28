@@ -1,0 +1,523 @@
+5.31 (Mage LAMP简介)
+
+
+CGI:Common Gateway Interface；通用网关接口
+
+
+'LAMP：'
+	
+	l：Linux
+	a：apache(httpd)
+	m：mysql ,mariadb , 或者 MongoDB(非关系型数据库)
+	p：php ， python , perl 
+
+
+	WEB资源类型：
+		静态资源：原始形式与响应内容一致
+		动态资源：原始形式通常为程序文件，需要在服务端执行之后，将执行结果返回给客户端
+
+		客户端技术：javascript
+		服务器端技术：php,jsp
+
+		CGI：Common Gateway Interface 
+			可以让一个客户端，从网页浏览器向执行在网络服务器上的程序传输数据；CGI描述了客户端和服务器程序之间传输的一种标准；
+
+			程序=指令+数据
+				数据类型：
+					层次模型
+					网状模型
+					关系模型：表(行+列)
+
+				关系模型：IngerSQL,Oracle,Sybase,Infomix,DB2,SQL Server,MySQL,PosigreSQL,MariaDB
+
+			请求流程：
+				Client --> (httpd) --> httpd --> (cgi) --> application server (program file) --> (mysql) --> MySQL 
+
+	各语言连接mysql的驱动模块：
+		'php 连接mysql的驱动模块：'
+			$ yum info php-mysql
+
+		'python 连接mysql的驱动模块：'
+			$ yum info mysql-connector-python
+
+
+	'数据库类型：'
+		SQL系：
+			MySQL --> MariaDB (CentOS7)
+			IngerSQL --> PostgreSQL
+		NoSQL系：
+			Redis、MongoDB，Hbase...
+
+
+
+'php脚本编程语言：'
+	嵌入到html中的嵌入式web程序开发语言；基于zend编译成opcode(二进制格式的字节码，重复运行，可省略编译环境)
+
+	Zend Engine的出现将PHP代码的处理分成了两个阶段：
+		首先是分析PHP并将其转换为称作Zend Opcode的二进制格式(类似Java的字节码)，并将其存储于内容中；第二阶段是使用Zend Engine去执行这些转换后的Opcode
+
+	'php的opcode：'
+
+		Opcode是一种PHP脚本编译后的中间语言。
+			1、Scanning(Lexing) —— 将PHP代码转换为语言片段(Tokens)
+			2、Parsing —— 将Tokens转换成简单而有意义的表达式
+			3、Compilation —— 将表达式编译成Opocdes
+			4、Execution —— 顺次执行Opcodes，每次一条，从而实现PHP脚本的功能
+
+				扫描-->分析-->编译-->执行
+
+	'php的加速器'
+
+		基于PHP的特殊扩展机制如opcode缓存扩展也可以将opcode缓存于php的共享内存中，从而可以让同一段代码的后续重复执行时跳过编译阶段以提高性能。由此也可以看出，这些加速器并非真正提高了opcode的运行速度，而仅是通过分析opcode后并将它们重新排列以达到快速执行的目的。
+
+		常见的php加速器有：
+
+		1、APC (Alternative PHP Cache)
+		遵循PHP License的开源框架，PHP opcode缓存加速器，目前的版本不适用于PHP 5.4。项目地址，http://pecl.php.net/package/APC。
+
+		2、eAccelerator
+		源于Turck MMCache，早期的版本包含了一个PHP encoder和PHP loader，目前encoder已经不在支持。项目地址， http://eaccelerator.net/。
+
+		3、XCache
+		快速而且稳定的PHP opcode缓存，经过严格测试且被大量用于生产环境。项目地址，http://xcache.lighttpd.net/
+
+		4、Zend Optimizer和Zend Guard Loader
+		Zend Optimizer并非一个opcode加速器，它是由Zend Technologies为PHP5.2及以前的版本提供的一个免费、闭源的PHP扩展，其能够运行由Zend Guard生成的加密的PHP代码或模糊代码。 而Zend Guard Loader则是专为PHP5.3提供的类似于Zend Optimizer功能的扩展。项目地址，http://www.zend.com/en/products/guard/runtime-decoders
+
+		5、NuSphere PhpExpress
+		NuSphere的一款开源PHP加速器，它支持装载通过NuSphere PHP Encoder编码的PHP程序文件，并能够实现对常规PHP文件的执行加速。项目地址，http://www.nusphere.com/products/phpexpress.htm
+
+
+
+
+'LAMP'
+	
+	httpd：接收用户的web请求；静态资源则直接响应；动态资源为php脚本，对此类资源的请求将交由php来运行；
+	php：运行php程序；
+	MariaDB：数据管理系统； 
+		
+	http与php结合的方式：
+		CGI 
+		FastCGI 
+		modules (把php编译成为httpd的模块)
+			MPM:
+				prefork: libphp5.so
+				event, worker: libphp5-zts.so
+
+
+	'php 的fpm模块'
+		[root@httpd-7 ~]# yum info php-fpm
+		已加载插件：fastestmirror, langpacks
+		Loading mirror speeds from cached hostfile
+		可安装的软件包
+		名称    ：php-fpm
+		架构    ：x86_64
+		版本    ：5.4.16
+		发布    ：36.el7_1
+		大小    ：1.4 M
+		源    ：base
+		简介    ： PHP FastCGI Process Manager
+		网址    ：http://www.php.net/
+		协议    ： PHP and Zend and BSD
+		描述    ： PHP-FPM (FastCGI Process Manager) is an alternative PHP FastCGI
+		         : implementation with some additional features useful for sites of
+		         : any size, especially busier sites.
+
+
+	安装lamp：
+		CentOS 6: httpd, php, mysql-server, php-mysql
+					# service httpd  start
+					# service  mysqld  start
+		CentOS 7: httpd, php, php-mysql, mariadb-server
+			# systemctl  start  httpd.service
+			# systemctl  start  mariadb.service
+			
+			MySQL的命令行客户端程序：mysql
+				-u 
+				-h
+				-p
+				
+				支持SQL语句对数据管理：
+					DDL，DML
+						DDL： CREATE， ALTER， DROP， SHOW
+						DML： INSERT， DELETE，SELECT， UPDATE
+						
+				授权能远程的连接用户：
+						mysql> GRANT  ALL  PRIVILEGES  ON  db_name.tbl_name TO  username@host  IDENTIFIED BY 'password'; 
+
+				[root@httpd-7 ~]# systemctl start mariadb.service
+				[root@httpd-7 ~]# ss -tnl
+				State      Recv-Q Send-Q Local Address:Port               Peer Address:Port
+				LISTEN     0      50           *:3306                     *:*
+				LISTEN     0      128          *:22                       *:*
+				LISTEN     0      128    127.0.0.1:631                      *:*
+				LISTEN     0      100    127.0.0.1:25                       *:*
+				LISTEN     0      128         :::80                      :::*
+				LISTEN     0      128         :::22                      :::*
+				LISTEN     0      128        ::1:631                     :::*
+				LISTEN     0      100        ::1:25                      :::*
+				[root@httpd-7 ~]# mysql
+				Welcome to the MariaDB monitor.  Commands end with ; or \g.
+				Your MariaDB connection id is 2
+				Server version: 5.5.44-MariaDB MariaDB Server
+
+				Copyright (c) 2000, 2015, Oracle, MariaDB Corporation Ab and others.
+
+				Type 'help;' or '\h' for help. Type '\c' to clear the current input statement.
+
+				MariaDB [(none)]> SHOW DATABASES;
+				+--------------------+
+				| Database           |
+				+--------------------+
+				| information_schema |
+				| mysql              |
+				| performance_schema |
+				| test               |
+				+--------------------+
+				4 rows in set (0.00 sec)
+
+														
+			php测试代码：
+				$ vim /var/www/html/phpinfo.php 
+				<?php 
+					phpinfo();
+				?>
+			
+			php连接mysql的测试代码：
+				[root@httpd-7 ~]# vim /var/www/html/mysql.ph
+				<?php
+					$conn = mysql_connect('127.0.0.1','root','');
+					if ($conn)
+					        echo "OK";
+					else
+					        echo "Failure";
+				?>	
+					
+		安装wordpress：(测试一下)	
+			1、在mac上操作：
+				scp Downloads/wordpress-4.7.4-zh_CN.tar.gz root@172.16.1.61:/root				
+			2、解压文件
+				$ tar -xvf  wordpress-4.7.4-zh_CN.tar.gz
+			3、进入目录
+				[root@httpd-7 ~]# cd wordpress/
+				[root@httpd-7 wordpress]# cd ..
+				[root@httpd-7 ~]# cp -a wordpress /var/www/html/blog/
+			4、创建WordPress数据库，并测试
+				[root@httpd-7 ~]# mysql
+				Welcome to the MariaDB monitor.  Commands end with ; or \g.
+				Your MariaDB connection id is 9
+				Server version: 5.5.44-MariaDB MariaDB Server
+
+				Copyright (c) 2000, 2015, Oracle, MariaDB Corporation Ab and others.
+
+				Type 'help;' or '\h' for help. Type '\c' to clear the current input statement.
+
+				MariaDB [(none)]> GRANT ALL ON wordpress.* TO 'maxie'@'%' IDENTIFIED BY 'root@123';
+				Query OK, 0 rows affected (0.00 sec)
+
+				MariaDB [(none)]> exit
+				Bye
+				[root@httpd-7 ~]# mysql -umaxie -proot@123 -h172.16.1.61
+				Welcome to the MariaDB monitor.  Commands end with ; or \g.
+				Your MariaDB connection id is 10
+				Server version: 5.5.44-MariaDB MariaDB Server
+
+				Copyright (c) 2000, 2015, Oracle, MariaDB Corporation Ab and others.
+
+				Type 'help;' or '\h' for help. Type '\c' to clear the current input statement.
+
+				MariaDB [(none)]> SHOW DATABASES;
+				+--------------------+
+				| Database           |
+				+--------------------+
+				| information_schema |
+				| test               |
+				+--------------------+
+				2 rows in set (0.00 sec)
+
+	!!!	!!!	!!!	'关闭MySQL主机名解析：'
+					$ vim /etc/my.cnf 		或者 vim /etc/my.cnf.d/server.cnf 都可以   centos6建议使用在第一个文件中添加
+					添加一行
+					skip-name-resolve=NO
+					$ systemctl restart http.service 
+
+				创建Wordpress的数据库：
+					>CREATE DATABASE wordpress_db;
+				创建Wordpress的数据库用户：
+					>CREATE USER 'wordpress_admin'@'%' IDENTIFIED BY 'root@123';
+				授权WordPress数据库用户访问WordPress的数据库：
+					>GRANT ALL ON wordpress_db.* TO 'wordpress_admin'@'%'  IDENTIFIED BY 'root@123';
+				刷新授权：
+					>FLUSH PRIVILEGES;
+
+
+'php详解：'
+	
+	配置文件：
+		/etc/php.ini 
+		其中的;分号表示注释
+
+		官方配置文档：
+			http://php.net/configuration.file
+		配置端的文档：
+			http://php.net/ini.sections
+		核心配置选项文档：
+			http://php.net/ini.list.php 			
+
+	脚本语言解释器
+		配置文件：/etc/php.ini,  /etc/php.d/*.ini 
+		
+		配置文件在php解释器启动时被读取，因此，对配置文件的修改如何生效？
+			Modules：重启httpd服务；
+			FastCGI：重启php-fpm服务；
+		
+		ini：
+			[foo]：Section Header
+			directive = value
+			
+			注释符：较新的版本中，已经完全使用;进行注释；
+			#：纯粹的注释信息
+			;：用于注释可启用的directive
+			
+			php.ini的核心配置选项文档：  http://php.net/manual/zh/ini.core.php
+			php.ini配置选项列表：http://php.net/manual/zh/ini.list.php
+			
+	<?php 
+		...php code...
+	?>
+
+
+'MySQL详解：'
+	
+
+
+	'数据模型：层次模型、网状模型、关系模型'
+			
+		'关系模型：'
+			二维关系：
+				表：row, column
+				索引：index
+				视图：view
+				
+			'SQL接口：Structured Query Language'	
+				类似于OS的shell接口；也提供编程功能；
+				
+				ANSI： SQL标准，SQL-86, SQL-89, SQL-92, SQL-99, SQL-03, ...
+					xml
+					
+				DDL：Data Defined Language(数据定义语言)
+					CREATE, ALTER, DROP、SHOW(仅Mysql)
+
+				DML: Data Manapulating Language
+					INSERT, DELETE, UPDATE, SELECT
+					
+				'编程接口：选择、循环；'
+				
+				SQL代码：
+					存储过程：procedure
+					存储函数：function
+					触发器：trigger
+					事件调度器：event scheduler
+					
+					例程：routine
+
+					
+			用户和权限：
+				用户：用户名和密码；
+				权限：管理类、数据库、表、字段
+				
+		'DBMS：DataBase Management System'
+			RDBMS：Relational
+				
+			MySQL：单进程，多线程 
+				用户连接：通过线程来实现；
+					线程池：
+	
+	'事务(Transaction)：组织多个操作为一个整体，要么全部都执行，要么全部都不执行；'
+		“回滚”， rollback
+		
+		Bob:8000, 8000-2000
+		Alice:5000, 5000+2000
+		
+		一个存储系统是否支持事务，测试标准：
+			ACID：
+				A：原子性；
+				C：一致性；
+				I：隔离性；
+				D：持久性；
+		
+		SQL接口：分析器和优化器
+		存储引擎：
+
+
+	'数据库：数据集合'
+			表：为了满足范式设计要求，将一个数据集分拆为多个；
+			
+	'约束：constraint，向数据表插入的数据要遵守的限制规则；'
+		主键：一个或多个字段的组合，填入主键中的数据，必须不同于已存在的数据；不能为空；
+		外键：一个表中某字段中能插入的数据，取决于另外一张表的主键中的数据；
+		惟一键：一个或多个字段的组合，填入惟一键中的数据，必须不同于已存在的数据；可以为空；
+		检查性约束：取决于表达式的要求；
+		
+	'索引：将表中的某一个或某些字段抽取出来，单独将其组织一个独特的数据结构中；'
+		常用的索引类型：
+			树型：
+			hash：
+			
+		注意：有助于读请求，但不利于写请求；
+		
+	'关系运算：'
+		选择：挑选出符合条件的行；
+		投影：挑选出符合需要的列；
+		连接：将多张表关联起来；
+			
+	'数据抽象：'
+		物理层：决定数据的存储格式，即如何将数据组织成为物理文件；
+		逻辑层：描述DB存储什么数据，以及数据间存在什么样的关系；
+		视图层：描述DB中的部分数据；
+		
+	'关系模型的分类：'
+		关系模型
+		实体-关系模型
+		基于对象的关系模型
+		半结构化关系模型
+	
+
+	'补充材料：RDMBS设计范式基础概念'
+
+		设计关系数据库时，遵从不同的规范要求，设计出合理的关系型数据库，这些不同的规范要求被称为不同的范式，各种范式呈递次规范，越高的范式数据库冗余越小。
+
+		'目前关系数据库有六种范式：第一范式（1NF）、第二范式（2NF）、第三范式（3NF）'、巴德斯科范式（BCNF）、第四范式(4NF）和第五范式（5NF，又称完美范式）。满足最低要求的范式是第一范式（1NF）。在第一范式的基础上进一步满足更多规范要求的称为第二范式（2NF），其余范式以次类推。一般说来，数据库只需满足第三范式(3NF）就行了。
+
+		(1) 第一范式（1NF）
+
+		所谓第一范式（1NF）是指在关系模型中，对域添加的一个规范要求，所有的域都应该是原子性的，即数据库表的每一列都是不可分割的原子数据项，而不能是集合，数组，记录等非原子数据项。即实体中的某个属性有多个值时，必须拆分为不同的属性。在符合第一范式（1NF）表中的每个域值只能是实体的一个属性或一个属性的一部分。简而言之，第一范式就是无重复的域。
+
+		说明：在任何一个关系数据库中，第一范式（1NF）是对关系模式的设计基本要求，一般设计中都必须满足第一范式（1NF）。不过有些关系模型中突破了1NF的限制，这种称为非1NF的关系模型。换句话说，是否必须满足1NF的最低要求，主要依赖于所使用的关系模型。
+
+		(2) 第二范式(2NF)
+
+		第二范式（2NF）是在第一范式（1NF）的基础上建立起来的，即满足第二范式（2NF）必须先满足第一范式（1NF）。第二范式（2NF）要求数据库表中的每个实例或记录必须可以被唯一地区分。选取一个能区分每个实体的属性或属性组，作为实体的唯一标识。
+
+		第二范式（2NF）要求实体的属性完全依赖于主关键字。所谓完全依赖是指不能存在仅依赖主关键字一部分的属性，如果存在，那么这个属性和主关键字的这一部分应该分离出来形成一个新的实体，新实体与原实体之间是一对多的关系。为实现区分通常需要为表加上一个列，以存储各个实例的唯一标识。简而言之，第二范式就是在第一范式的基础上属性完全依赖于主键。
+
+		(3) 第三范式（3NF）
+
+		第三范式（3NF）是第二范式（2NF）的一个子集，即满足第三范式（3NF）必须满足第二范式（2NF）。简而言之，第三范式（3NF）要求一个关系中不能包含已在其它关系已包含的非主关键字信息。简而言之，第三范式就是属性不依赖于其它非主属性，也就是在满足2NF的基础上，任何非主属性不得传递依赖于主属性。
+
+
+
+'MariaDB详解：'
+	'MariaDB主要有两类程序文件：'
+		Client：mysql，mysqldump，mysqladmin
+		Server：mysqld，mysqld_safe，mysqld_multi
+
+	'mysql内部命令：'
+		>HELP; 命令查看帮助信息
+		>HELP contents; 查看详细的帮助信息
+		>HELP 'COMMAND'; 查看命令的帮助信息
+		>use DATABASE_NAME; 选定当前使用哪个库为默认库(设置完之后，直接对其操作)
+		>DESC table_name; 查看某个表的表结构
+		>DROP TABEL TABEL_NAME; 删除表
+		>DROP DATABSE DB_NAME; 删除指定数据库
+		>SELECT * FROM TB_NAME\G; 以每行的结构显示表内容 \G
+
+		授权能远程连接的用户：
+			mysql> GRANT  ALL  PRIVILEGES  ON  db_name.tbl_name TO  username@host  IDENTIFIED BY 'password'; 
+		修改指定用户的密码：
+			SET PASSWORD FOR 'root'@'127.0.0.1' = PASSWORD('root@123');
+		重读授权表：
+			FLUSH PRIVILEGES;
+		重新连接MySQL：
+			mysql -uroot -plocalhost -proot@123
+
+
+	Unireg
+	
+	MySQL AB  --> MySQL
+		Solaris：二进制版本；
+		
+		www.mysql.com
+		
+	MariaDB: www.mariadb.org
+	
+	MariaDB的特性：
+		插件式存储引擎：存储管理器有多种实现版本，彼此间的功能和特性可能略有区别；用户可根据需要灵活选择； 
+		
+		存储引擎也称为“表类型”；
+		
+		(1) 更多的存储引擎；
+			MyISAM：不支持事务；
+			MyISAM --> Aria
+			InnoDB --> XtraDB 
+				：支持事务；
+		(2) 诸多扩展和新特性；
+		(3) 提供了较多的测试组件；
+		(4) truly open source；
+		
+	MySQL的发行机制：
+		Enterprise：提供了更丰富的功能；
+		Community：
+
+
+	'安装phpadmin：通过web界面管理数据库'记得下载老版本 4.0版本
+		注意：在执行这些步骤之前，需要在MySQL中授权可远程连接的用户
+
+		1、下载phpmyadmin
+		2、解压文件并移动到httpd的家目录
+			$ unzip phpMyAdmin-4.0.1-all-languages.zip
+			$ mv phpMyAdmin-4.0.10.20-all-languages /var/www/html/phpadmin
+			编辑配置文件：
+				$ cp config.sample.inc.php config.inc.php
+				$ vim config.inc.php
+				cfg['blowfish_secret'] = 'ko08VpTUc8fiiqmQdKmKETHwQD4'; /* YOU MUST FILL IN THIS FOR COOKIE AUTH! */
+				修改其中blowfish_secret的值为随机数
+
+		3、安装php-mbstring
+			yum install php-mbstring
+		4、重启httpd
+		5、打开网页即可
+
+
+
+'作业：'
+		练习题：分别使用httpd-2.2和httpd-2.4实现；
+	
+		1、建立httpd服务，要求：
+			(1) 提供两个基于名称的虚拟主机：
+				www1.stuX.com，页面文件目录为/web/vhosts/www1；错误日志为/var/log/httpd/www1/error_log，访问日志为/var/log/httpd/www1/access_log；
+				www2.stuX.com，页面文件目录为/web/vhosts/www2；错误日志为/var/log/httpd/www2/error_log，访问日志为/var/log/httpd/www2/access_log；
+			(2) 通过www1.stuX.com/server-status输出其状态信息，且要求只允许提供账号的用户访问；
+			(3) www1不允许192.168.1.0/24网络中的主机访问；
+			
+		2、为上面的第2个虚拟主机提供https服务，使得用户可以通过https安全的访问此web站点；
+			(1) 要求使用证书认证，证书中要求使用国家（CN），州（Beijing），城市（Beijing），组织为(MageEdu)；
+			(2) 设置部门为Ops, 主机名为www2.stuX.com；
+		
+		3、安装Discuz：论坛
+		4、安装phpwind：论坛
+		5、安装wordpress
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

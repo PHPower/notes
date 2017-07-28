@@ -1,0 +1,309 @@
+6.12 (Mage iptables进阶)
+
+回顾：
+	iptables/netfilter：
+		netfilter：raw，mangle, nat, filter
+			PREROUTING --> INPUT
+			PREROUTING --> FORWARD --> POSTROUTING
+			OUTPUT --> POSTROUTING 
+		filter：INPUT，FORWARD，OUTPUT
+		nat：PREROUTING，INPUT，OUTPUT，POSTROUTING
+		
+	iptables：
+		[-t table] COMMAND [chain] rule-specification
+			-m matchname [per-match-options]
+			-t targetname [per-target-options]
+			[options]
+	
+
+	匹配 条件：
+			基本匹配条件：-s, -d, -p, -m, -i, -o
+			扩展匹配条件：
+				隐式扩展：
+					-p tcp: --dport, --sport, --tcp-flags, --syn 
+					-p udp：--dport, --sport
+					-p imcp: --icmp-type
+				显式扩展：
+					multiport：--sports, --dports
+					iprange：--src-range, --dst-range
+					time：--timestart, --timestop, --weekdays, --monthdays, --datestart, --datestop
+					string：--algo {bm|kmp}, --string
+					connlimit：--connlimit-upto, --connlimit-above
+					limit：--limit, --limit-burst
+					state：--state
+						NEW, ESTABLISHED, RELATED, INVALID, UNTRACKED
+						
+		target：
+			-j：
+				ACCEPT/DROP
+				REJECT：--reject-with
+				LOG：--log-level, --log-prefix
+				
+				自定义链：
+					RETURN：回到主链
+
+	iptables-save/iptables-restore
+	
+
+
+
+iptables(3)：
+	
+	'iptables/netfilter网络防火墙：'
+		(1) 网关；
+		(2) filter表的FORWARD链；
+		
+		要注意的问题：
+			(1) 请求-响应报文均会经由FORWARD链，要注意规则的方向性；
+			(2) 如果要启用conntrack机制，建议将双方向的状态为ESTABLISHED的报文直接放行；
+			'(3) 在NEW规则时，不能一起写RELATED规则'
+
+
+			'创建iptables配置文件开机自动导入的Unit File文件：('步骤可能有问题，之后再处理')'
+
+				1、先复制一份别的程序的Unit File： 
+					$ cp /usr/lib/systemd/system/httpd.service /usr/lib/systemd/system/iptables.service
+
+				2、编辑配置文件：
+					$ vim /usr/lib/systemd/system/iptables.service
+					[Unit]
+					Description=iptables rules constructor							#描述
+					After=network.target remote-fs.target nss-lookup.target
+
+					[Service]
+					Type=notify
+					ExecStart=/usr/sbin/iptables-restore /root/iptables-rules/rules1		#启动时执行
+					ExecReload=/usr/sbin/iptables-restore /root/iptables-rules/rules1		#重载时执行
+					ExecStop=/usr/sbin/iptables -F 											#停止时执行
+
+					[Install]
+					WantedBy=multi-user.target		#多用户模式下运行
+
+				3、装载配置文件：
+					$ systemctl daemon-reload
+
+				4、启动自定义配置：
+					$ systemctl enable iptables
+					$ systemctl start iptables
+
+
+		'ping同一机器上的两张不同地址的网卡，可以ping通，是因为网卡地址是在内核上的，所以同在一个内核，都能ping通'
+
+
+
+	'NAT: Network Address Translation'
+		请求报文：由管理员定义；
+		响应报文：由NAT的conntrack机制自动实现； 
+		
+		请求报文：
+			改源地址：SNAT，MASQUERADE
+			改目标地址：DNAT
+			
+	iptables/netfilter：
+		'NAT定义在nat表；'
+			PREROUTING，INPUT，OUTPUT，POSTROUTING
+			
+			SNAT：POSTROUTING
+			DNAT：PREROUTING
+			PAT：端口映射
+			
+	'target：'
+		SNAT：源地址转换（请求来自内网，隐藏客户端）
+			This  target  is only valid in the nat table, in the POSTROUTING and INPUT chains, and user-defined chains which are only called from those chains.
+			
+			--to-source [ipaddr[-ipaddr]]
+			
+		DNAT：目标地址转换（请求来自外 网，隐藏服务器）可以解决IP地址紧俏的状态
+			只在内核空间辨别目标端口即可，无需监听端口。
+
+			This target is only valid in the nat table, in the PREROUTING and OUTPUT chains, and user-defined chains  which  are only  called from those chains.
+				'响应报文：由DNAT的conntrack机制自动实现；'
+
+			--to-destination [ipaddr[-ipaddr]][:port[-port]]
+			
+		 MASQUERADE：当源地址的外网地址不固定时，使用
+			This target is only valid in the nat table, in the POSTROUTING chain.  It  should  only  be  used  with  dynamically assigned  IP (dialup) connections: if you have a static IP address, you should use the SNAT target.
+			
+			SNAT场景中应用于POSTROUTING链上的规则实现源地址转换，但外网地址不固定时，使用此target；
+			
+		REDIRECT：端口映射(可以在服务器本机进行设置)
+			This  target  is only valid in the nat table, in the PREROUTING and OUTPUT chains, and user-defined chains which are only called from those chains.
+			
+			--to-ports port[-port]
+
+		PNAT：端口转换
+
+			
+	layer7
+			
+			
+		
+	博客作业：iptables/netfilter入门到进阶
+
+
+
+
+
+
+'时间服务器：ntp'
+	
+	对时间要求比较高的服务：https --> 必须与客户端时间大致一致
+	对时间要求不高的服务：
+
+	虚拟机：分配给虚拟机的时间片与物理机CPU时钟周期不相同
+
+	在云计算环境中，必须指定时间服务器(云计算环境都是虚拟机)
+
+
+	'NTP：Network Time Protocol'
+		网络时间服务器
+
+		程序包：ntp
+			既可以作为服务端，也可以作为客户端
+
+		配置文件：
+			/etc/ntp.conf
+			/etc/ntp/
+
+		'拨快时间，而非直接跳转'：
+			目的是为了不让系统出现空白时间段
+
+		端口：123
+
+
+	'CentOS7之后的时间服务器：'
+		chrony：使用ntp协议的时间服务器
+
+			端口：323
+
+			准确的时间同步
+
+			配置文件：
+				/etc/chrony.conf
+
+				server：指明时间服务器地址
+				allow NETADD/NETMASK
+				allow all：允许所有客户端主机使用此服务端同步时间
+				deny NETADDR/NETMASK
+				deny all：拒绝所有客户端
+				bindcmdaddress：命令管理接口监听的地址
+				
+				
+
+			服务端/客户端程序：
+				/usr/sbin/chronyd
+
+			'作为客户端使用：'
+
+				在配置文件添加时间服务器地址：
+					server 172.16.0.1 iburst
+
+				然后启动并设置开机自启：
+					$ systemctl start chronyd.service
+					$ systemctl enable chronyd
+
+			'作为服务端使用：'
+
+				修改配置文件的：
+					# Allow NTP client access from local network.
+					allow 172.16/16
+
+				但是如果服务端如果无法联网，可能不会给这些内网中的服务器提供时间同步
+
+				开启下面的选项，避免无法联网的情况：
+					# Serve time even if not synchronized to any NTP server.
+					local stratum 10
+
+				重启服务：
+					$ systemctl restart chronyd
+
+				再客户端安装chrony，在配置文件添加我们配置的服务端的ip地址：(注释其他时间服务器)
+					$ yum install chrony 
+					$ vim /etc/chrony.conf
+
+					server 172.16.0.1 iburst
+
+
+			'子命令：'
+				chronyc：直接进入交互式模式
+					sourcestats：子命令，时间同步状态
+
+				chronyc COMMAND：可以直接运行交互式模式中的命令
+
+				chronyc help：查看帮助
+
+
+
+
+
+
+
+
+
+
+'tcp_wrapper：'/////////////////////////////
+
+	库文件：libwrap.so，tcp包装器；
+	
+	判断一个服务程序是否能够由tcp_wrapper进行访问控制的方法：
+		(1) 动态链接至libwrap.so库；
+			ldd  /PATH/TO/PROGRAM
+				libwrap.so
+		(2) 静态编译libwrap.so库文件至程序中：
+			strings /PATH/TO/PGRGRAM 
+				hosts_access
+	
+	配置文件：/etc/hosts.allow, /etc/hosts.deny
+		
+		 See 'man 5 hosts_options' and 'man 5 hosts_access' for information on rule syntax.	
+	
+		配置文件语法：
+			daemon_list : client_list[ : option : option ...]
+			
+			daemon_list：程序文件名称列表
+				(1) 单个应用程序文件名；
+				(2) 程序文件名列表，以逗号分隔；
+				(3) ALL：所有受tcp_wrapper控制的应用程序文件；
+				
+			client_list：
+				(1) 单个IP地址或主机名；
+				(2) 网络地址：n.n.n.n/m.m.m.m，n.n.n.；
+				(3) 内建的ACL:
+					ALL：所有客户端主机；
+					LOCAL：Matches any host whose name does not contain a dot character.
+					UNKNOWN
+					KNOWN
+					PARANOID
+					
+				OPERATORS：
+					EXCEPT
+						list1 EXCEPT list2 EXCEPT list3
+						
+						sshd: 172.16. EXCEPT 172.16.100. EXCEPT 172.16.100.68
+		
+			[ : option : option ...]
+			
+				deny：拒绝，主要用于hosts.allow文件中定义“拒绝”规则；
+				allow：允许，主要用于hosts.deny文件中定义”允许“规则；
+				
+				spawn：生成，发起，触发执行用户指定的任意命令，此处通常用于记录日志；
+				
+					vsftpd: 172.16. : spawn /bin/echo $(date) login attempt from %c to %s >> /var/log/tcp_wrapper.log 
+	
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

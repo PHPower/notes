@@ -1,0 +1,752 @@
+5.4上午
+
+'DNS：'
+	对于在网卡配置中的PEERDNS的yes|no的值，是否生效取决于：
+		NetworkManager服务是否关闭，关闭则生效PEERDNS
+	
+	关于Network是否启动，对于/etc/resolv.conf文件的影响
+	以及网卡中的配置文件中PEERDNS的 yes/no的设置，对于/etc/resolv.conf的影响
+
+'网卡配置文件的文档：'
+	/usr/share/doc/initscripts-9.49.30/sysconfig.txt
+
+
+
+'设置网卡的网关gateway：'(网关需要跟本机IP在一个网段)
+
+	1、在网卡的配置文件中的GATEWAY中设置
+	2、在/etc/sysconfig/network中设置
+		GATEWAY=192.168.0.1
+
+	如果在两个文件中都配置了网关，网卡的配置文件的优先级最高
+
+
+'主机名hostname：'
+	
+
+	'centos6：常用设置'
+		/etc/sysconfig/network文件中的HOSTNAME设置
+		设置完之后不会立即生效，在命令行中再执行一遍命令
+		$ hostname maxie.com
+		
+		在/etc/hosts中的第一行最后面添加主机名 
+		/etc/hosts 名字解析的作用
+		
+		注销当前终端再登陆即可
+
+	'centos7：'
+
+
+
+	修改优先级：
+		修改/etc/nsswitch.conf中host
+		hosts:      files dns
+		修改上面的位置，即可改变优先级
+
+
+
+"网络接口配置-Bonding："
+	就是将多块网卡绑定同一IP地址对外提供服务，实现高可用或者负载均衡
+
+	'Bonding工作模式：'
+		
+		Mode 0 (balance-rr)
+			轮转（Round-robin轮循）策略：从头到尾顺序的在每一个slave接口上面发送数据包。
+			本模式提供负载均衡和容错的能力
+		
+		Mode 1 (active-backup)：可以坏一块网卡
+			活动-备份（主备）策略：只有一个slave被激活，当且仅当活动的slave接口失败时才会激活其他slave。
+			为了避免交换机发生混乱此时绑定的MAC地址只有一个外部端口上可见
+		
+		Mode 3 (broadcast)
+			广播策略：在所有的slave接口上传送所有的报文,提供容错能力
+		active-backup、balance-tlb和balance-alb模式不需要交换机的任何特殊配置。其他绑定模式需要配置交换机以便整合链接。
+		如：Cisco 交换机需要在模式0、2 和3 中使用EtherChannel，但在模式4中需要LACP和EtherChannel
+
+
+	'创建bonding设备的配置文件：'
+		/etc/sysconfig/network-scripts/ifcfg-bond0
+			DEVICE=bond0
+			BOOTPROTO=none
+			BONDING_OPTS=“miimon=100 mode=0”	#定义工作模式mode，miimon：100毫秒检查一次（监控时间miimon）
+			IPADDR=172.16.23.150
+			PREFIX=24
+			GATEWAY=172.16.23.16
+
+		/etc/sysconfig/network-scripts/ifcfg-eth0 #每个物理网卡无需在配置IP地址了
+			DEVICE=eth0        #设备名
+			BOOTPROTO=none
+			MASTER=bond0       #由bond0进行管理
+			SLAVE=yes          #现在属于从属关系
+			USERCTL=no
+							上面加`#`号的都是必须有的
+
+		查看bond0状态：cat /proc/net/bonding/bond0
+		查看bond0设备：cat /sys/class/net/bond0
+
+
+
+		miimon是用来进行链路监测的。如果miimon=100，那么系统每100ms 监测一次链路连接状态，如果有一条线路不通就转入另一条线路
+
+	'bond0的详细配置信息：'
+		/sys/class/net/bodn0/下的各种文件
+
+
+	'删除bond0'
+		删除bond0
+			$ ifconfig bond0 down
+			$ rmmod bonding
+
+	'详细帮助'
+		/usr/share/doc/kernel-doc-version/Documentation/networking/bonding.txt
+		https://www.kernel.org/doc/Documentation/networking/bonding.txt
+
+
+	`centos6：`
+		做实验时，两张网卡都需要在一个网络内（都在桥接，或者都在主机模式下）
+			查看那张网卡是主的，down掉之后查看是否可以ping通
+				down：直接在vmware中断开连接，不要使用命令
+
+		实验步骤：
+			1、关闭NetworkManager服务
+				添加bond0的配置文件以及eth0和1的配置文件
+			2、重启network服务
+			3、查看/proc/net/bonding/bond0
+
+'centos7的网络属性配置：'
+	CentOS 6之前，网络接口使用连续号码命名：eth0、eth1等,当增加或删除网卡时，名称可能会发生变化
+
+	CentOS 7使用基于硬件，设备拓扑和设置类型命名：
+		(1) 网卡命名机制
+		systemd对网络设备的命名方式
+			(a) 如果Firmware或BIOS为主板上集成的设备提供的索引信息可用，且可预测则根据此索引进行命名，例如eno1
+			(b) 如果Firmware或BIOS为PCI-E扩展槽所提供的索引信息可用，且可预测，则根据此索引进行命名，例如ens1
+			(c) 如果硬件接口的物理位置信息可用，则根据此信息进行命名，例如enp2s0
+			(d) 如果用户显式启动，也可根据MAC地址进行命名，enx2387a1dc56
+			(e) 上述均不可用时，则使用传统命名机制
+
+
+'网卡名称：'
+
+	基于BIOS支持启用biosdevname软件（此软件由戴尔公司开发）
+		内置网卡：em1,em2
+		pci卡：pYpXY：slot ,X:port
+
+		[root@centos7 ~]# rpm -qi biosdevname
+			Name        : biosdevname
+			Version     : 0.6.2
+			Release     : 1.el7
+			Architecture: x86_64
+			URL         : http://linux.dell.com/files/biosdevname
+
+		(2) 名称组成格式
+			en: Ethernet 有线局域网
+			wl: wlan无线局域网
+			ww: wwan无线广域网
+			名称类型：
+			o<index>: 集成设备的设备索引号
+			s<slot>: 扩展槽的索引号
+			x<MAC>: 基于MAC地址的命名
+			p<bus>s<slot>: enp2s1
+
+	'网卡设备的命名过程'：
+		第一步：
+			udev, 辅助工具程序/lib/udev/rename_device/usr/lib/udev/rules.d/60-net.rules
+		第二步：
+			biosdevname会根据/usr/lib/udev/rules.d/71-biosdevname.rules
+		第三步：
+			通过检测网络接口设备，根据/usr/lib/udev/rules.d/75-net-description
+			ID_NET_NAME_ONBOARD
+			ID_NET_NAME_SLOT
+			ID_NET_NAME_PATH
+	
+
+	'采用传统命名方式：'
+		使用传统命名方式：
+			(1) 编辑/etc/default/grub配置文件
+				GRUB_CMDLINE_LINUX="rhgbquiet net.ifnames=0"
+				或：修改/boot/grub2/grub.cfg
+					在grub.cfg文件中的linux16一行的最后位置添加 "net.ifnames=0"这个信息
+
+			(2) 为grub2生成其配置文件（修改/etc/default/grub，需要执行以下命令，如果是/boot/grub2/grub.cfg则无需执行）
+				grub2-mkconfig -o /etc/grub2.cfg
+			(3) 重启系统
+
+
+'CentOS7管理网络：'
+
+	'nmcli命令：'
+		地址配置工具：nmcli
+		图形工具：nm-connection-editor
+		字符界面：nmtui-edit、nmtui
+		设置主机名：nmtui-hostname
+
+		
+		语法：
+			nmcli[ OPTIONS ] OBJECT { COMMAND | help }
+				设备（数据链路层）：device -show and manage network interfaces
+				$ nmcli device help
+
+					[root@centos7 ~]# nmcli device status   #查看网卡状态
+					设备  类型      状态    CONNECTION
+					eth0  ethernet  连接的  eth0
+					eth1  ethernet  连接的  eth1
+					lo    loopback  未管理  --
+
+				连接：connection -start, stop, and manage network connections
+				nmcli connection help
+
+
+		修改IP地址等属性：
+			$ nmcli connection modify IFACE [+|-]setting.propertyvalue
+				setting.property:
+				ipv4.addresses ipv4.gateway
+				ipv4.dns1 ipv4.method manual | auto
+		
+
+		修改配置文件执行生效：systemctl restart network
+			$ nmcli connection reloa d
+		
+
+		nmcli命令生效：
+			$ nmcli con down eth0 ;nmcli con up eth0
+
+		nmcli断开连接网卡：
+			$ nmcli device disconnect eth0
+
+			连接：
+			$ nmcli device connect eth0
+
+		nmcli设置主机名：
+			vim /etc/hostname
+			或者
+			hostnamectl set-hostname HOSTNAME（即生效，也修改文件）
+
+
+
+		
+		'针对不同环境，设置不同的网络配置：'
+				
+				查看一共有几套配置：
+					$ nmcli connection show
+					
+					[root@centos7 ~]# nmcli connection show
+					名称                UUID                                  类型            设备
+					eth1                bffb57bd-26c2-401f-b460-84f25c3745ea  802-3-ethernet  eth1
+					Wired connection 1  13d9e9c4-3b1a-4b1d-bec1-db1d519e3632  802-3-ethernet  --
+					eth0                514a1e1c-2fe1-4087-b269-6a1e17f1ef22  802-3-ethernet  eth0
+
+				删除配置：
+					$ nmcli connection delete eth0
+					如果是直接删除文件，需要删除之后，reload一下
+
+				修改配置中的名称信息：
+					$ nmcli connection modify Wired\ connection\ 1   connection.id con-eth1
+
+						其中：modify后跟的是需要修改的名称，connection.id 后跟的是修改后的名称
+
+
+			'多个配置文件，针对一个网卡：'
+
+				增加一套配置：（拷贝配置文件也可以，修改其中的内容，修改NAME，UUID，IPADDR，无需修改MAC地址）
+				$ nmcli connection add con-name eth1-office ipv4.method manual ipv4.addresses 192.168.1.121/24 type ethernet ifname eth1
+					add：添加
+					con-name：设置配置名
+					ipv4.method：设置ip的设置类型（DHCP或者手动指定manual）
+						手工指定IP：manual
+						自动获取：auto
+
+					ipv4.addresses：设置IP地址
+					type：上网类型
+					ifname：这套配置，针对哪个网卡
+
+
+				生效配置：
+				$ nmcli connection down eth1
+				$ nmcli connection up con-eth1
+				$ nmcli connection reload
+					'（如果不是手动cp配置文件，其实只要up一条命令即可）'
+
+			'多个IP地址，绑定一个网卡：'
+
+				在一套配置上，再加一个IP：
+				$ nmcli connection modify con-eth1 +ipv4.addresses 2.2.2.2/24
+				$ nmcli connection show
+				$ nmcli connection up con-eth1
+					重启网络，之后生效
+
+
+		实例：
+			修改连接设置 
+				nmcli con mod “static” connection.autoconnectno
+				nmcli con mod “static” ipv4.dns 172.25.X.254
+				nmcli con mod “static” +ipv4.dns 8.8.8.8
+				nmcli con mod “static” -ipv4.dns 8.8.8.8
+				nmcli con mod “static” ipv4.addresses “172.25.X.10/24 172.25.X.254”
+				nmcli con mod “static” +ipv4.addresses 10.10.10.10/16
+			
+			DNS设置，存放在/etc/resolv.conf文件中
+				PEERDNS=no 表示当IP通过dhcp自动获取时，dns仍是手动设置，不自动获取。等价于下面命令：
+				
+				$ nmcli con mod “system eth0” ipv4.ignore-auto-dns yes
+
+
+
+		'nmcli实现多网卡绑定（bonding）：'
+
+			添加bonding接口：
+				$ nmcli connection add type bond con-name mybond0 ifname mybond0 mode active-backup
+					ifname：后面跟虚拟的绑定接口
+				执行完命令后，会生成配置文件 ifcfg-mybond0
+
+				添加IP到mybond0：
+				$ nmcli connection modify mybond0 ipv4.addresses 192.168.1.121/24 ipv4.gateway 192.168.1.1 
+
+			添加从属接口：
+				$ nmcli connection add type bond-slave ifname eth1 master mybond0
+				$ nmcli connection add type bond-slave ifname eth0 master mybond0
+
+				注：如无为从属接口提供连接名，则该名称是接口名称加类型构成
+
+
+			要启动绑定，则必须首先启动从属接口:
+				$ nmcli connection up bond-slave-eth0
+				$ nmcli connection up bond-slave-eth1
+
+			启动绑定：
+				$ nmcli connection up mybond0
+
+
+'网络组Network Teaming：'（CentOS7）
+	
+	网络组：是将多个网卡聚合在一起方法，从而实现容错和提高吞吐量
+
+	网络组不同于旧版中bonding技术，提供更好的性能和扩展性
+
+	网络组由内核驱动和teamd守护进程实现.
+	
+	多种方式runner：
+		broadcast
+		roundrobin
+		activebackup
+		loadbalance
+		lacp(implements the 802.3ad Link Aggregation Control Protocol)
+
+
+	启动网络组接口不会自动启动网络组中的port接口
+	启动网络组接口中的port接口总会自动启动网络组接口
+	禁用网络组接口会自动禁用网络组中的port接口
+	没有port接口的网络组接口可以启动静态IP连接
+	启用DHCP连接时，没有port接口的网络组会等待port接口的加入
+
+
+	'创建网络组接口：'（相当于bond0）
+		$ nmcli connection add type team con-name CNAME ifname INAME [configJSON]
+			CNAME连接名，INAME接口名
+			JSON指定runner方式
+			
+			格式：'{"runner": {"name": "METHOD"}}'
+			METHOD可以是broadcast,roundrobin,
+			activebackup,loadbalance, lacp
+
+		例如：$ nmcli connection add type team con-name team0 ifname team0 config '{"runner":{"name":"activebackup"}}'
+
+
+	'创建port接口：'
+		$ nmcli connection add type team-slave con-name CNAME ifname INAME master TEAM
+			CNAME连接名
+			INAME网络接口名
+			TEAM网络组接口名
+
+		例如：$ nmcli connection add type team-slave ifname eth0 con-name team0-eth0 master team0 
+
+		连接名若不指定，默认为team-slave-IFACE
+
+		$ nmcli device disconnect INAME
+		$ nmcli connection up CNAME
+			INAME设备名CNAME网络组接口名或port接口
+
+
+	'查看team的状态：'
+		$ teamdctl team0 state
+
+
+	'删除team组：'
+		$ nmcli connection down team0
+		$ rm -f ifcfg-team0*
+		$ nmcli reload （重新加载配置文件）
+
+
+	'管理网络组配置文件：'
+		$ vim /etc/sysconfig/network-scripts/ifcfg-team0
+			DEVICE=team0
+			DEVICETYPE=Team
+			TEAM_CONFIG="{\"runner\": {\"name\": \"broadcast\"}}"
+			BOOTPROTO=none
+			IPADDR0=172.25.5.100
+			PREFIX0=24
+			NAME=team0
+			ONBOOT=yes
+
+		$ vim /etc/sysconfig/network-scripts/ifcfg-team0-eth1
+			DEVICE=eth1
+			DEVICETYPE=TeamPort
+			TEAM_MASTER=team0
+			NAME=team0-eth1
+			ONBOOT=yes
+
+
+	实例：
+		$ nmcli con add type team con-name team0 ifname team0 config '{"runner": {"name": "loadbalance"}}'
+		$ nmcli con mod team0 ipv4.addresses 192.168.1.100/24
+		$ nmcli con mod team0 ipv4.method manual
+		$ nmcli con add con-name team0-eth1 type team-slave ifname eth1 master team0
+		$ nmcli con add con-name team0-eth2 type team-slave ifname eth2 master team0
+		$ nmcli con up team0
+		$ nmcli con up team0-eth1
+		$ nmcli con up team0-eth2
+		$ teamdctl team0 state; nmcli dev dis eth1
+
+删除网络组：
+
+	$ nmcli connection down team0
+	$ teamdctl team0 state
+	$ nmcli connection show
+	$ nmcli connectioni delete team0-eth0
+	$ nmcli connectioni delete team0-eth1
+	$ nmcli connection show
+
+
+实验：创建网络组
+	$ ip link
+	$ nmcli con add type team con-name team0 ifname team0 config '{"runner": {"name": "activebackup"}}'
+	$ nmcli con mod team0 ipv4.addresses '192.168.0.100/24'
+	$ nmcli con mod team0 ipv4.method manual
+	$ nmcli con add con-name team0-port1 type team-slave ifname eth1 master team0
+	$ nmcli con add con-name team0-port2 type team-slave ifname eth2 master team0
+	$ teamdctl team0 state
+
+实验：创建网络组：
+	$ ping -I team0 192.168.0.254
+	$ nmcli dev dis eno1
+	$ teamdctl team0 state
+	$ nmcli con up team0-port1
+	$ nmcli dev dis eno2
+	$ teamdctl team0 state
+	$ nmcli con up team0-port2
+	$ teamdctl team0 state
+
+
+
+
+
+
+'测试网络工具：'
+	
+	网络客户端工具：
+
+		ftp , lftp命令：
+			子命令：get，mget，ls，help
+
+			'ftp命令：'
+
+				ftp语法：
+					ftp URL 
+
+				子命令：
+					get：下载一个文件
+					mget：下载多个文件
+					put：上传
+					mput：上传多个文件
+					!COMMAND：在本机上执行COMMAND命令
+					lcd：查看自己在本机的哪个目录
+					lcd /PATH/TO/：切换本机的当前目录
+					ls：查看ftp服务器上的信息
+					help：查看帮助命令
+
+				以匿名账号登陆：
+						用户名：anonymous
+						密码：随便填
+						或者使用ftp账号用
+			
+			'lftp命令：'
+				lftp语法：
+					lftp [-p port] [-u user[,password]] SERVER
+
+					支持TAB键补全，而且登陆之后默认使用匿名用户登陆
+
+				lftpget URL（非交互式操作）
+					lftpget ftp://172.16.0.1/login.txt
+
+
+			'wget命令：'（支持http，ftp）
+				语法：
+					wget[option]... [URL]...
+						-q: 静默模式
+						-c: 断点续传
+						-O: 保存位置
+						--limit-rate=: 指定传输速率
+							速度单位：字节为单位，也可以指定单位1M，100k
+				实例：
+					wget ftp://172.16.0.1/login.txt -O /root/test
+
+			links URL：连接网页（links http://www.baidu.com）
+				--dump：只看文字
+				--source：看源码
+
+				实例：
+					links -source http://www.mcy95.com/2017/04/30/disk-quota/ > test.html
+
+
+
+
+'Linux上的抓包命令：'
+		tcpdump -i eth1 -nn -x port 22
+		或者
+		tcpdump -i eth1 -nn -X port 22
+
+		-i：指定网卡
+		-X port：指定端口号
+
+		ss -tnl：查看正在监听的端口号，找到端口号并监听
+
+
+
+
+
+
+
+
+'作业：'
+1、centos6 bond实验（企业级实验）
+	把需要绑定的网卡都设置成一个网段内的，都设置成主机模式或者桥接
+
+	（1）关闭NetworkManager服务，在/etc/sysconfig/network-scripts/目录下创建ifcfg-bond0配置文件
+		$ service NetworkManager stop 
+		$ cd /etc/sysconfig/network-scripts
+		$ vim ifcfg-bond0
+			DEVICE=bond0
+			BONDING_OPTS="miiimon=100 mode=1"
+			IPADDR=172.16.23.150
+			NETMASK=255.255.255.0
+			GATEWAY=172.16.23.1
+
+	(2)修改两张网卡的配置信息为：
+		$ vim ifcfg-eth0
+			DEVICE="eth0"
+			MASTER=bond0
+			SLAVE=yes
+
+		$ vim ifcfg-eth1
+			DEVICE="eth1"
+			MASTER=bond0
+			SLAVE=yes
+
+	(3)重启网络服务
+		$ service network restart
+
+	(4)查看bond0配置信息：
+
+		[root@localhost Desktop]$ cat /proc/net/bonding/bond0 
+		Ethernet Channel Bonding Driver: v3.7.1 (April 27, 2011)
+
+		Bonding Mode: fault-tolerance (active-backup)
+		Primary Slave: None
+		Currently Active Slave: eth0
+		MII Status: up
+		MII Polling Interval (ms): 100
+		Up Delay (ms): 0
+		Down Delay (ms): 0
+
+		Slave Interface: eth0
+		MII Status: up
+		Speed: 1000 Mbps
+		Duplex: full
+		Link Failure Count: 0
+		Permanent HW addr: 00:0c:29:26:8e:b1
+		Slave queue ID: 0
+
+		Slave Interface: eth1
+		MII Status: up
+		Speed: 1000 Mbps
+		Duplex: full
+		Link Failure Count: 0
+		Permanent HW addr: 00:0c:29:26:8e:bb
+		Slave queue ID: 0
+
+	(5)手动在VM控制端，断掉eth0的连接（断开连接），使用一台主机一直ping bond0的IP地址，查看是否会自动切换
+
+		$ ping 172.16.23.150
+		64 bytes from 172.16.23.150: icmp_seq=10 ttl=64 time=0.197 ms
+		Request timeout for icmp_seq 11
+		Request timeout for icmp_seq 12
+		64 bytes from 172.16.23.150: icmp_seq=13 ttl=64 time=0.223 ms
+		64 bytes from 172.16.23.150: icmp_seq=14 ttl=64 time=0.214 ms
+
+		已经自动切换，并丢了2个包
+
+		[root@localhost network-scripts]$ cat /proc/net/bonding/bond0 
+		Ethernet Channel Bonding Driver: v3.7.1 (April 27, 2011)
+
+		Bonding Mode: fault-tolerance (active-backup)
+		Primary Slave: None
+		Currently Active Slave: eth1
+		MII Status: up
+		MII Polling Interval (ms): 100
+		Up Delay (ms): 0
+		Down Delay (ms): 0
+
+		Slave Interface: eth0
+		MII Status: down
+		Speed: Unknown
+		Duplex: Unknown
+		Link Failure Count: 1
+		Permanent HW addr: 00:0c:29:26:8e:b1
+		Slave queue ID: 0
+
+		Slave Interface: eth1
+		MII Status: up
+		Speed: 1000 Mbps
+		Duplex: full
+		Link Failure Count: 0
+		Permanent HW addr: 00:0c:29:26:8e:bb
+		Slave queue ID: 0
+
+	'bond0的详细配置信息：'
+		/sys/class/net/bodn0/下的各种文件
+
+	(6)修改bond0模式为3
+		$ vim ifcfg-bond0
+			mode选项改为3（广播模式）
+
+		$ service network restart
+
+		$ cat /proc/net/bonding/bodn0
+			查看是否变为广播模式
+
+		测试：
+			maxie:~ maxie$  ping 172.16.23.150 
+			PING 172.16.23.150 (172.16.23.150): 56 data bytes
+			64 bytes from 172.16.23.150: icmp_seq=0 ttl=64 time=0.224 ms
+			64 bytes from 172.16.23.150: icmp_seq=0 ttl=64 time=0.235 ms (DUP!)
+			64 bytes from 172.16.23.150: icmp_seq=0 ttl=64 time=0.310 ms (DUP!)
+			64 bytes from 172.16.23.150: icmp_seq=0 ttl=64 time=0.314 ms (DUP!)
+			64 bytes from 172.16.23.150: icmp_seq=1 ttl=64 time=0.214 ms
+			64 bytes from 172.16.23.150: icmp_seq=1 ttl=64 time=0.224 ms (DUP!)
+			64 bytes from 172.16.23.150: icmp_seq=1 ttl=64 time=0.251 ms (DUP!)
+			64 bytes from 172.16.23.150: icmp_seq=1 ttl=64 time=0.270 ms (DUP!)
+
+		因为是广播模式，而且两张网卡，所以是两个包
+
+
+	(7)删除bond0
+		$ ifconfig bond0 down  #down掉网卡
+
+		$ rmmod bonding    #卸载模块
+
+		$ rm -rf /etc/sysconfig/network-scripts/ifcfg-bond0  #删除配置文件
+
+		$ vim ifcfg-eth0
+			BOOTPROTO=static
+			IPADDR=172.16.1.130
+			PREFIX=16
+			GATEWAY=172.16.0.1
+
+		$ vim ifcfg-eth1
+			BOOTPROTO=dhcp 
+
+		$ service network restart #重启网络
+
+
+
+
+
+
+2、centos7 bond实验 
+
+	(1)先修改网卡名，修改成centos6版的eth类网卡名
+		$ vim /boot/grub2/grub.cfg
+			中的linux16一行的行尾添加 net.ifnames=0
+		$ vim /etc/sysconfig/network-scripts/ifcfg-eno.....
+			修改原配置文件中的DEVICE名字和NAME名字，以及配置文件的名字为更改后的名字eth0/1之类的
+
+		$ reboot 即可生效
+
+	(2)修改两张网卡都为仅主机模式
+
+	(3)创建bond0设备以及配置文件
+		$ nmcli connection add con-name bond0 type bond ifname bond0 mode active-backup
+		$ nmcli connection modift bond0 ipv4.method manual ipv4.addresses 172.16.23.200 gw 172.16.23.1 
+
+	(4)将物理网卡添加到bond0中
+		$ nmcli connection add type bond-slave ifname eth0 master bond0 
+		$ nmcli connection add type bond-slave ifname eth1 master bond0
+
+	(5)启动bond-slave
+		$ nmcli connection up bond-slave-eth1
+		$ nmcli connection up bond-slave-eth0
+
+	(6)启动bond0 
+		$ nmcli connection up bond0 
+
+	(7)ping测试
+		$ ping 172.16.23.200
+
+		如果正常ping通，则测试其容错能力，停掉正在运行的eth0（在vm界面中关闭连接）
+
+	(8)删除bond0
+		$ nmcli connection down bond0 
+		$ nmcli connection delete bond0 
+		$ nmcli connection delete bond-slave-eth0
+		$ nmcli connection delete bond-slave-eth1
+
+		即可恢复
+
+
+
+
+3、centos7 team绑定实验
+
+	(1)创建team组：
+		$ nmcli connection add type team con-name team0 ifname team0 config '{"runner":{"name":"activebackup"}}'
+		$ nmcli connection show 
+		$ nmcli connection modift team0 ipv4.method manual ipv4.addresses 172.16.23.166/24 ipv4.gateway 172.16.23.1
+
+	(2)绑定物理网卡
+		$ nmcli connection add type team-slave con-name team0-eth0 master team0 ifname eth0 
+		$ nmcli connection add type team-slave con-name team0-eth1 master team0 ifname eth1 
+		$ nmcli connection show 
+
+	(3)启动team0-eth0/1
+		$ nmcli connection up team0-eth0
+		$ nmcli connection up team0-eth1
+		$ nmcli connection show
+
+	(4)启动team0
+		$ nmcli connection up team0 
+		$ nmcli connection show 
+
+	(5)测试ping
+		查看team0状态：
+			$ teamdctl team0 state
+
+		ping ...
+
+	(6)删除team组：team0
+		$ nmcli connection down team0 
+		$ nmcli connection delete team0 
+		$ nmcli connection delete team0-eth0
+		$ nmcli connection delete team0-eth1
+		$ nmcli connection show 
+
+
+
+
+				
+
+	
+
+
+
+
+

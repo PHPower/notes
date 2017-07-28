@@ -1,0 +1,101 @@
+刘滨版 期中实验配置文件
+
+nginx调度器：
+
+	虚拟主机：
+		upstream wpweb {
+		        server 172.16.12.14:80;
+		        server 172.16.12.13:80;
+		        }
+		    upstream vaweb {
+		        server 172.16.12.17:80;
+		        server 172.16.12.18:80;
+		        }
+		}
+		server {
+		        listen 80;
+		        server_name www.myword.com;
+		        proxy_set_header Host $host;
+		        proxy_set_header X-Real-IP $remote_addr;
+		        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+		        proxy_buffering off;
+		        location / {
+		                proxy_pass http://vaweb;
+		         }
+
+		        location ~ .*\.(php|php5|jsp)?$ {
+		                proxy_pass http://wpweb;
+		        }
+		}
+
+
+
+
+
+动态AP站点：
+
+
+	<VirtualHost 172.16.12.13:80>
+	        ServerName www.myword.com
+	        DocumentRoot "/mnt/wp"
+	        DirectoryIndex index.php index.html
+	        <Directory "/mnt/wp">
+	                Options None
+	                AllowOverride None
+	                Require all granted
+	        </Directory>
+	        CustomLog "logs/wp_access_log" combined
+	        ErrorLog "logs/wp_error_log"
+	</VirtualHost>
+
+
+	<VirtualHost 172.16.12.14:80>
+	        ServerName www.myword.com
+	        DocumentRoot "/mnt/wp"
+	        DirectoryIndex index.php index.html
+	        <Directory "/mnt/wp">
+	                Options None
+	                AllowOverride None
+	                Require all granted
+	        </Directory>
+	        CustomLog "logs/wp_access_log" combined
+	        ErrorLog "logs/wp_error_log"
+	</VirtualHost>
+
+
+
+
+
+
+
+
+varnish配置：
+
+
+backend web1 {
+    .host = "172.16.12.13";
+    .port = "80";
+}
+
+backend web2 {
+    .host = "172.16.12.14";
+    .port = "80";
+}
+
+sub vcl_init {
+    new webser = directors.random();
+    webser.add_backend(web1,1);
+    webser.add_backend(web2,1);
+}
+sub vcl_recv {
+    set req.backend_hint = webser.backend();
+
+    if (req.url ~ "(?i)^/(login|admin)") {
+        return(pass);
+        }
+sub vcl_deliver {
+    if (obj.hits>0) {
+        set resp.http.X-Cache = "Hit via " + server.ip;
+    } else {
+        set resp.http.X-Cache = "Miss from " + server.ip;
+        }

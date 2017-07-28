@@ -1,0 +1,5 @@
+linux完整系统启动流程：
+	
+	POST --> Boot device --> bootloader:MBR446bytes : grub stage1 --> grub stage1.5 --> boot partition
+	--> grub stage2 --> grub.conf --> kernel : vmlinuz --> initrd initramfs --> rootfs --> init 
+	--> /etc/inittab --> /etc/rc.d/rc.sysinit --> /etc/rc#.d/{K*.sh | S*.sh} --> /etc/rc.d/rc.local --> login

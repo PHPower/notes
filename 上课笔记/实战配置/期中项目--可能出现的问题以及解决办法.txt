@@ -1,0 +1,28 @@
+期中项目--可能出现的问题以及解决办法
+
+
+
+1、如果提示按照varnish配置文件的配置后，登陆WordPress时，提示不支持cookie，则在 wordpress/wp-config.php添加：
+
+	define('COOKIE_DOMAIN', '.blog.maxie.com');
+
+	这里的 blog.maxie.com是我们的http://blog.maxie.com/wordpress/wp-admin/这里的域名。如果是IP，应该问题不大。
+
+
+
+
+2、如果无法实现会话保持，则配置varnish只做静态缓存，对动态请求，都转移到nginx前端负载均衡调度器上进行处理
+	在nginx的配置文件中，配置静态调度至varnish缓存服务器
+					 配置动态调度至后端动态AP主机，进行负载均衡调度  --> 会话保持使用 ip_hash或者
+
+					hash $request_uri consistent;
+					或者
+					ip_hash;
+					或者
+					hash $cookie_name consistent;
+
+
+
+3、web、ap站点建立数据库连接时出错：
+	(1) 没有授权
+	(2) 没有安装mariadb数据库客户端

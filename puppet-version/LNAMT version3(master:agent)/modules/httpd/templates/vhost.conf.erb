@@ -1,0 +1,22 @@
+<VirtualHost <%= @ipaddress %>:808>
+	ServerName maxie.io:808
+	ProxyRequests Off
+	ProxyVia On
+	ProxyPreserveHost On
+	<Proxy *>
+		Require all granted
+	</Proxy>
+	ProxyPass	/	http://<%= @ipaddress %>:80/
+
+	<Location />
+		Require all granted
+	</Location>
+#	DocumentRoot "/web/blog/"
+#	<Directory "/web/blog/">
+#		Options FollowSymLinks
+#		AllowOverride None
+#		Require all granted
+#		DirectoryIndex index.html
+#	</Directory>
+	CustomLog "/web/blog/logs/maxie_access.log" combined
+</VirtualHost>

@@ -1,0 +1,492 @@
+5.31 (Mage http进阶)
+
+
+回顾：
+	httpd的配置：
+		Listen [IP:]Port
+		KeepAlived {ON|Off}：
+			是否支持保持连接
+		MPM：并发访问模型
+			prefork：每个进程响应一个请求
+			worker：多进程多线程模型，每线程处理一个用户请求
+			event：事件驱动模型，多进程模型，每个进程响应多个请求；
+
+		DSO：
+			loadmodule
+			$ http -M 
+
+		DocumentRoot
+
+		ErrorLog：错误日历
+			LogLevel
+
+		CustomLog：访问日志
+			LogFormat：日志格式
+
+		Alias /URL/ "/path/to/somedir/"：别名
+
+
+		基于用户访问控制：(一般不使用，因为网站一般使用表单格式的认证方式)
+			认证方式：basic,digest
+				AuthType Basic
+
+		虚拟主机：
+			基于IP、Port、FQDN来区分
+
+
+
+'http协议和Httpd的配置：'
+	
+	'URL：Unifrom Resource Locator'
+		URL方案：scheme  协议的类型
+		服务器地址：IP:PORT 
+		资源路径
+
+		基本语法：
+			<scheme>://<user>:[<password>]@<host>:<port>/<path>;<params>?<query>#<frag>
+				params：参数(不查询数据库，以分号分割)
+					http://www.maxiecloud.com/bbs/hello;gender=f 
+				query：(可省略)
+					http://www.maxiecloud.com/bbs/item.php?username=tom&title=abc 
+				frag：标记
+					httpd://access.redhat.com/documentation/en-US/Red_Hat_Enterprise_Linux/6/html-single/Installation_Guide/index.html#ch-Boot-x86
+		相对URL
+		绝对URL
+
+
+
+	'http协议： '
+		'http协议是无状态的'
+			服务器无法持续追踪访问者来源：
+				通过cookie和session可以追踪
+
+		'cookie：指某些网站为了辨别用户身份而储存在用户本地终端（Client Side）上的数据（通常经过加密）'
+			在客户端保存的cookie是胖cookie
+			在服务端保存的cookie是瘦cookie
+
+		http-watch：监控插件
+
+		'http事务：'
+			请求：requset
+			响应：response
+
+			'报文语法格式：'
+				requset报文：
+					<method><requset-URL><version>
+					<HEADERS>
+
+					<entity-body>
+
+				response报文：
+					<version><status><reason-phrase>
+					<HEADERS>
+
+					<entity-body>
+
+
+				'method：请求方法'，标明客户端希望服务器对资源进行执行的动作
+					安全方法：GET、HEAD、POST(访问表单使用)
+					不安全方法：DELETE(删除)、PUT(上传,需要服务器开启DVA功能)
+					TRACE：追踪获取资源时，经过哪些服务器才能获取到
+					OPTIONS：查看服务器支持哪些method
+
+				'version：协议版本号'
+					HTTP/<major>.<minor>
+
+				'status：响应码，用来标记本次响应码的结果状态'
+					三位数字，如200，301，302，402，502；标记请求处理过程中发生的情况
+						2开头：请求成功
+						3开头：重定向
+						4开头：客户端错误
+						5开头：服务器错误
+
+				'reason-phrase：'
+					状态码所标记的状态的简要描述
+
+				'headers：'
+					每个请求或响应报文可包含任意个首部；每个首部都有首部名称，后面跟一个冒号，而后跟上一个可选空格，接着是一个值；
+
+				'entity-body：'
+					请求时附加的数据或相应时附加的数据
+
+
+
+			'status：状态码'
+
+				1xx：100-101，信息提示
+				2xx：200-206，成功
+				3xx：300-305，重定向
+				4xx：400-415，错误类信息，客户端错误
+				5xx：500-505，错误类信息，服务端错误
+
+					常用的状态码：
+						200：成功，请求的所有数据通过响应报文的entity-body部分发送；ok
+						301：请求的URL指向的资源已经被删除；但在响应报文中通过首部Location指明了资源限制所处的新位置；Move Permanently
+						302：与301相似，但在响应报文中通过Location指明资源现在所处临时新位置；Found
+						304：客户端发出了条件式请求，但服务器上的资源未曾发生改变，则通过响应此响应状态吗通知客户端；Not Modified
+						401：需要输入账号和密码认证方能访问资源；Unauthorized
+						403：请求被禁止；Forbidden
+						404：服务器无法找到客户端请求的资源；Not Found
+						500：服务器内部错误；Internal Server Error 
+						502：代理服务器从后端服务器收到一条伪响应；Bad Gateway
+							代理又分：正向代理和反向代理
+
+			'headers：'
+				格式：
+					name value
+
+					Cache-Control:public,max-age=600
+					Connection:keep-alive
+
+				首部的分类：
+					通用首部
+					请求首部
+					响应首部
+					实体首部
+					扩展首部
+
+					'通用首部：'
+						Date：报文的创建时间
+						Connection：连接状态，如keep-alive,close
+						Via：显示报文经过的中间节点)(代理服务器)
+						Cache-Control：控制缓存(HTTP1.1才有的功能)
+						Pragma：
+
+					'请求首部：'
+						Accept：通过服务器自己可接受的媒体类型(MIME: text/html , application/javascript , images/jpeg)
+						Accept-Charset：字符集编码
+						Accept-Encoding：接受编码格式，一般指压缩机制，如 gzip,deflate,sdch
+						Accept-Language：接收的语言
+
+						Host：请求的服务器名称和端口号
+						Referer：包含当前正在请求的资源的上一级资源
+						User-agent：客户端代理
+
+						条件式请求首部：
+							Expect：
+							If-Modified-Since：自从指定的时间之后，请求的资源发生过修改
+
+
+						安全请求首部：
+							Authorization：向服务器发送认证信息，如账号密码
+							Cookie：客户端向服务器发送cookie
+							Cokkie2：版本2
+
+					'响应首部：'
+						信息性：
+							Age：响应持续时长
+							Server：服务器程序软件名称和版本(生成环境要移除此信息)
+
+						协商首部：某资源有多种表示方法时使用
+							Accept-Ranges：服务器可以接受的请求范围类型
+							Vary：服务器查看的其他首部类型
+
+						安全响应首部：
+							Set-Cookie：向客户的设置cookie;
+							Set-Cookie2：
+							WWW-Authenticate：来自服务器的对客户端的质询认证表单
+								提示客户端输入账号密码时，会出现WWW..首部
+
+					'实体首部：'
+						Allow：列出对此实体可使用的请求方法
+						Location：告诉客户端真正的实体位于何处
+
+						Content-Encoding：
+						Content-Length：主体的长度
+						Content-Location：实体真正所处位置
+						Content-Type：主体的对象类型
+
+						缓存相关：
+							ETag：实体的扩展标签
+							Expires：实体的过期时间
+							Last-Modified：最后一次修改的时间
+
+
+!!!!!看http权威指南，看前4章!!!!!!!!
+
+
+
+
+
+'http-2.4的常见配置(2)'
+	
+	'curl命令'：
+
+		语法：
+			curl [OPTIONS] [URL...]
+
+		常用选项：
+		!	-A/--user-agent<string>：设置用户代理发送给服务器
+		!	--basic：使用Http认证
+			--tcp-nodelay：使用TCP_NODELAY选项
+		!	-e/--referer <URL>：来源网址
+			--cacert <file>：CA证书 ssl
+		!	--compressed：要求返回时压缩的格式
+			-H/--header <line> ：自定义首部信息传递给服务器
+		!	-I/--head：只显示响应报文首部
+			--limit-rate <rate>：设置传输速度
+			-u/-user <user[:password]> ：设置服务器的用户和密码
+			-0/--http1.0：使用HTTP 1.0版本	
+
+
+	'elinks命令'
+		语法：
+			elinks [OPTIONS].. [URL]
+
+		选项：
+			-dump：不进入交互模式，而直接将URL的内容输出至标准输出
+
+
+	'user/group：'
+
+		指定以哪个用户的身份运行httpd服务进程；
+			User apache
+			Group apache
+				在/etc/httpd/conf/httpd.conf中定义
+
+		SUexec：切换用户执行(不安全的)
+
+
+	'使用mode_deflate模块压缩页面优化速度'
+
+		使用场景：
+			(1)节约带宽，额外消耗CPU；同时，可能有些较老浏览器不支持
+			(2)
+
+	!!!	设置过滤器：（'必须要设置的在生产环境中，设置压缩'）
+			SetOutputFilter DEFALATE_MY
+
+			# mod_feflate configureaiton
+
+			#Restrict compression to there MIME types
+			AddOutputFilterByType DEFALATE_MY text/plain
+			AddOutputFilterByType DEFALATE_MY text/html 
+			AddOutputFilterByType DEFALATE_MY text/xml
+			AddOutputFilterByType DEFALATE_MY text/css
+			....
+
+			# Level of compression (Highest 9 - Lowest 1) 设置压缩比
+			DeflateCompressionLevel 9
+
+			# Netscape 4.x has some problems	#指定压缩的浏览器版本
+			BrowserMatch ^Mozilla/4 gzip-only-text/html 
+
+			# Netscape 4.06-4.08 have some more problems
+			BrowserMatch ^Mozilla/4\.0[678] no-gzip
+
+			# MSIE masquerades as Netscape, but it is fine 	#设置哪些浏览器不进行压缩，因为不支持
+			BrowserMatch \bMSI[E] !no-gzip !gzip-only-text/html 
+
+
+	'https、http over ssl：'
+
+		SSL会话的简化过程：
+			(1)客户端发送可选则的加密方式，并向服务器请求证书；
+			(2)服务器端发送证书以及选定的加密方式给客户端
+			(3)客户端取得证书并进行证书验证
+				如果信任给其发证书的CA：
+					(a)验证证书来源的合法性；用CA的公钥解密证书上数字签名
+					(b)验证证书的内容的合法性；完整性验证
+					(c)检查证书的有效期限
+					(d)检查证书是否被吊销
+					(e)证书中拥有者的名字，与访问的目标主机是要一致；
+			(4)客户端生成临时会话密钥(对称密钥)，并使用服务器端的公钥加密此数据发送给服务器，完成密钥交换；
+			(5)服务器端此密钥加密用户请求的资源，响应给客户端
+				服务器端为了加快这些进程，可以在连接之后，缓存会话数据，保存一段时间(默认5分钟)
+
+		https很贵(消耗CPU)，很慢(步骤很多)
+
+		注意：SSL会话是基于IP地址创建，所以单IP的主机上，仅可以使用一个https虚拟主机；
+
+		'部署https：'步骤
+			1、安装mod_ssl模块
+				$ yum install mod_ssl
+				$ httpd -M | grep ssl 
+			2、创建CA服务器，创建CA认证
+			3、http服务器发起CA认证请求
+				(1)创建https私钥
+				(2)生成证书签署请求
+				(3)发送给CA
+				(4)CA签署
+
+			4、配置https
+				1)安装支持组件：
+					$ yum install -y mod_ssl
+
+				2)编辑配置文件：
+					$ vim /etc/httpd/conf.d/ssl.conf
+						修改其中：
+							取消这两项的注释，并修改ServerName中的地址
+							DocumentRoot "/var/www/html"			
+							ServerName www.maxiecloud.com:443
+
+							修改其下：
+							SSLCertificateFile /etc/pki/CA/certs/http.crt   #这里修改为证书的地址
+							SSLCertificateKeyFile /etc/httpd/http.key  #这里为http的私钥地址
+				重启http服务
+				浏览器访问：
+					https://172.16.1.131即可
+			5、'使用命令验证：(在CA主机上的操作)也可以在客户端操作，但必须有CA的自签证书'
+				$ vim /etc/hosts 
+				172.16.1.30 www.maxiecloud.com 
+
+				$ openssl s_client -connect www.maxiecloud.com:443 
+				$ openssl s_client -connect www.maxiecloud.com:443 -CAfile /etc/pki/CA/cacert.pem 
+
+				[root@ca-server CA]# openssl s_client -connect www.maxiecloud.com:443 -CAfile cacert.pem
+
+
+			'查看当前主机的虚拟机主机有哪些：'
+				$ httpd -t -D DUMP_VHOSTS
+
+
+
+	'httpd自带的工具程序：'
+
+		htpasswd：basic认证基于文件实现时，用到的账号密码文件生成工具
+		apachectl：httpd自带的服务控制脚本，支持Start和stop
+		apxs：由httpd-devel包提供，扩展httpd使用第三方模块的工具
+		rotatelogs：日志滚动工具；
+			accesslog --> 
+				accesslog , access.1.log -->
+					access.log , access.1.log ,access.2.log 
+		suexec：访问某些有特殊权限配置的资源时，临时切换至指定用户身份运行
+		ab：apache bench（压测工具）
+
+
+
+回顾：
+	http协议： 
+		url的格式
+		request和response报文
+			<method><request-url><version>
+			<headers>
+
+			<entity-body>
+
+			<version><status><reason-phrase>
+			<headers>
+
+			<entity-body>
+
+		headers:
+			通用首部、请求首部，响应首部，实体首部，拓展首部
+
+
+
+	'httpd的压力测试工具：'
+		压测：benchmark
+
+		'Linux的压测工具：前三个常用：'只能模拟单个或几个的页面的测试
+			ab、webbench，http_load，selge
+
+		'其他压测工具：'
+			jmeter：开源测试工具(ASF基金会)
+			Loadrunner：商业测试工具
+
+
+		tcpcopy工具：网易，复制生产环境中的真实请求，并将之保存下来(开源)
+			把每一个用户的访问请求，保存在文件中；使用tcpcopy通过这些文件进行压测，模拟现实压力
+
+
+
+		'ab命令：'
+			语法：
+				ab [OPTIONS] URL 
+			选项：
+				-n：总请求数
+				-c：模拟的并行数(并发数)
+					'以实际情况的并发数进行测试；同类测试，最好做3次测试'
+				-k：以持久连接模式测试；
+
+			实例：
+				$ ab -n 10000 -c 10 http://172.16.0.67/index.html 			#只测试一个index.html ，单页测试 
+
+				观察每次的'Time per request'
+
+			'http服务器的性能不仅取决于服务器的性能，也取决于网络带宽'
+
+
+
+
+'httpd-2.4的新特性：'
+	(1)MPM支持运行DSO机制；以模块形式按需加载
+	(2)event MPM生产环境可用
+	(3)异步读写机制
+	(4)支持每模块及每目录的单独日志级别定义
+	(5)每请求相关的专用配置
+	(6)增强版的表达式分析器
+	(7)毫秒级持久连接时长定义
+	(8)基于FQDN的虚拟主机也不再需要NameVirtualHost指令
+	(9)新指令，AllowOverrideList
+	(10)支持用户自定义变量
+	(11)更低的内存消耗
+
+
+	新模块：
+		(1)mod_proxt_fcgi
+		(2)mod_proxy_scgi
+		(3)mod_remoteip
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

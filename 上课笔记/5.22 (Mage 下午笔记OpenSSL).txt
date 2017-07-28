@@ -1,0 +1,539 @@
+5.22 (Mage 下午笔记OpenSSL)
+
+回顾：
+	技术：加密和解密，服务
+	
+	加密算法和协议：
+		对称加密：数据加密（保密性），（3DES，AES）
+		公钥加密：身份认证、密钥交换、数据加密（不常用，比对称加密要慢3个数量级），（RSA，DSA）
+		单向加密：数据完整性，（MD5, SHA1, ...）
+		密钥交换：RSA，DH（迪菲-赫尔曼），ECDH（椭圆曲线DH），ECDHE（临时椭圆曲线DH）
+		
+	SSL/TLS
+		SSL: 安全套接字层（ssl 1.0, ssl 2.0, ssl 3.0）
+		TLS：传输层安全 （tls 1.0, tls 1.1, tls 1.2, tls 1.3）
+		
+		OpenSSL
+			libcrypto
+			libssl 
+			openssl
+			
+		SSL会话主要三步：
+			客户端向服务器端索要并验正证书；
+			双方协商生成“会话密钥”；
+			双方采用“会话密钥”进行加密通信；
+			
+			SSL Handshake Protocol：
+				第一阶段：ClientHello：
+					支持的协议版本，比如tls 1.2；
+					客户端生成一个随机数，稍后用户生成“会话密钥”
+					支持的加密算法，比如AES、3DES、RSA；
+					支持的压缩算法；
+					
+				第二阶段：ServerHello
+					确认使用的加密通信协议版本，比如tls 1.2；
+					服务器端生成一个随机数，稍后用于生成“会话密钥”
+					确认使用的加密方法；
+					服务器证书；
+					
+				第三阶段：
+					验正服务器证书，在确认无误后取出其公钥；（发证机构、证书完整性、证书持有者、证书有效期、吊销列表）				
+					发送以下信息给服务器端：
+						一个随机数；
+						编码变更通知，表示随后的信息都将用双方商定的加密方法和密钥发送；
+						客户端握手结束通知；
+						
+				第四阶段：
+					收到客户端发来的第三个随机数pre-master-key后，计算生成本次会话所有到的“会话密钥”；
+					向客户端发送如下信息：
+						编码变更通知，表示随后的信息都将用双方商定的加密方法和密钥发送；
+						服务端握手结束通知；
+				
+		PKI：公钥基础设施
+			签证机构：CA
+			注册机构：RA
+			证书吊销列表：CRL
+			证书存取库
+
+
+
+
+
+
+
+
+OpenSSL：(2)
+	
+	组件：
+		libcrypto，libssl主要由开发者使用
+		openssl ：多用途命令行工具
+
+	
+	'openssl 命令：'
+
+		许多字命令，分为三类：
+			标准命令
+			消息摘要命令：dgst子命令
+			加密命令：enc子命令
+
+
+		标准命令：
+			enc，ca，req，genrsa，....
+
+
+
+		对称加密：
+			工具：openssl enc, gpg
+			支持的算法：3des，aes，blowfish,towfish
+
+
+			'enc命令：'man enc可以查看帮助文档
+				加密：openssl enc -e -des3 -a -salt -in fstab -out fstab.ciphertext
+				解密：openssl enc -d -des3 -a -salt -in fstab.ciphertext -out fstab
+
+
+				实例：
+					[root@centos7 mage-class-test]# cp /etc/fstab ./
+					[root@centos7 mage-class-test]#
+					[root@centos7 mage-class-test]# openssl enc -e -des3 -a -salt -in fstab -out fstab.ciphertext
+					enter des-ede3-cbc encryption password:		#输入密码
+					Verifying - enter des-ede3-cbc encryption password:
+					[root@centos7 mage-class-test]# ls
+					fstab  fstab.ciphertext
+					[root@centos7 mage-class-test]# ll
+					总用量 8
+					-rw-r--r--. 1 root root 670 5月  20 10:16 fstab
+					-rw-r--r--. 1 root root 935 5月  20 10:16 fstab.ciphertext
+					[root@centos7 mage-class-test]# cat fstab.ciphertext
+					U2FsdGVkX18uc4SLKWzHTpzJ+RZhTcEke/n4huJDkhIw+H+zvXkRha99IlKBC4Q8
+					....
+					....
+
+					[root@centos7 mage-class-test]# openssl enc -d -des3 -a -salt -in fstab.ciphertext -out fstab
+					enter des-ede3-cbc decryption password:
+					[root@centos7 mage-class-test]# cat fstab
+				
+					UUID=ab341a4b-a908-47c0-9553-bcf79b05ce43 /                       xfs     defaults        0 0
+					UUID=531365c9-8be5-40a1-bd9e-9bc980d21cda /boot                   xfs     defaults        0 0
+					...
+					...		  ext3    defaults	  0 0
+					[root@centos7 mage-class-test]#
+
+
+		单项加密：
+			工具：openssl dgst，md5sun，sha1sum，sha224sum，.....
+
+			dgst命令：
+				~]# openssl dgst -md5 /PATH/TO/SOMEFILE
+
+
+		生成用户密码：
+			工具：passwd, openssl passwd 
+
+			~]# openssl passwd -1 -salt SLAT
+
+
+		生成随机数：
+			工具：rand, openssl rand
+
+			~]# openssl rand -hex NUM
+			~]# openssl rand -base NUM
+
+
+		公钥加密：
+			加密解密：
+				算法：RSA，ELGamal
+				工具：openssl rsautl, ggp 
+			数字签名：
+				算法：RSA，ELGamal，DSA
+			密钥交换：
+				算法：DH
+
+			生成密钥：(公钥是从私钥中提取出来的)
+				生成私钥：~]# (umask 077; openssl genrsa -out cakey.pem 2048)
+				提出公钥：~]# openssl rsa -in /PATH/FROM/PARIVATE_KEY_FILE -pubout
+
+
+	Linux系统上的随机数生成器：
+		/dev/random：仅从熵池返回随机数；随机数用尽，阻塞；
+		/dev/urandom：从熵池中返回随机数；随机数用尽，会利用软件生成伪随机数，非阻塞
+			'伪随机数，并不安全'
+
+			熵池中随机数的来源：
+				硬盘IO中断时间间隔；
+				键盘IO中断时间间隔；
+
+	'CA：'
+		公共信任的CA，私有CA；
+
+		建立私有CA：
+			openssl
+			openca
+
+		证书签署请求：csr
+
+		openssl命令：
+			配置文件：/etc/pki/tls/openssl.cnf
+
+			
+
+	!!!		'构建私有CA：'
+				在确认配置为CA的服务上生成一个自签证书，并为CA提供所需要的目录及文件即可。
+
+				步骤：
+					(1)生成私钥：
+						~]# (umask 077; openssl genrsa -out /etc/pki/CA/private/cakey.pem 4096)
+					(2)生成自签证书：
+						~]# openssl req -new -x509 -key /etc/pki/CA/private/cakey.pem -out /etc/pki/CA/cacert.pem -days 3655
+							-new：生成新证书签署请求
+							-x509：生成自签格式证书，专用于创建私有CA时
+							-key：生成请求时用到的私有文件路径
+							-out：生成的请求文件路径；如果自签操作将直接生成签署过的整数
+							-days：证书的有效时长，，单位是day；默认是365day
+
+					(3)为CA提供所需的目录及文件：
+						~]# mkdir -pv /etc/pki/CA/{certs,crl,newcerts} 		
+							这步，在Centos6上做，7无需执行
+
+						~]# touch /etc/pki/CA/{serial,index.txt}
+						~]# echo 01 > /etc/pki/CA/serial
+
+			'要用到证书进行安全通信的服务器，需要向CA请求签署证书'
+
+				步骤：(以httpd为例)
+					先要构建私有CA，再执行以下操作
+
+					(1)用到证书的主机生成私钥：
+						~]# mkdir /etc/httpd/ssl 
+						~]# cd /etc/httpd/ssl 
+						~]# (umask 077; openssl genrsa -out /etc/httpd/ssl/httpd.key 2048)
+					(2)生成证书签署请求：
+						~]# openssl req -new -key /etc/httpd/ssl/httpd.key -out /etc/httpd/ssl/httpd.csr -days 365
+							这里的csr格式：
+								表示是"证书签署请求"
+
+					(3)将请求通过可靠方式发送给CA主机：
+
+					(4)在CA主机上签署证书：
+						~]# openssl ca -in /web/httpd/httpd.csr -out /etc/pki/CA/certs/httpd.crt days 365
+
+						查看证书中的信息：
+							~]# openssl x509 -in /etc/pki/CA/certs/httpd.crt -noout -serial -subject	
+
+					(5)使https支持ssl：
+						1)安装支持组件：
+							$ yum install -y mod_ssl
+						2)编辑配置文件：
+							$ vim /etc/httpd/conf.d/ssl.conf
+								修改其中：
+									取消这两项的注释，并修改ServerName中的地址
+									DocumentRoot "/var/www/html"			
+									ServerName 172.16.1.131:443
+
+									修改其下：
+									SSLCertificateFile /etc/pki/CA/certs/http.crt   #这里修改为证书的地址
+									SSLCertificateKeyFile /etc/httpd/http.key  #这里为http的私钥地址
+					(6)重启http服务
+					(7)浏览器访问：
+						https://172.16.1.131即可
+
+
+	!!!!'做视频中关于搭建httpds服务器，并生成签名的实验'
+
+
+			吊销证书：
+				步骤：
+					(1) 客户端获取要吊销的证书的serial（在使用证书的主机执行）
+						~]# openssl x509 -in /etc/pki/CA/certs/httpd.crt -noout -serial -subject
+					(2) CA主机吊销证书
+						先根据客户提交的serial和subject信息，对比其与本机数据库index.txt中存储的是否一致；
+
+						吊销： 
+							~]# openssl ca -revoke /etc/pki/CA/newcerts/SERIAL.pem
+
+								其中的SERIAL要换成证书真正的序列号；
+
+					(3)生成吊销证书的吊销编号(第一次吊销证书时执行)
+						~]# echo 01 > /etc/pki/CA/crlnumber
+
+					(4)更新证书吊销列表
+						~]# openssl ca -gencrl -out thisca.crl 
+
+							查看crl文件：
+								~]# openssl crl -in /PATH/FROM/CRL_FILE.crl -noout -text
+
+
+
+博客作业：加密解密技术基础、PKI及创建私有化CA
+
+
+
+
+
+
+'OpenSSH：'
+	
+
+	telnet --> ssh(secure Shell) 取代了telnet
+		telnet是非独立程序
+		端口号：23
+
+
+		由xinetd超级守护进程管理
+
+			CentOS7：使用telnet
+				(1)安装服务端
+					$ yum install -y telnet-server
+				(2)开启telnet服务：
+					$ systemctl start telnet.socket
+					$ systemctl start telnet
+				(3)使用telnet登陆：（用户最好不用root用户）
+					可以使用xshell登陆或者再另一台linux登陆
+					如果是Linux客户端，需要安装 yum install telnet
+					telnet IP地址
+
+			CentOS6：
+				(1)安装服务端
+				(2)开启telnet服务：
+					$ chkconfig telnet on 
+					$ service xinetd restart
+
+
+		服务进程有两种类型:
+			独立守护进程：自我管理
+			超级守护进程：xinetd，服务器托管者，用于托管其它瞬时守护进程；自己是独立守护进程
+				瞬时守护进程：非自我管理，而是由”超级守护进程“代为管理
+
+
+	ssh：secure shell
+		C/S; 22/tcp，安全地远程登录
+			server: openssh(sshd)
+			client: openssh(ssh,scp)
+				windows: xshell , securecrt, sshscureshellcilent, putty    "关于安全的软件，建议使用正版"
+
+		ssh protocol version：
+			v1：不安全，man-in-middle
+			v2：安全，建议使用
+
+		主机认证：需要用到主机认证密钥；由服务器端维护和提供（'ssh中，公钥一般不公开，不同于ssl'）
+		用户登录：
+			用户认证：
+				基于口令的认证；
+				基于密钥的认证：
+					用户提供一对儿密钥，私钥保留在客户端，公钥保留于远程服务器端的用户家目录下；
+
+	'OpenSSH：'
+		sshd：配置文件 /etc/sshd_config
+		ssh：配置文件 /etc/ssh/ssh_config 
+
+		'ssh客户端程序：'
+			ssh [options] [user@]host [COMMAND]
+			ssh [-l user] [options] host [COMMAND]
+
+			'省略用户名：'
+				使用本地用户名作为远程登录的用户名
+
+			常用选项：
+				-l user：以指定的用户登录远程主机
+				-p port：用于指明远程服务器的端口
+				-X：支持x11转发
+				-Y：支持信任的x11转发
+					X：协议：x-window，C/S
+					x11转发的作用：在本地显示远程主机上的图形窗口
+						前提：本地是x图形界面，或者提供了x service；
+				-o StrictHostKeyChecking=no：连接时，会询问是否接收ssh公钥，直接回答为yes，不进行交互式操作
+
+			'接收的所认可的服务器列表：'
+				~/.ssh/known_hosts
+
+			ssh远程连接服务器时的配置选项，定义在/etc/ssh/ssh_config配置文件中：
+				HOST pattern
+					OPTION1 VALUE
+					OPTION2 VALUE
+					...
+				'一般在配置文件的最后一行添加配置选项即可'
+					StrictHostKeyChecking no   
+
+
+			ssh支持的用户认证方式：
+				基于口令的认证；
+				基于密钥的认证；
+					(1)在本地主机生成一对儿密钥
+						ssh-keygen [-q] [-b bits] [-t type] [-f output_keyfile] [-P passphrase]
+							-t {rsa|ecdsa|dsa}：公钥加密算法类型
+							-b bits：指明密钥长度
+							-p passphrase：私钥加密密码
+							-f output_keyfile：生成密钥的保存位置
+
+							$ ssh-keygen  #即可生成（一路回车）   生成到默认地址
+
+					(2)在本地主机上，将公钥复制到登陆的远程主机的某用户的家目录下的特定文件中(~/.ssh/authorized_keys)
+						ssh-copy-id [-i [identity_file]] [-p port] [-o ssh_option] [user@]hostname 
+							$ ssh-copy-id -i ~/.ssh/id.rsa.pub root@172.16.1.121  #即可
+
+					(3)测试
+						ssh user@host 
+
+		'scp命令：'
+			scp [options] SRC... DEST/
+			scp [options] SRC    DEST
+
+			存在两种使用情形：
+				Pull：	scp [options]	[user@]host:/PATH/TO/SOMEFILE	/PATH/TO/SOMEFILE
+				Push：	scp [options]	/PATH/TO/SOMEFILE [user@]host:/PATH/TO/SOMEFILE
+
+					常用选项：
+						-r：递归复制
+						-p：保持原文件的权限信息
+						-q：静默模式
+						-P PORT：指明远程主机ssh协议监听的端口
+
+		'sftp命令：'
+			批量拷贝
+				ftp：file transfer protocol，明文；
+				安全的文件传输机制：
+					ftps: ftp over ssl 
+					sftp: ftp over ssh 
+					
+				sftp：
+					C/S架构
+						S：由sshd服务进程管理，是sshd的一个子系统，在centos系统上的openssh上，默认为启动状态； /usr/libexec/openssh/sftp-server
+						C：即sftp; 
+						
+					连接至远程主机： sftp  user@host
+						sftp> help
+
+
+
+		'pssh：'
+			(1)安装
+				$ yum install pssh     #存放在epel仓库中
+			(2)可用工具：
+				pssh : epel 
+				pssh 
+				pscp：批量拷贝
+
+
+
+		'sshd（服务器端）'
+			配置文件：/etc/ssh/sshd_config 
+
+				格式： [配置指令  值]
+					常用指令：
+						Port  22 					#生产环境中一般要修改ssh端口号
+						ListenAddress	0.0.0.0		#
+						Protocol 	2
+						PermitRootLogin  	yes
+						UserDNS		no
+
+				手册页：
+					man sshd_config 
+					man sshd 
+
+					man ssh_config
+					man ssh 
+
+
+				限制可登陆的用户(配置文件)：
+					AllowUsers user1 user2 user3 ...	#
+					AllowGroups	grp1 grp2 ...
+
+					DenyUsers	user1 user2 ...
+					DenyGroups	grp1  grp2 ...
+
+
+			CentOS6：
+				服务脚本：/etc/rc.d/init.d/sshd 
+			CentOS7：
+				systemd Unit File： /usr/lib/systemd/system/sshd.service 
+
+
+	总结：
+		'ssh服务的最佳实践'： 
+			1、不要使用默认端口
+			2、禁止使用protocol version 1；
+			3、限制可登陆的用户
+			4、设定空闲会话超时时长
+			5、利用防火墙设置ssh访问策略
+			6、仅监听特定的IP地址
+			7、基于口令认证时，使用强密码策略：
+				~]# tr -dc A-Za-z0-9 < /dev/urandom | head -c 30 | xargs
+			8、使用基于密钥的认证
+			9、禁止使用空密码
+			10、禁止root用户直接登录
+			11、限制ssh的访问频度和并发在线数
+			12、做好日志，经常分析
+				/var/log/secure
+
+
+	ssh协议的另一个实现：dropbear（epel仓库中）
+		轻量化的实现方案，多用于嵌入式环境中
+
+		常用工具：
+			dbclient：ssh协议客户端程序
+				dbclinet [options] [user@]host [/post][,user@]host/port],...] [command]
+
+			dropbearkey：主机密钥生成工具
+				dropbearkey -t <type>   -f<filename> [-s bits]
+
+
+		服务端程序：
+			dropbear 
+				-p [IP:]PORT
+				-F：前台
+				-E：将日志发往错误输出
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Kb0AuoAyn9BrgXOXO2T019mOuG92DQEo1FZw3z5qKHR1EEZtGStH1QwwxFyawdzyUz5X9boUUdWzTW3AOxjQnQnVwW63aGC4fJ2qVrkPEgpycs90ZtRnjcgR9pVk5xqn

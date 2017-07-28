@@ -1,0 +1,27 @@
+讲课顺序：
+
+Nginx 2天 --> lvs 负载均衡 --> Nginx 负载均衡集群 --> HA Proxy --> varnish --> tomcat
+
+mysql 主从复制  2天 --> redis 1天--> mongo 
+
+运维工具：
+
+puppet --> zabbix
+
+
+'以上特别重要'
+
+
+
+kvm虚拟化
+
+补充一些
+
+openstack
+
+docker
+
+elk search
+
+日常工作：
+	发布 ，变更， 故障处理

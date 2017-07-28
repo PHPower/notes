@@ -1,0 +1,374 @@
+6.23 (Mage Nginx负载均衡)
+
+回顾：
+	nginx：
+		proxy模块：代理模块
+		fastcgi模块：fastcgi代理模块
+			可以代理python创建的web --> new wcgi 
+
+		两个模块都可以实现缓存加速：
+			1、定义缓存
+			2、调用缓存
+
+	
+	LB Cluster：
+		有中心节点的调度方式
+
+		硬件：
+			F5 BigIP、NetScaler、A10
+
+		软件：
+			四层：lvs，nginx（伪四层stream模块），haproxy(mode tcp)
+			七层：nginx(http_upstream module)，haproxy(mode http)，httpd(mode balance)，ast,...
+
+
+		session sticky：会话粘性
+			LVS：sh、persistence --> 基于源IP绑定
+			Nginx：Cookie 		--> 基于cookie
+
+		session replication：会话集群
+			通过组播(只向组播域内的地址进行广播)同步集群内的会话信息
+			不适合较大规模的集群
+
+		session server：会话存储服务器
+			由单独的高性能存储主机 存放用户的会话信息
+				主机：memcache(缓存系统，容易崩溃)、redis(支持持久功能)
+
+
+
+
+'ngx_http_upstream_module模块 '
+	
+	每个后端服务器组，多个组之间不互相影响
+
+	The ngx_http_upstream_module module is used to define groups of servers that can be referenced by the proxy_pass, fastcgi_pass, uwsgi_pass, scgi_pass, and memcached_pass directives.
+		
+	1、upstream name { ... }
+		定义后端服务器组，'会引入一个新的上下文；Context: http'
+
+		'自带健康状态检测功能'
+			利用第三方软件可以实现健康状态检查信息的输出
+		
+		upstream httpdsrvs {
+			server ...
+			server...
+			...
+		}
+		
+		2、server address [parameters];
+			在upstream上下文中server成员，以及相关的参数；Context:	upstream
+			定义后端主机
+
+
+			address的表示格式：服务器地址
+				unix:/PATH/TO/SOME_SOCK_FILE
+				IP[:PORT]
+				HOSTNAME[:PORT]
+				
+			parameters：选项
+				weight=number
+					权重，默认为1；
+				max_fails=number
+					失败尝试最大次数；超出此处指定的次数时，server将被标记为不可用；
+					默认1次，失败一次就标记为不可用；0表示，不做健康状态检测
+				
+				fail_timeout=time
+					设置将服务器标记为不可用状态的超时时长；默认10秒
+				
+				max_conns
+					当前的服务器的最大并发连接数；
+				
+				backup(可以用来做sorry server)
+					将服务器标记为“备用”，即所有服务器均不可用时此服务器才启用；
+				
+				down
+					标记为“不可用”(软down，服务器真实并没有问题)；维护时使用
+
+				
+
+	3、least_conn;
+		最少连接调度算法，当server拥有不同的权重时其为wlc;
+		
+	4、	ip_hash;
+		源地址hash调度方法； --> 等同于sh算法
+		
+	5、hash key [consistent];
+		基于指定的key的hash表来实现对请求的调度，此处的key可以直接文本、变量或二者的组合；
+		
+		作用：'将请求分类，同一类请求将发往同一个upstream server；'
+		
+		If the consistent parameter is specified the ketama consistent hashing method will be used instead.
+			
+
+		'在处理客户端请求时，对URI请求时，为了快速调度，使用以下查询算法：	'
+			consistent：一致性hash
+			不加任何参数默认是：取模hash
+
+		示例：
+			hash $request_uri consistent; 	#带参数的URI，提高缓存命中率
+				将同一个URI的请求，发往同一个后端目标服务器；提高缓存命中率
+
+			hash $remote_addr;				#相当于ip_hash;功能
+			hash $cookie;					#商业版
+
+
+
+		'对权重之和进行取模，取模之后的余数，根据余数进行调度'
+			对某个数字取模，余数一定是0 -- 这个数字-1 的范围
+
+		'一致性hash算法：'
+		hash可能会偏斜，使用虚拟服务器节点，解决hash偏斜 --> 计算量会变大
+			“虚拟节点”（ virtual node ）是实际节点（机器）在 hash 空间的复制品（ replica ），
+			一实际个节点（机器）对应了若干个“虚拟节点”，这个对应个数也成为“复制个数”，“虚拟节点”在 hash 空间中以hash值排列
+			
+
+		'总结：'
+		1、所谓的哈希算法，就是尽量做到随机无序，如果数据量足够的话，就可以看作是打乱顺序、平均分配位置的算法。
+		2、新增的redis物理节点，必须经过哈希算法，获取到n个虚拟节点（分身），每个虚拟节点遵循顺时针原则，管理散列在哈希环（哈希桶）上对应的对象（http请求）；
+		3、这样，即便是新增或者删除真实的节点，都不会影响太大，因为每个真实的redis节点都可以看作是平均分配在整个系统当中的，1个节点的失效最多引起n个虚拟节点的实效，考虑到虚拟节点有散列平均分配的性质，基本不会造成灾难性影响。
+
+
+
+
+	6、keepalive connections;
+		'为每个worker进程保留的空闲的长连接数量；每worker与后端服务保持的最大空闲长连接数量'
+			设置维持保持连接的数量；每个worker进程共与后端服务器维持多少个连接；  
+			'连接数量 = worker * connections'
+			默认不开启；
+
+		如果代理服务器没有启用缓存功能，所有请求都要向后端服务器进行请求；每一个请求都需要一个端口，还有三次握手
+		开启保持连接后，多个请求可以使用同一个端口进行传输请求信息
+
+		
+	nginx的其它的二次发行版：
+		tengine
+		OpenResty
+		
+
+
+	'实验：1台Nginx作为反代并且是负载均衡，调用后端2台http或者nginx的web服务'
+		1、Nginx节点：
+			$ vim /etc/nginx/conf.d/maxie.conf 
+			upstream websrvs {
+				server 192.168.1.10:80 weight=2 max_fails=2 fail_timeout=2;
+				server 192.168.1.20:80 weight=1 max_fails=2 fail_timeout=2;
+
+				server 127.0.0.1:80 backup;
+			}
+
+			server {
+				listen 80;
+				server_name www.maxie.com;
+				location {
+					proxy_pass http://websrvs;
+				}
+			}
+
+			$ systemctl start nginx
+
+		2、RS节点：
+			$ yum install httpd 
+			$ echo "RS1" > /var/www/html/index.html
+
+			$ echo "RS2" > /var/www/html/index.html
+
+			$ systemctl start httpd 
+
+		3、测试即可
+
+
+
+
+
+
+
+
+
+'ngx_stream_core_module模块' 必须在编译安装需要加上参数：  --with-stream 
+	模拟反代基于tcp或udp的服务连接，即工作于传输层的反代或调度器；(伪四层代理)
+
+	查看是否支持：
+		$ rpm -qa | grep nginx
+		$ rpm -ql nginx-mod-stream
+	
+	1、stream { ... }
+		定义stream相关的服务；Context:main(主配置块中，而非http块中)
+		
+		stream {
+			upstream sshsrvs { 				'#这里的upstream是stream的，而非http的'
+				server 192.168.22.2:22; 
+				server 192.168.22.3:22; 
+				least_conn;
+			}
+
+			server {
+				listen 10.1.0.6:22022;		'#因为本机也有22端口，所以要定义另一个非占用的端口'
+				proxy_pass sshsrvs;
+			}
+		}
+
+
+		实例：4层代理实例
+			$ vim /etc/nginx/
+			stream {
+				server {
+					listen 22922;
+					proxy_pass 172.16.3.20:22;
+				}
+			}
+			$ systemctl start nginx 
+			$ ss -tnl 
+
+			远程连接测试：
+			$ ssh -p 22922 root@172.16.3.10
+
+		
+	2、listen
+		listen address:port [ssl] [udp] [proxy_protocol] [backlog=number] [bind] [ipv6only=on|off] [reuseport] [so_keepalive=on|off|[keepidle]:[keepintvl]:[keepcnt]];
+
+			ssl：支持ssl会话
+			udp：使用udp协议
+
+				
+	3、least_conn
+		最少连接
+
+	4、server address [parameters];
+		在upstream上下文中server成员，以及相关的参数；Context:	upstream
+		定义后端主机
+
+
+		address的表示格式：服务器地址
+			unix:/PATH/TO/SOME_SOCK_FILE
+			IP[:PORT]
+			HOSTNAME[:PORT]
+			
+		parameters：选项
+			weight=number
+				权重，默认为1；
+			max_fails=number
+				失败尝试最大次数；超出此处指定的次数时，server将被标记为不可用；
+				默认1次，失败一次就标记为不可用；0表示，不做健康状态检测
+			
+			fail_timeout=time
+				设置将服务器标记为不可用状态的超时时长；默认10秒
+			
+			max_conns
+				当前的服务器的最大并发连接数；
+			
+			backup(可以用来做sorry server)
+				将服务器标记为“备用”，即所有服务器均不可用时此服务器才启用；
+			
+			down
+				标记为“不可用”(软down，服务器真实并没有问题)；维护时使用
+
+	5、allow、deny
+
+	6、支持ssl
+
+	7、mysql负载均衡
+
+	8、hash key [consistent]
+
+
+
+
+编译安装nginx：
+	只有官方或者epel的安装编译选项不够我们使用时，或要使用第三方模块时，我们才进行编译安装
+	或者打补丁，需要编译安装
+
+	分布式文件系统需要的模块：
+		Mogilefs ：nginx作为Mogilefs客户端
+
+
+	打补丁：
+
+
+	下载src.rpm 源码rpm包；制作好之后，方便我们进行多台主机发布编译后的版本
+		$ rpm -ivh nginx.....src.rpm 
+		$ cd rpmbuild
+		$ rpmbuild -bb rpmbuild/SPECS/nginx.spec
+		$ yum install -y rpmbuild/RPMS/x86_64/nginx........x86_64.rpm
+
+
+
+
+
+'课外实践：'安装，查看文档；实现之前的学过的功能
+	tengine
+	Openresty
+
+
+
+'课外实践作业：'
+	5.23上午第二个视频最后10分钟
+
+	实现图片和php-fpm服务器的负载均衡(每个服务都要2台服务器)、
+	实现pma/WordPress的会话保持功能，
+	所有的WordPress以及图片可以分别存放在NFS共享存储上，
+	前端nginx处理静态内容，也可以是负载均衡(不是必须的)
+	如果前端nginx做了负载均衡，那么再做一个nginx的负载均衡调度器并实现对负载均衡调度器的HA高可用实现
+
+	拓扑结构：
+
+												                  +-------------+
+												                  |    ROUTER   |
+												                  +-------------+
+							                                 			|
+							                               			    +
+							    MASTER                   			keep|alived                 		    BACKUP
+							  172.16.3.10               			172.16.3.100               			  172.16.3.40
+							+-------------+    		  			  +-------------+            			+-------------+
+							|   nginx01   |-----------------------|  virtualIP  |-----------------------|   nginx02   |
+							+-------------+            			  +-------------+            			+-------------+
+							  192.168.1.10                    	         |                     			  192.168.1.20
+		                          +-----------------------------------------------------------------------------+
+		                          |                             						  						|
+		                    +-------------+              												+-------------+
+		                    |    web01    |               												|    web02    |
+		                    +-------------+               												+-------------+
+ 				                   |  													 						|
+		       +------------------------------------------+								   +------------------------------------------------+
+		       |               |           |              |       						   |                  |              |              |
+		   +---------+    +---------+   +---------+    +---------+  					   +---------+    +---------+   +---------+    +---------+ 
+		   |  jpg01  |    |  jpg02  |   |  fpm01  |    |  fpm02  |  					   |  jpg01  |    |  jpg02  |   |  fpm01  |    |  fpm02  |
+		   +---------+    +---------+   +---------+    +---------+  					   +---------+    +---------+   +---------+    +---------+
+
+
+
+
+
+算法学习：
+	一致性hash
+	取模hash
+
+
+
+	'对权重之和进行取模，取模之后的余数，根据余数进行调度'
+			对某个数字取模，余数一定是0 -- 这个数字-1 的范围
+
+		'一致性hash算法：'
+		hash可能会偏斜，使用虚拟服务器节点，解决hash偏斜 --> 计算量会变大
+			“虚拟节点”（ virtual node ）是实际节点（机器）在 hash 空间的复制品（ replica ），
+			一实际个节点（机器）对应了若干个“虚拟节点”，这个对应个数也成为“复制个数”，“虚拟节点”在 hash 空间中以hash值排列
+			
+
+		'总结：'
+		1、所谓的哈希算法，就是尽量做到随机无序，如果数据量足够的话，就可以看作是打乱顺序、平均分配位置的算法。
+		2、新增的redis物理节点，必须经过哈希算法，获取到n个虚拟节点（分身），每个虚拟节点遵循顺时针原则，管理散列在哈希环（哈希桶）上对应的对象（http请求）；
+		3、这样，即便是新增或者删除真实的节点，都不会影响太大，因为每个真实的redis节点都可以看作是平均分配在整个系统当中的，1个节点的失效最多引起n个虚拟节点的实效，考虑到虚拟节点有散列平均分配的性质，基本不会造成灾难性影响。
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

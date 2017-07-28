@@ -1,0 +1,735 @@
+7.18课后作业(搭建mogileFS、FastDFS、SeaweedFS)
+
+
+准备工作4台虚拟机
+
+	node1：172.16.1.100/16
+	node2：172.16.1.70/16
+	node3：172.16.1.30/16
+	node4：172.16.1.40/16
+
+同步时间：
+	$ ntpdate 172.16.0.1
+
+
+
+系统环境：
+	$ lsb_release -a
+	LSB Version:	:core-4.1-amd64:core-4.1-noarch:cxx-4.1-amd64:cxx-4.1-noarch:desktop-4.1-amd64:desktop-4.1-noarch:languages-4.1-amd64:languages-4.1-noarch:printing-4.1-amd64:printing-4.1-noarch
+	Distributor ID:	CentOS
+	Description:	CentOS Linux release 7.2.1511 (Core)
+	Release:	7.2.1511
+	Codename:	Core
+
+1、'搭建mogileFS'
+	
+	Node1：
+		(1) 配置MySQL，允许root用户远程连接
+			> GRANT ALL ON *.* TO 'root'@'172.16.1.%' IDENTIFIED BY 'root@123' WITH GRANT OPTION;
+			> FLUSH PRIVILEGES;
+
+		(2) 配置安装tracker
+			$ yum install -y  perl-Net-Netmask perl-IO-stringy perl-Sys-Syslog perl-IO-AIO
+			$ lftp 172.16.0.1
+			> cd pub/Sources/7.x86_64/mogilefs/
+			> mget *
+			$ yum install -y ./*.rpm
+			$ rpm -ql MogileFS-Server-mogilefsd
+			# 主配置文件
+			/etc/mogilefs/mogilefsd.conf
+			# 启动脚本
+			/etc/rc.d/init.d/mogilefsd
+			# 数据库初始化工具
+			/usr/bin/mogdbsetup
+			# mogilefsd主进程
+			/usr/bin/mogilefsd
+
+		(3) 配置mogilefs数据库
+			$ mysql 
+			> GRANT ALL ON *.* TO 'root'@'172.16.1.%' IDENTIFIED BY 'root@123';
+			> CREATE DATABASE mogilefs;
+			> GRANT ALL ON mogilefs.* TO 'moguser'@'172.16.1.%' IDENTIFIED BY 'root@123';
+			> FLUSH PRIVILEGES;
+
+			# 初始化数据库
+			$ mogdbsetup --dbhost=172.16.1.100 --dbrootpass='root@123' --dbuser='moguser' --dbpass='root@123'
+
+			# 查看数据库
+			MariaDB [mogilefs]> SHOW TABLES;
+			+----------------------+
+			| Tables_in_mogilefs   |
+			+----------------------+
+			| checksum             |
+			| class                |
+			| device               |
+			| domain               |
+			| file                 |
+			| file_on              |
+			| file_on_corrupt      |
+			| file_to_delete       |
+			| file_to_delete2      |
+			| file_to_delete_later |
+			| file_to_queue        |
+			| file_to_replicate    |
+			| fsck_log             |
+			| host                 |
+			| server_settings      |
+			| tempfile             |
+			| unreachable_fids     |
+			+----------------------+
+
+
+
+		(4) 修改主配置文件
+			$ vim /etc/mogilefs/mogilefsd.conf
+			#DBI：perl连接mysql的驱动，mysql数据库类型，mogdb连接的数据库，host不解释
+			db_dsn = DBI:mysql:mogdb:host=172.16.1.100
+			#连接数据库的用户
+			db_user = moguser                                      
+			#连接数据库的密码
+			db_pass = mogpass                                     
+			#mogilefsd监听的地址 
+			listen = 172.16.1.100:7001                            
+			#监听的端口
+			conf_port = 7001                                       
+			#启用的请求线程，为10表示只能并发10个客户端；注意客户端不是用户访问量，而是连接使用mogilefsd的服务器
+			query_jobs = 10                                        
+			#用于删除的线程
+			delete_jobs = 1                                        
+			#用于作复制的线程数量
+			replicate_jobs = 5                                     
+			#在存储失败后将文件复制请求重新放置于队列中的线程
+			reaper_jobs = 1                        
+
+
+		(5) 修改存储配置文件
+			$ vim /etc/mogilefs/mogilefsd.conf
+			maxconns = 10000
+			httplisten = 0.0.0.0:7500
+			mgmtlisten = 0.0.0.0:7501
+			docroot = /data/mogilefs/
+
+			$ mkdir -pv /data/mogilefs/dev1
+			$ chown -R mogilefs.mogilefs /data/mogilefs/
+
+		(6) 启动
+			$ systemctl start mogilefsd
+			$ service mogstored start
+			$ ss -tnl | grep -E "(7500)|(7501)|(7001)"
+			LISTEN     0      128          *:7500                     *:*
+			LISTEN     0      128          *:7501                     *:*
+			LISTEN     0      128          *:7001                     *:*
+
+		(7) 发送rpm包到其他节点
+			$ scp *.rpm root@172.16.1.70:/root
+			$ scp *.rpm root@172.16.1.30:/root
+			$ scp *.rpm root@172.16.1.40:/root
+
+
+
+
+
+	'Node2-4：配置stroge'
+		(1) 安装mogilefs
+			$ yum install -y perl-Net-Netmask perl-IO-stringy perl-Sys-Syslog perl-IO-AIO
+			$ yum install -y ./*.rpm
+
+		(2) 配置 
+			# dev2这里为每个节点的nodeN，比如Node3就是/dev3
+			$ mkdir -pv /data/mogilefs/dev2  
+			$ vim /etc/mogilefs/mogstored.conf
+			# 最大连接数
+			maxconns = 10000
+			# http监听端口
+			httplisten = 0.0.0.0:7500
+			# 管理监听端口
+			mgmtlisten = 0.0.0.0:7501
+			# 数据目录
+			docroot = /data/mogilefs/
+
+			$ chown -R mogilefs.mogilefs /data/mogilefs/
+
+		(3) 启动
+			$ service mogstored restart
+			$ ss -tnl
+
+
+	
+
+
+
+	'Node1：配置作为tracker中心节点，管理其他3个以及自己的数据节点'
+
+		$ mogadm --trackers=172.16.1.100:7001 host add node1 --ip=172.16.1.100 --status=alive
+		$ mogadm --trackers=172.16.1.100:7001 host add node2 --ip=172.16.1.70 --status=alive
+		$ mogadm --trackers=172.16.1.100:7001 host add node3 --ip=172.16.1.30 --status=alive
+		$ mogadm --trackers=172.16.1.100:7001 host add node4 --ip=172.16.1.40 --status=alive
+
+		$ mogadm host list
+		node1 [1]: alive
+		  IP:       172.16.1.100:7500
+
+		node2 [2]: alive
+		  IP:       172.16.1.70:7500
+
+		node3 [3]: alive
+		  IP:       172.16.1.30:7500
+
+		node4 [4]: alive
+		  IP:       172.16.1.40:7500
+
+
+	'添加设备文件'
+		$ mogadm device add node1 1
+		$ mogadm device add node2 2
+		$ mogadm device add node3 3
+		$ mogadm device add node4 4
+		$ mogadm device list
+		node1 [1]: alive
+		                    used(G)    free(G)   total(G)  weight(%)
+		   dev1:   alive      0.244     36.987     37.231        100
+
+		node2 [2]: alive
+		                    used(G)    free(G)   total(G)  weight(%)
+		   dev2:   alive      0.214     37.018     37.231        100
+
+		node3 [3]: alive
+		                    used(G)    free(G)   total(G)  weight(%)
+		   dev3:   alive      0.214     37.018     37.231        100
+
+		node4 [4]: alive
+		                    used(G)    free(G)   total(G)  weight(%)
+		   dev4:   alive      0.214     37.018     37.231        100
+
+
+
+
+
+
+	'检查一下状态'
+		$ mogadm check
+		Checking trackers...
+		  127.0.0.1:7001 ... OK
+
+		Checking hosts...
+		  [ 1] node1 ... OK
+		  [ 2] node2 ... OK
+		  [ 3] node3 ... OK
+		  [ 4] node4 ... OK
+
+		Checking devices...
+		  host device         size(G)    used(G)    free(G)   use%   ob state   I/O%
+		  ---- ------------ ---------- ---------- ---------- ------ ---------- -----
+		  [ 1] dev1            37.232      0.245     36.987   0.66%  writeable   0.0
+		  [ 2] dev2            37.232      0.214     37.017   0.58%  writeable   0.2
+		  [ 3] dev3            37.232      0.214     37.017   0.58%  writeable   0.0
+		  [ 4] dev4            37.232      0.214     37.017   0.58%  writeable   0.0
+		  ---- ------------ ---------- ---------- ---------- ------
+		             total:   148.927      0.888    148.039   0.60%
+
+
+
+
+
+
+	'添加domain和class'	
+		$ mogadm domain add files
+		$ mogadm domain add imgs
+		$ mogadm domain list
+		 domain               class                mindevcount   replpolicy   hashtype
+		-------------------- -------------------- ------------- ------------ -------
+		 files                default                   2        MultipleHosts() NONE
+
+		 imgs                 default                   2        MultipleHosts() NONE
+
+		$ mogadm class add imgs jpg
+		$ mogadm class add imgs jpeg
+		$ mogadm class add imgs png
+		$ mogadm class add imgs gif
+		$ mogadm class add files txt
+		$ mogadm class add files html
+		$ mogadm domain list
+		 domain               class                mindevcount   replpolicy   hashtype
+		-------------------- -------------------- ------------- ------------ -------
+		 files                default                   2        MultipleHosts() NONE
+		 files                html                      2        MultipleHosts() NONE
+		 files                txt                       2        MultipleHosts() NONE
+
+		 imgs                 default                   2        MultipleHosts() NONE
+		 imgs                 gif                       2        MultipleHosts() NONE
+		 imgs                 jpeg                      2        MultipleHosts() NONE
+		 imgs                 jpg                       2        MultipleHosts() NONE
+		 imgs                 png                       2        MultipleHosts() NONE
+
+
+
+
+	'上传文件和图片'
+		$ mogupload --trackers=172.16.1.100 --domain=files --key="/fstab.html" --file='/etc/fstab' --class=html
+		$ mogupload --trackers=172.16.1.100 --domain=imgs --key="/1.jpg" --file='/root/WechatIMG101498906505_.pic_hd.jpg' --class=jpg
+		
+		$ mogfileinfo --trackers=172.16.1.100 --domain=imgs --key='/1.jpg'
+		- file: /1.jpg
+		     class:                  jpg
+		  devcount:                    1
+		    domain:                 imgs
+		       fid:                    6
+		       key:               /1.jpg
+		    length:              2248247
+		 - http://172.16.1.40:7500/dev4/0/000/000/0000000006.fid
+		
+		$ mogfileinfo --trackers=172.16.1.100 --domain=files --key='/fstab.html'
+		- file: /fstab.html
+		     class:                 html
+		  devcount:                    1
+		    domain:                files
+		       fid:                    5
+		       key:          /fstab.html
+		    length:                  595
+		 - http://172.16.1.40:7500/dev4/0/000/000/0000000005.fid
+
+
+
+
+
+
+
+2、'配置nginx反代mogilefs文件系统'
+
+	(1) 编译安装nginx
+		$ wget ftp://172.16.0.1/pub/Sources/sources/nginx/nginx_mogilefs_module-1.0.4.tar.gz
+		$ yum groupinstall -y "Development Tools" "Server Platform Development"
+		$ scp maxie@172.16.1.11:/Users/machiyuan/Downloads/nginx-1.8.0.tar.gz ./
+		$ tar xf nginx-1.8.0.tar.gz
+		$ tar xf nginx_mogilefs_module-1.0.4.tar.gz
+
+		$ cd nginx-1.8.0/
+		$ yum install -y pcre-devel
+		$ yum install openssl-devel -y
+
+		$ ./configure --prefix=/usr --sbin-path=/usr/sbin/nginx --conf-path=/etc/nginx/nginx.conf --error-log-path=/var/log/nginx/error.log --http-log-path=/var/log/nginx/access.log --pid-path=/var/run/nginx/nginx.pid  --lock-path=/var/lock/nginx.lock --user=nginx --group=nginx --with-http_ssl_module --with-http_flv_module --with-http_stub_status_module --with-http_gzip_static_module --http-client-body-temp-path=/var/tmp/nginx/client/ --http-proxy-temp-path=/var/tmp/nginx/proxy/ --http-fastcgi-temp-path=/var/tmp/nginx/fcgi/ --http-uwsgi-temp-path=/var/tmp/nginx/uwsgi --http-scgi-temp-path=/var/tmp/nginx/scgi --with-pcre --with-debug --add-module=../nginx_mogilefs_module-1.0.4
+
+		$ make CFLAGS="-pipe  -O -W -Wall -Wpointer-arith -Wno-unused-parameter -g"
+		$ make install
+		$ groupadd -r nginx
+		$ useradd -r -g nginx nginx
+		$ nginx -t
+		$ nginx 
+
+	(2) 编辑nginx配置文件反向代理mogilefs	
+		$ vim /etc/nginx/nginx.conf
+		location /imgs {
+            mogilefs_tracker 172.16.1.100:7001;
+            mogilefs_domain imgs;
+            mogilefs_methods GET;
+            mogilefs_noverify on;
+            mogilefs_pass {
+                  proxy_pass $mogilefs_path;
+                  proxy_hide_header Content-Type;
+                  proxy_buffering off;
+            }
+        }
+
+        location /files  {
+            mogilefs_tracker 172.16.1.100:7001;
+            mogilefs_domain files;
+            mogilefs_methods GET;
+            mogilefs_noverify on;
+            mogilefs_pass {
+                  proxy_pass $mogilefs_path;
+                  proxy_hide_header Content-Type;
+                  proxy_buffering off;
+            }
+        }
+
+        $ nginx -t
+        $ nginx -s reload
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+3、FastDFS部署	
+	下载：
+		$ lftp 172.16.0.1/pub/Sources/SRPMS/fastdfs
+		> mget *
+		$ ls
+		fastdfs-5.0.11-1.el7.centos.src.rpm        nginx-1.10.2-1.el7.centos.src.rpm
+		libfastcommon-1.0.36-1.el7.centos.src.rpm
+
+	dropbox网盘：(安装一种即可)
+		RPM包
+			https://www.dropbox.com/sh/hk8mk99aac5bx3h/AAB-hn0efsv9eIXrwdSk8t7Ca?dl=0
+		源码包：
+			https://www.dropbox.com/sh/bt1nen8dfit2b3l/AACHtC1uEsPCv95hFsqnaZHKa?dl=0
+
+
+	(1) '制作fastDFS依赖环境的RPM包'
+		$ yum groupinstall -y "Development Tools"
+		$ yum install -y git
+		$ git clone https://github.com/happyfish100/fastdfs.git
+		$ git clone https://github.com/happyfish100/libfastcommon.git
+
+		$ mv libfastcommon1.0.11/ libfastcommon-1.0.36
+		$ tar zcf libfastcommon-1.0.36.tar.gz libfastcommon-1.0.36/
+		$ mv libfastcommon-1.0.36.tar.gz rpmbuild/SOURCES/
+		$ cp libfastcommon-1.0.36/libfastcommon.spec rpmbuild/SPECS/
+		$ cd rpmbuild/SPECS/
+		$ rpmbuild -bb libfastcommon.spec
+		$ cd /root/rpmbuild/RPMS/x86_64/
+		$ yum install -y ./*.rpm
+
+
+
+		生成的3个PRM包
+			libfastcommon-1.0.36-1.el7.centos.x86_64.rpm
+			libfastcommon-debuginfo-1.0.36-1.el7.centos.x86_64.rpm
+			libfastcommon-devel-1.0.36-1.el7.centos.x86_64.rpm
+
+	(2) '制作fastDFS的 RPM包'
+
+		$ mv fastdfs/ fastdfs-5.0.11
+		$ tar zcf fastdfs-5.0.11.tar.gz fastdfs-5.0.11/
+		$ mv fastdfs-5.0.11.tar.gz rpmbuild/SOURCES/
+		$ cp fastdfs-5.0.11/fastdfs
+		$ cd rpmbuild/SPECS/
+		$ rpmbuild -bb fastdfs.spec
+		$ cd ../RPMS/x86_64/
+		$ ls fast*
+		fastdfs-5.0.11-1.el7.centos.x86_64.rpm
+		fastdfs-debuginfo-5.0.11-1.el7.centos.x86_64.rpm
+		fastdfs-server-5.0.11-1.el7.centos.x86_64.rpm
+		fastdfs-tool-5.0.11-1.el7.centos.x86_64.rpm
+
+		# 将debuginfo包删除即可，无需用到
+		$ ls
+		fastdfs-5.0.11-1.el7.centos.x86_64.rpm
+		fastdfs-server-5.0.11-1.el7.centos.x86_64.rpm
+		fastdfs-tool-5.0.11-1.el7.centos.x86_64.rpm
+		libfastcommon-1.0.36-1.el7.centos.x86_64.rpm
+		libfastcommon-devel-1.0.36-1.el7.centos.x86_64.rpm
+		libfdfsclient-5.0.11-1.el7.centos.x86_64.rpm
+		libfdfsclient-devel-5.0.11-1.el7.centos.x86_64.rpm
+
+		$ scp -r x86_64/ root@172.16.1.70:/root/fastdfs
+		$ scp -r x86_64/ root@172.16.1.30:/root/fastdfs
+		$ scp -r x86_64/ root@172.16.1.40:/root/fastdfs
+		$ scp -r x86_64/ root@172.16.1.100:/root/fastdfs
+
+
+		$ ls /etc/init.d
+		fdfs_storaged  fdfs_trackerd  functions  netconsole  network  README
+
+
+	(3) 四个节点都安装这些RPM包
+
+		$ yum install -y ./fastdfs/*.rpm
+
+	(4) 拷贝配置文件至其他节点
+		$ scp -r fastdfs-5.0.11/conf/* root@172.16.1.100:/etc/fdfs
+		$ scp -r fastdfs-5.0.11/conf/* root@172.16.1.70:/etc/fdfs
+		$ scp -r fastdfs-5.0.11/conf/* root@172.16.1.30:/etc/fdfs
+		$ scp -r fastdfs-5.0.11/conf/* root@172.16.1.40:/etc/fdfs
+
+	
+	(5) 修改FastDFS配置文件 ('tracker节点配置文件')   --> 172.16.1.100 Node1 
+		$ vim tracker.conf
+		# 是否关闭，默认为不关闭
+		disabled=false
+
+		# 监听的地址
+		bind_addr=
+
+		# 监听端口
+		port=22122
+
+		# 连接超时时间
+		connect_timeout=30
+
+		# 网络超时时间
+		network_timeout=60
+
+		# tracker节点存放的临时文件和日志目录
+		base_path=/data/fastdfs
+
+		# 最大连接数
+		max_connections=256 
+
+		# 调度存储节点的调度方法，0：轮询；1：指定组；2：负载均衡，根据最大剩余空间来进行调度
+		store_lookup=2
+
+		# 指定数据存储的组，如果lookup设定为1，这时此配置有效
+		store_group=group2
+
+		# 选择要存储的服务器节点
+		store_server=0
+
+		# 选择存储节点上磁盘的调度算法；0：轮询；2：选择最大空间的进行写入
+		store_path=0
+
+		# 读文件。0：轮询；1：根据上传时的节点，进行读取操作
+		download_server=0
+
+		# 预留空间
+		reserved_storage_space = 10%
+
+		# http监听地址
+		http.server_port=80
+
+		# 运行时的组
+		run_by_group=fastdfs
+
+		# 运行时的用户
+		run_by_user=fastdfs
+
+
+		$ groupadd -r fastdfs
+		$ useradd -r -g fastdfs fastdfs
+		$ mkdir -pv /data/fastdfs
+		$ chown -R fastdfs.fastdfs /etc/fdfs
+		$ chown -R fastdfs.fastdfs /data/fastdfs
+
+		$ service fdfs_trackerd start 
+		$ ss -tnl | grep 22122
+
+
+
+	(2) '配置storge存储节点' --> Node1 172.16.1.100
+		$ vim /etc/fdfs/storge.conf 
+		# 监听的端口
+		port=23000
+		# 临时文件存储路径
+		base_path=/data/fastdfs
+		# 存储路径数
+		store_path_count=1
+		# 存储数据的目录
+		store_path0=/data/storge
+		# 数据存储目录下的子目录(默认创建256个)
+		subdir_count_per_path=256
+		# tracker节点地址
+		tracker_server=172.16.1.100:22122
+		# 运行时的组
+		run_by_group=fastdfs
+		# 运行时的用户
+		run_by_user=fastdfs
+
+		$ mkdir /data/storge
+		$ chown -R fastdfs.fastdfs /data/storge
+		$ service fdfs_storaged restart
+		$ ss -tnl | gep 23000
+
+
+		$ scp storage.conf root@172.16.1.70:/etc/fdfs
+		$ scp storage.conf root@172.16.1.30:/etc/fdfs
+		$ scp storage.conf root@172.16.1.40:/etc/fdfs
+
+
+
+
+
+	(3) 剩余3个节点也作为storge节点：
+		$ mkdir -pv /data/{fastdfs,storge}
+		mkdir: created directory ‘/data’
+		mkdir: created directory ‘/data/fastdfs’
+		mkdir: created directory ‘/data/storge’
+		
+		$ groupadd -r fastdfs
+		$ useradd -r -g fastdfs fastdfs
+		$ chown -R fastdfs.fastdfs /etc/fdfs/
+		$ chown -R fastdfs.fastdfs /data/fastdfs
+		$ chown -R fastdfs.fastdfs /data/storge/
+
+		'编辑node3 172.16.1.30和 node4 172.16.1.40的配置文件'
+
+		$ vim /etc/fdfs/storage.conf
+		group_name=group2
+
+		将node3、4归到gorup2中，node1和node2为group1
+
+
+	(4) 启动服务
+		$ servic fdfs_storaged start 
+		$ ss -tnl | grep 23000
+
+	(5) 查看是否启动成功
+
+		$ cat /data/fastdfs/logs/storaged.log
+		[2017-07-18 10:03:11] INFO - file: storage_sync.c, line: 2732, successfully connect to storage server 172.16.1.40:23000
+
+	(6) '配置FastDFS客户端 --> Node1 172.16.1.100'
+
+		$ vim /etc/fdfs/client.conf
+		base_path=/data/fastdfs
+		tracker_server=172.16.1.100:22122
+
+		'# 上传文件测试'
+		$ fdfs_upload_file /etc/fdfs/client.conf /usr/share/wallpapers/Hanami/contents/images/1280x1024.jpg
+		group2/M00/00/00/rBABHlltb8eAEWGAAAY9u23JBFw244.jpg
+
+		'# 查看文件存储在哪里'
+		$ fdfs_file_info client.conf group2/M00/00/00/rBABHlltb8eAEWGAAAY9u23JBFw244.jpg
+		source storage id: 0
+		source ip address: 172.16.1.30
+		file create timestamp: 2017-07-18 10:17:43
+		file size: 409019
+		file crc32: 1841890396 (0x6DC9045C)
+
+
+
+
+
+
+
+
+
+
+
+
+4、'fastdfs-nginx-module 安装配置'
+
+	fastdfs-nginx-module模块只需要安装到storage上(因为我们每台机器都配置了storge，所以都要安装)
+
+
+	'所有节点执行以下操作'
+
+	(1) 编译安装Nginx
+		下载将fastdfs-nginx-module编译进nginx中的SRC.RPM包，编译安装即可  或者 直接安装我们编译好的RPM包即可
+		# 源码包：https://www.dropbox.com/sh/bt1nen8dfit2b3l/AACHtC1uEsPCv95hFsqnaZHKa?dl=0
+
+		$ lftp 172.16.0.1/pub/Sources/7.x86_64/fastdfs/
+		> mget nginx-*
+		$ ls 
+		# 此nginx为我们自己制作的已经将fastdfs-nginx-module编译进nginx的RPM包，下载地址在文章尾部
+		# 下载地址：https://www.dropbox.com/sh/hk8mk99aac5bx3h/AAB-hn0efsv9eIXrwdSk8t7Ca?dl=0 
+		nginx-1.10.2-1.el7.centos.x86_64.rpm
+		nginx-all-modules-1.10.2-1.el7.centos.noarch.rpm
+		nginx-filesystem-1.10.2-1.el7.centos.noarch.rpm
+		nginx-mod-http-geoip-1.10.2-1.el7.centos.x86_64.rpm
+		nginx-mod-http-image-filter-1.10.2-1.el7.centos.x86_64.rpm
+		nginx-mod-http-perl-1.10.2-1.el7.centos.x86_64.rpm
+		nginx-mod-http-xslt-filter-1.10.2-1.el7.centos.x86_64.rpm
+		nginx-mod-mail-1.10.2-1.el7.centos.x86_64.rpm
+		nginx-mod-stream-1.10.2-1.el7.centos.x86_64.rpm
+		$ yum install -y ./*.rpm 
+
+
+		# 创建日志文件
+		$ id nginx
+		uid=990(nginx) gid=985(nginx) groups=985(nginx)
+		$ touch /data/fastdfs/logs/mod_fastdfs.log
+		$ chown -R nginx.nginx /data/fastdfs/logs/mod_fastdfs.log
+		$ ll /data/fastdfs/logs/mod_fastdfs.log
+		-rw-r--r-- 1 nginx nginx 0 Jul 18 10:53 /data/fastdfs/logs/mod_fastdfs.log 
+
+
+		# 编辑mod_fastdfs配置文件
+		$ vim /etc/fdfs/mod_fastdfs.conf
+		base_path=/data/fastdfs
+		tracker_server=172.16.1.100:22122
+		store_path0=/data/storge
+		log_filename=/data/fastdfs/logs/mod_fastdfs.log
+
+
+	(2) 编辑nginx配置文件 
+		$ vim /etc/nginx/nginx.conf
+		location /M00 {
+                alias /data/storge/data;
+                ngx_fastdfs_module;
+        }
+
+        $ nginx -t
+		ngx_http_fastdfs_set pid=3898
+		nginx: the configuration file /etc/nginx/nginx.conf syntax is ok
+		nginx: configuration file /etc/nginx/nginx.conf test is successful
+       
+
+
+    (3) 上传文件 进行测试
+    	$ fdfs_upload_file /etc/fdfs/client.conf /usr/share/wallpapers/Flying_Field/contents/images/1920x1080.jpg
+    	$ fdfs_file_info /etc/fdfs/client.conf group2/M00/00/00/rBABKFltfkmAa1k4AA8WqzPCs1s869.jpg
+    	source storage id: 0
+		source ip address: 172.16.1.40
+		file create timestamp: 2017-07-18 11:19:37
+		file size: 988843
+		file crc32: 868397915 (0x33C2B35B)
+
+    	$ fdfs_upload_file /etc/fdfs/client.conf /usr/share/wallpapers/Media_Life/contents/images/1680x1050.jpg
+    	$ fdfs_file_info /etc/fdfs/client.conf group2/M00/00/00/rBABHlltfoyAcPT2AAYb-JeJuSg330.jpg
+    	source storage id: 0
+		source ip address: 172.16.1.30
+		file create timestamp: 2017-07-18 11:20:44
+		file size: 400376
+		file crc32: 2542385448 (0x9789B928)
+
+	(4) 开启nginx服务
+		$ systemctl start nginx 
+		$ ss -tnl 
+		$ ps aux 
+
+	(5) 打开网页测试
+
+		http://172.16.1.100/M00/00/00/rBABHlltfoyAcPT2AAYb-JeJuSg330.jpg
+
+		http://172.16.1.100/M00/00/00/rBABKFltfkmAa1k4AA8WqzPCs1s869.jpg
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

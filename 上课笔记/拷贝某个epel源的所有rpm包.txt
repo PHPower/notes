@@ -1,0 +1,4 @@
+拷贝某个epel源的所有rpm包
+
+
+wget -np -H --cut-dirs=0 -r -c -L http://172.16.0.1/fedora-epel/6/x86_64/ -P ./

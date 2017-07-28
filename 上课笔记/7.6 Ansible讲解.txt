@@ -1,0 +1,1825 @@
+
+环境部署：
+	Pxe、Cobbler：
+		通过网络自动化部署系统
+
+		游戏运维(腾讯)：平均每人运维1W-1.5W台机器
+
+配置管理：
+	puppet、saltstack、ansible，chef，cfengine
+		早期：chef、cfengine
+		puppt：中期，被saltstack(500-1000会出现瓶颈)、ansible代替
+		ansible：使用Python编写，12年诞生
+
+命令执行：
+	fabric，func
+		轻量级工具，只执行一些命令
+
+'程序发布：'
+	人工智能(纯手工)
+	工具化(脚本化)
+	平台化(DevOps，全栈) --> 只需会一些运维工具即可和轻量级开发语言
+	智能化
+
+
+
+
+
+'运维工具介绍'
+
+	### Ansible
+	'Ansible优点：'
+		Agentless(去中心化)
+		Stupied Simple （上手简单，学习曲线平滑）
+		SSH by default （安全，无需安装客户端）
+		YAML no code，定制剧本 （语法简单，维护方便）
+
+	'自动工具衍生过程：'
+		早期(很复杂，使用复杂，安装复杂，配置复杂)：chef cfengine（C语言） func
+		中期（向轻量型发展）：puppet （ruby）
+		近代（轻量工具）： saltstack ansible (Python)
+
+	
+	'Ansible使用场景：'
+
+		ls cd pwd top touch cp mv rm mkdir ln useradd userdel use* group* passwd* cat head tail tac
+		more less set ifconfig scp rsync
+		（1）文件传输：
+		mv cp scp rsync
+		（2）命令执行：
+		剩下的其它命令
+
+		安装http服务：
+			安装
+			配置
+			启动服务（本机的服务启动） tasks
+			让服务对用户提供服务（路由器配置，iptables）
+
+
+
+'Ansible企业实际应用场景分析：'
+	（1）Dev开发环境
+		使用者：程序员(dev)
+		功能：程序员开发软件测试BUG的环境
+		管理者：千万不能是运维，一定是要程序员自已
+	
+	（2）测试环境('测试环境一般需要的机器比较多')
+		使用者：测试工程师(qa)
+		功能：测试经过Dev环境测试通过的软件的功能
+		管理者：运维
+		备注：测试环境往往有多套（测试环境满足测试功能即可，不宜过多）
+			（1）测试同学希望测试环境有多套
+				公司的产品多产品线并发，即多个版本，意味着多个版本同步测试
+			（2）通常情况下，测试环境有多少套和产品线数量保持一样
+	
+	（3）发布环境（代码发布机，有些公司堡垒机（安全屏障））
+		使用者：运维
+		功能：'发布代码至生产环境'
+		管理者：运维（有经验的）
+		发布机：往往需要有2台（主备）
+	
+	（4）生产环境
+		使用者：运维，只能是运维（极少数情况下会开放权限给核心开发人员，极少数公司将该 环境权限完全开放给开发人员并让开发人员维护）
+		功能：对用户提供公司产品的服务
+		管理者：只能是运维
+		生产环境服务器数量：一般比较多，且应用非常重要。往往需要自动工具协助部署配置应用。机器数量具体和公司业务规模相关。
+	
+	（5）灰度环境（生产环境的一部分）
+		使用者：运维
+		功能：在全量发布代码前将代码的功能面向少量精准用户发布的环境;
+			'灰度发布是指在黑与白之间，能够平滑过渡的一种发布方式'
+			'灰度发布可以保证整体系统的稳定，在初始灰度的时候就可以发现，调整问题，以保证其影响度'
+			案例：
+			大家手头100台服务器，先发布其中的10台服务器，这10台服务器就是灰度服务器。
+		管理者：只能是运维
+		为什么灰度环境：往往该版本功能变更较大，为保险起见特意先让一部分用户优化体验该功能，待这部分用户使用没有重大问题的时候，再全量发布至所有服务器。
+
+
+
+'自动化发布：'
+	发布机/Master/管理器/堡垒机
+		1、统一入口、规范管理
+		2、利用手机APP动态口令等验证机制
+		3、托管服务器密码，实现自动改密
+		4、事中控制，防止违规
+		5、操作精细化审计，追溯整个运维过程
+
+	目录摆放规范简述：
+		/srv/
+		/data/srv/
+		/web/
+		/app/
+
+	命名规范简述：
+		一级：项目名
+		二级：打宝石就
+		三级：版本号
+			朱版本号.子版本号[.修正版本号[.编译版本号]]
+		四级：版本特性
+
+	示例：
+		webapp-201740141220-v1.0.10.0-Beta
+		webapp-201740141220-v1.0.10.0-Stable
+
+
+
+
+
+
+'Ansible简介：'
+	特点：
+		1、Agentless：去中心化
+		2、Stupied Simple
+		3、SSH by default：基于ssh认证
+		4、YAML no code，定制剧本：语法格式为YAML
+		5、基于Python实现
+		6、模块化：调用特定模块，完成特定任务，支持自定义模块
+		7、幂等性：同一个命令/文件可以执行多次
+
+	2015.10被红帽收购
+
+
+
+
+
+'Ansible安装'
+	yum install ansible -y
+	ansible --verison ##查看安装的版本号
+
+	Ansible 1.9和2.0的区别：
+	（1） 最大区别是2.0的API调用方式发生变化，1.9原有的api调用方式在2.0不再支持
+	（2） 2.0增加了重要的功能： ansible-console
+	（3） Ansible 2.0的模块数量增加很多，500+个模块数量
+
+	'配置文件：'
+		/etc/ansible/
+		/etc/ansible/ansible.cfg：主配置文件
+		/etc/ansible/hosts：仓库文件
+		/etc/ansible/roles：剧本文件
+
+
+	'Ansible命令集'
+	/usr/bin/ansible   			# Ansibe AD-Hoc 临时命令执行工具，常用于临时命令的执行
+	/usr/bin/ansible-doc  		'# Ansible 模块功能查看工具，类似于 man 文档'
+	/usr/bin/ansible-galaxy 	'# 下载/上传优秀代码或Roles模块的官网平台，基于网络的；类似于github功能'
+	/usr/bin/ansible-playbook 	'# Ansible 定制自动化的任务集编排工具；ansible剧本-->类似于脚本的功能'
+	/usr/bin/ansible-pull 		# Ansible远程执行命令的工具（使用较少，海量机器时使用，对运维的架构能力要求较高）
+	/usr/bin/ansible-vault 		'# Ansible 文件加密工具'
+	/usr/bin/ansible-console  	'# Ansible基于Linux Consoble界面可与用户交互的命令执行工具'
+
+	'Ansible高级自定义插件目录（需要python基础）'
+	/usr/share/ansible_plugins
+		action  （(可能使用较多)）
+		callback (可能使用较多)
+		connection
+		filter
+		lookup
+		vars
+
+
+	'添加认证'
+		ssh-keygen -t rsa -P ''
+
+		ssh-copy-id -i .ssh/id_rsa.pub root@192.168.99.120 
+
+		ansible srv1 -m ping
+
+	
+	'Ansible 命令使用格式 '
+		ansible <host-pattern> [options]
+
+
+	'主要组成部分：'
+		1、ANSIBLE PLAYBOOKS ：任务剧本（任务集），编排定义 Ansible 任务集的配置文件，由 Ansible 顺序依次执行，通常是 JSON 格式的 YML 文件；
+			'类似于脚本 '
+
+		2、INVENTORY ： Ansible 管理主机的清单；
+			'主机清单，类似于/etc/hosts文件'
+
+		3、MODULES ： Ansible 执行命令的功能模块，多数为内置的核心模块，也可自定义；
+			
+
+		4、PLUGINS ：模块功能的补充，如连接类型插件、循环插件、变量插件、过滤插件等，该功能不常用。
+		5、API ：供第三方程序调用的应用程序编程接口
+		6、ANSIBLE ：该部分图中表示的不明显，组合 INVENTORY 、API 、 MODULES 、 PLUGINS 的绿框大家可以理解为是ansible 命令工具，其为核心执行工具；
+
+
+	'添加组配置信息：'
+		$ vim /etc/ansible/hosts 
+		[web]
+		172.16.1.100
+		172.16.1.70
+		172.16.1.20
+		172.16.4.10
+
+		测试
+		$ ansible web -m ping 
+
+
+
+
+	'返回颜色：'
+		绿色：正常返回
+		红色：执行失败
+		黄色：执行成功并且对目标主机做变更
+
+
+
+	- 调用ping模块检测172.16.0.68是否存活
+	ansible 172.16.0.68 -m ping
+	返回信息如下：
+	172.16.0.68 | success >> {
+	    "changed": false, 
+	    "ping": "pong"
+	}
+
+	ansible "172.16.0.6*" -m ping
+
+
+	- Ansible模块查看
+	ansible-doc -l
+
+	- Ansible command创建文件
+	ansible 172.16.0.6* -m command -a "touch /tmp/stanley.md"
+
+
+
+
+	Ansible命令详解：
+	Usage: ansible <host-pattern> [options]
+
+
+
+
+
+	'Options:命令选项'
+	  -a MODULE_ARGS, --args=MODULE_ARGS
+	                        module arguments  # 指定Ansible调用的模块
+	  --ask-become-pass     ask for privilege escalation password # Ansible su切换用户的时候使用该参数输入密码
+	  -k, --ask-pass        ask for SSH password  # 以密码认证
+	  --ask-su-pass         ask for su password (deprecated, use become) # su的时候使用该 参数
+	  -K, --ask-sudo-pass   ask for sudo password (deprecated, use become) # sudo的时候
+	  --ask-vault-pass      ask for vault password # ansible-valut 加密文件
+	  -B SECONDS, --background=SECONDS  # 后台等待X秒
+	                        run asynchronously, failing after X seconds
+	                        (default=N/A)
+	  -b, --become          run operations with become (nopasswd implied)
+	  --become-method=BECOME_METHOD
+	                        privilege escalation method to use (default=sudo),
+	                        valid choices: [ sudo | su | pbrun | pfexec | runas ]
+	  --become-user=BECOME_USER
+	                        run operations as this user (default=None)  # su到哪个用户
+	  -C, --check           dont make any changes; instead, try to predict some
+	                        of the changes that may occur  # 不执行命令只做命令执行检查
+	  -c CONNECTION, --connection=CONNECTION
+	                        connection type to use (default=smart)
+	  -e EXTRA_VARS, --extra-vars=EXTRA_VARS  # 调用外部变量
+	                        set additional variables as key=value or YAML/JSON
+	  -f FORKS, --forks=FORKS  # Ansible一次命令执行并发的线程数
+	                        specify number of parallel processes to use
+	                        (default=5)
+	  -h, --help            show this help message and exit
+	  -i INVENTORY, --inventory-file=INVENTORY  # Ansible调用的Hosts文件，默认/etc/ansible/hosts
+	                        specify inventory host file
+	                        (default=/etc/ansible/hosts)
+	  -l SUBSET, --limit=SUBSET  # 限定主机列表中的某台机器执行
+	                        further limit selected hosts to an additional pattern
+	  --list-hosts          outputs a list of matching hosts; does not execute
+	                        anything else  ## 列出主机列表中的主机
+	  -m MODULE_NAME, --module-name=MODULE_NAME  # Ansible 调用的执行模块
+	                        module name to execute (default=command)
+	  -M MODULE_PATH, --module-path=MODULE_PATH
+	                        specify path(s) to module library (default=None)
+	  -o, --one-line        condense output
+	  -P POLL_INTERVAL, --poll=POLL_INTERVAL
+	                        set the poll interval if using -B (default=15)
+	  --private-key=PRIVATE_KEY_FILE
+	                        use this file to authenticate the connection
+	  -S, --su              run operations with su (deprecated, use become) #使用su和become结合使用
+	  -R SU_USER, --su-user=SU_USER  # su的话切换至哪个用户
+	                        run operations with su as this user (default=root)
+	                        (deprecated, use become)
+	  -s, --sudo            run operations with sudo (nopasswd) (deprecated, use
+	                        become)  # 执行sudo命令
+	  -U SUDO_USER, --sudo-user=SUDO_USER  # sudo 
+	                        desired sudo user (default=root) (deprecated, use
+	                        become)
+	  -T TIMEOUT, --timeout=TIMEOUT  # 执行命令的超时时间
+	                        override the SSH timeout in seconds (default=10)
+	  -t TREE, --tree=TREE  log output to this directory
+	  -u REMOTE_USER, --user=REMOTE_USER
+	                        connect as this user (default=root)
+	  --vault-password-file=VAULT_PASSWORD_FILE  ## ansible-vault加密的密码文件
+	                        vault password file
+	  -v, --verbose         verbose mode (-vvv for more, -vvvv to enable
+	                        connection debugging)  # 显示详细信息 -vvvv
+	  --version             show programs version number and exit ## 显示版本号
+
+
+
+
+
+	'Ansiblie命令执行过程 （-vvvv）'
+		1. 加载自己的配置文件 默认/etc/ansible/ansible.cfg
+		2. 加载自己对应的模块文件，如command
+		3. 通过ansible将模块或命令生成对应的临时py文件，并将该 文件传输至远程服务器的
+		对应执行用户的家目录的.ansible/tmp/XXX/XXX.PY文件
+		4. 给文件+x执行
+		5. 执行并返回结果
+		6. 删除临时py文件，sleep 0退出
+
+
+
+	'Ansible核心组件：'
+		ANSIBLE PLAYBOOKS：任务剧本（任务集），编排定义Ansible任务集的配置文件，由Ansible顺序依次执行，通常是JSON格式的YML文件；
+		INVENTORY：Ansible管理主机的清单；/etc/ansible/hosts
+		MODULES：Ansible执行命令的功能模块，多数为内置的核心模块，也可自定义； （ansible-doc -l获取Ansible的所有模块列表）
+		PLUGINS：模块功能的补充，如连接类型插件、循环插件、变量插件、过滤插件等，该功能不常用。
+		API：供第三方程序调用的应用程序编程接口；
+		ANSIBLE：该部分图中表示的不明显，组合INVENTORY、API、MODULES、PLUGINS的绿框大家可以理解为是ansible命令工具，其为核心执行工具；
+
+
+
+	'Ansible命令执行来源：'
+	（1） USER，普通用户，即SA （SYSTEM ADMINISTRATOR）。
+	（2） CMDB API 调用
+	（3） PUBLIC/PRIVATE CLOUD API调用
+	（4）USER-> Ansible Playbook -> Ansibile
+		Ansible-playbook（剧本）：
+			a> 将已有编排好的任务集写入Ansible-Playbook
+			b> 通过ansible-playbook命令分拆任务集至逐条ansible命令，按预定规则逐条执行。
+
+	Ansible 和 Ansible-playbook的使用场景：
+	Ansible 主要用于临时命令使用场景
+	Ansible-playbook 主要用于长期规划好的，大型项目的场景，需要有前提的规划。
+
+
+
+	'Ansible主要操作对象： '
+		HOSTS(主要学习)
+		NETWORKING
+
+
+
+!!!	'Ansible组件调用关系：（大家自己总结）'
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+'Ansible 实战演练'
+	ansible 172.16.0.6* -m command -a 'ls /tmp'
+
+	- Ansible group 定义:
+	[groupname]  定义Inventory 组，后面可跟ip ,也可跟hostname
+
+	[mageduweb]
+	172.16.0.68
+	172.16.0.69
+
+
+
+
+	'Ansible 配置文件'（绝大多数配置保持默认就好）
+	（1）[defaults]
+		inventory      = /etc/ansible/hosts  		'# 主机列表配置文件'
+		library        = /usr/share/my_modules/ 	# 库文件存放目录 
+		remote_tmp     = $HOME/.ansible/tmp  		'# 生成的临时py命令文件存放在远程主机的目录'
+		local_tmp      = $HOME/.ansible/tmp 		'# 本机的临时命令执行目录'
+		forks          = 5   						# 默认并发数
+		poll_interval  = 15   						# 默认的线程池
+		sudo_user      = root  						# 默认sudo 用户
+		ask_sudo_pass = True
+		ask_pass      = True
+		transport      = smart
+		remote_port    = 22 						'# 远程ssh端口号'
+		module_name    = command
+		module_lang    = C
+		module_set_locale = False
+
+		roles_path	   = /etc/ansible/roles 		# 默认从ansible-galaxy下载路径
+
+		host_key_checking = False  					'### 检查对应服务器的host_key'
+
+
+	（2）[privilege_escalation]
+	（3）[paramiko_connection]
+	（4）[ssh_connection]
+	（5）[accelerate]
+	（6）[selinux]
+	（7）[colors]：执行命令后输出的颜色
+
+	
+
+
+
+	'Ansible模块：'
+	
+
+		- command模块： 使用ansible自带模块执行命令  如果要用 > < | & ' ' 使用shell模块 core
+		ansible mageduweb -m command -a 'ls /tmp'
+		ansible mageduweb -m command -a 'cat /tmp/stanley.md | grep echo'  ##执行失败，即使不返回失败结果也不会正常生效
+			不支持特殊符号： | < > 等其他符号
+		
+
+		- creates
+		        a filename or (since 2.0) glob pattern, when it already exists, this
+		        step will *not* be run.
+		        [Default: None]
+
+		
+
+		- shell 模块： 调用bash执行命令 类似 cat /tmp/stanley.md | awk -F'|' '{print $1,$2}' &> /tmp/stanley.txt 这些复杂命令，即使使用shell也会失败，解决办法：写到脚本时，copy到远程，执行，再把需要的结果拉回执行命令的机器（执行Ansible命令的机器往往称为：Master机或者中控机或者堡垒机）。
+		ansible mageduweb -m shell -a 'echo magedu | passwd –-stdin stanley'
+
+
+		
+
+		- copy： '复制本地文件至远程服务器，并且能够改属性等'
+		ansible mageduweb -m copy -a 'src=/root/125.sh dest=/root/p.sh owner=stanley backup=no mode=600'
+			- backup：是否备份已存在的文件
+			- content：
+			= dest：目标目录
+			- directory_mode：目录模式
+			= src：源文件地址
+			- group：
+			- owner：文件属主
+			- mode：文件权限
+			- 
+
+			实例：
+				$ ansible web -m copy -a 'src=/etc/fstab dest=/tmp/fstab.log'
+				172.16.4.10 | SUCCESS => {
+				    "changed": true,
+				    "checksum": "db7620df4932c943360a47be588f96e17ed5bb5f",
+				    "dest": "/tmp/fstab.log",
+				    "gid": 0,
+				    "group": "root",
+				    "md5sum": "8c359d1187c15666a88f3bff726ba184",
+				    "mode": "0644",
+				    "owner": "root",
+				    "size": 595,  									
+				    "src": "/root/.ansible/tmp/ansible-tmp-1497934708.56-112068435046464/source",
+				    "state": "file",
+				    "uid": 0
+				}
+
+				$ ansible web -m copy -a 'src=/etc/fstab dest=/tmp/fstab.log owner=maxie group=root'
+				172.16.4.10 | SUCCESS => {
+				    "changed": true,
+				    "checksum": "db7620df4932c943360a47be588f96e17ed5bb5f",
+				    "dest": "/tmp/fstab.log",
+				    "gid": 0,
+				    "group": "root",
+				    "mode": "0644",
+				    "owner": "maxie",
+				    "path": "/tmp/fstab.log",
+				    "size": 595,
+				    "state": "file",
+				    "uid": 500
+				}
+
+				$ ansible web -m copy -a 'src=/etc/fstab dest=/tmp/fstab.log mode=0600'
+				172.16.4.10 | SUCCESS => {
+				    "changed": true,
+				    "checksum": "db7620df4932c943360a47be588f96e17ed5bb5f",
+				    "dest": "/tmp/fstab.log",
+				    "gid": 0,
+				    "group": "root",
+				    "mode": "0600",
+				    "owner": "maxie",
+				    "path": "/tmp/fstab.log",
+				    "size": 595,
+				    "state": "file",
+				    "uid": 500
+				}
+
+				$ ansible web -m shell -a 'ls -l /tmp/fstab*'
+				172.16.4.10 | SUCCESS | rc=0 >>
+				-rw------- 1 maxie root 595 Apr 24 14:57 /tmp/fstab.log
+
+				'备份功能'
+				$ ansible web -m copy -a 'src=/etc/issue dest=/tmp/fstab.log mode=0600 backup=yes'
+				172.16.4.10 | SUCCESS => {
+				    "backup_file": "/tmp/fstab.log.9151.2017-04-24@15:08:31~",
+				    "changed": true,
+				    "checksum": "ac3b08418b8e04a4c0147e481e96189bc4d03d82",
+				    "dest": "/tmp/fstab.log",
+				    "gid": 0,
+				    "group": "root",
+				    "md5sum": "a4a2b71435e06981725c2e20f800d6a4",
+				    "mode": "0600",
+				    "owner": "maxie",
+				    "size": 79,
+				    "src": "/root/.ansible/tmp/ansible-tmp-1497935345.84-30705261541485/source",
+				    "state": "file",
+				    "uid": 500
+				}
+				$ ansible web -m shell -a 'ls -l /tmp/fstab*'
+				172.16.4.10 | SUCCESS | rc=0 >>
+				-rw------- 1 maxie root  79 Apr 24 15:08 /tmp/fstab.log
+				-rw------- 1 root  root 595 Apr 24 14:57 /tmp/fstab.log.9151.2017-04-24@15:08:31~
+
+				172.16.1.70 | SUCCESS | rc=0 >>
+				-rw------- 1 maxie root  79 Jun 20 21:40 /tmp/fstab.log
+				-rw------- 1 root  root 595 Jun 20 21:29 /tmp/fstab.log.6137.2017-06-20@21:40:23~
+
+				172.16.1.20 | SUCCESS | rc=0 >>
+				-rw------- 1 maxie root  79 Jun 20 21:40 /tmp/fstab.log
+				-rw------- 1 root  root 595 Jun 20 21:29 /tmp/fstab.log.6206.2017-06-20@21:40:03~
+
+				172.16.1.100 | SUCCESS | rc=0 >>
+				-rw------- 1 maxie root  79 Jun 20 13:09 /tmp/fstab.log
+				-rw------- 1 root  root 595 Jun 20 12:58 /tmp/fstab.log.7460.2017-06-20@13:09:06~
+									
+					changed：改变
+					checksum：md5校验码
+					dest：目标
+					gid： gid号
+					group：所属的组
+
+
+
+
+		'cron：定时执行任务的模块'
+
+			* * * * *
+			分 时 日 月 周 
+
+			name：计划任务的名字
+			minute：分钟
+			hour：小时
+			weekday：星期
+			job：执行的任务
+			state：状态  
+				absent：删除 
+				present：默认(创建)
+			backup：备份
+
+
+
+			// 增加一条crontab
+			ansible mageduweb -m cron -a 'minute="*/5" job="/usr/sbin/ntpdate 172.16.0.1 &> /dev/null" name="SynctimeStanley"'
+
+			// 删除名为SynctimeStanley的crontab任务
+			ansible mageduweb -m cron -a 'state=absent name="SynctimeStanley"'
+
+			$ ansible web -m cron -a 'name="disk check" minute="15" hour="3" job="df -lh >> df.log" weekday=0'
+			172.16.4.10 | SUCCESS => {
+			    "changed": true,
+			    "envs": [],
+			    "jobs": [
+			        "disk check"
+			    ]
+			}
+			172.16.1.70 | SUCCESS => {
+			    "changed": true,
+			    "envs": [],
+			    "jobs": [
+			        "disk check"
+			    ]
+			}
+			172.16.1.20 | SUCCESS => {
+			    "changed": true,
+			    "envs": [],
+			    "jobs": [
+			        "disk check"
+			    ]
+			}
+			172.16.1.100 | SUCCESS => {
+			    "changed": true,
+			    "envs": [],
+			    "jobs": [
+			        "disk check"
+			    ]
+			}
+			$ crontab -l
+			#Ansible: disk check
+			15 3 * * 0 df -lh >> df.log
+
+
+			'删除计划任务：'
+			$ ansible web -m cron -a 'state=absent name="disk check"'
+			172.16.4.10 | SUCCESS => {
+			    "changed": true,
+			    "envs": [],
+			    "jobs": []
+			}
+			172.16.1.70 | SUCCESS => {
+			    "changed": true,
+			    "envs": [],
+			    "jobs": []
+			}
+			172.16.1.20 | SUCCESS => {
+			    "changed": true,
+			    "envs": [],
+			    "jobs": []
+			}
+			172.16.1.100 | SUCCESS => {
+			    "changed": true,
+			    "envs": [],
+			    "jobs": []
+			}
+			[root@test-1 ~]# crontab -l
+
+
+
+
+
+
+		
+
+		- fetch模块： 从远程服务器拉取文件至本机，
+			'只能fetch文件，不能fetch目录,如果拉目录，先tar/zip 再拉到本机即可'
+
+			src： 远程文件路径
+			dest：本地路径  --> 只能是目录，不能自己修改文件名
+
+		ansible mageduweb -m fetch -a 'src=/root/p.sh dest=/root/ppp.sh'
+
+			$ ansible web -m fetch -a 'src=/tmp/df.txt dest=/tmp'
+			172.16.4.10 | SUCCESS => {
+			    "changed": true,
+			    "checksum": "d77170b4ae2eb1b70d7a3787ceba087639c1ee4d",
+			    "dest": "/tmp/172.16.4.10/tmp/df.txt",
+			    "md5sum": "9a83dbdbebebe174cbdc65ef39a0d905",
+			    "remote_checksum": "d77170b4ae2eb1b70d7a3787ceba087639c1ee4d",
+			    "remote_md5sum": null
+			}
+			[root@test-1 ~]# ll /tmp/
+			total 32
+			drwxr-xr-x 3 root  root 4096 Jun 20 13:25 172.16.1.100
+			drwxr-xr-x 3 root  root 4096 Jun 20 13:25 172.16.1.20
+			drwxr-xr-x 3 root  root 4096 Jun 20 13:25 172.16.1.70
+			drwxr-xr-x 3 root  root 4096 Jun 20 13:25 172.16.4.10
+			-rw-r--r-- 1 root  root  412 Jun 20 12:41 df.txt
+			-rw------- 1 maxie root   79 Jun 20 13:09 fstab.log
+			-rw------- 1 root  root  595 Jun 20 12:58 fstab.log.7460.2017-06-20@13:09:06~
+			drwx------ 3 root  root 4096 Jun 20 07:49 systemd-private-6a646858c0b3470a95ea54b1c1f29e59-cups.service-ut96Xb
+			[root@test-1 ~]# ll /tmp/172.16.1.20/tmp/df.txt
+			-rw-r--r-- 1 root root 412 Jun 20 13:25 /tmp/172.16.1.20/tmp/df.txt
+
+			
+
+
+
+		- file模块： '设置文件属性'
+			ansible mageduweb -m file -a 'path=/root/p.sh mode=755'  # 设置文件属性
+			ansible mageduweb -m file -a 'src=/root/p.sh dest=/tmp/pp.sh mode=644 state=touch' # 复制文件并且设置文件属性
+
+			group ： 所属的组
+			mode  ： 权限 
+			path= ： 文件路径
+			state ： 设置文件属性
+
+			$ ansible web -m file -a 'path=/tmp/df.txt mode="0600" owner="maxie" group="root"'
+			172.16.4.10 | SUCCESS => {
+			    "changed": true,
+			    "gid": 0,
+			    "group": "root",
+			    "mode": "0600",
+			    "owner": "maxie",
+			    "path": "/tmp/df.txt",
+			    "size": 370,
+			    "state": "file",
+			    "uid": 500
+			}
+			$ ansible web -m shell -a 'ls -l /tmp/df*'
+			172.16.4.10 | SUCCESS | rc=0 >>
+			-rw------- 1 maxie root 370 Apr 24 14:40 /tmp/df.txt
+
+
+
+
+		- pip 模块： 'Python的包管理工具'
+			ansible mageduweb -m pip -a 'name=pip2'
+
+		
+
+		- ping 模块： '检测主机存活'
+
+		
+
+		- yum模块： '安装软件'
+			state：状态 
+				latest：升级
+				absent：卸载
+			name：要安装的软件名
+			disablerepo：关闭repo
+
+
+			ansible mageduweb -m yum -a 'name=httpd state=latest'  //安装httpd包
+			ansible mageduweb -m shell -a 'ss -tnl | grep 80 '
+			ansible mageduweb -m command -a 'ss -tnl '
+			ansible mageduweb -m command -a 'systemctl start httpd.service'
+			ansible mageduweb -m command -a 'systemctl stop httpd.service'
+
+			'安装httpd'
+			$ ansible web -m yum -a 'name=httpd state=latest'
+			172.16.4.10 | SUCCESS => {
+			    "changed": false,
+			    "msg": "",
+			    "rc": 0,
+			    "results": [
+			        "All packages providing httpd are up to date",
+			        ""
+			    ]
+			}
+
+
+		- service模块：启动服务/关闭服务
+			state：状态
+				started：启动
+				stopped：停止
+				restarted：重启
+				reloaded：重载
+
+			ansible mageduweb -m service -a 'name=httpd state=started'
+			ansible mageduweb -m service -a 'name=httpd state=stopped'
+
+		1、	'启动：'
+			$ ansible web -m service -a 'name=httpd state=started'
+			172.16.4.10 | SUCCESS => {
+			    "changed": true,
+			    "name": "httpd",
+			    "state": "started"
+			}
+			172.16.1.70 | SUCCESS => {
+			    "changed": true,
+			    "name": "httpd",
+			    "state": "started",
+			    "status": {
+			        "ActiveEnterTimestampMonotonic": "0",
+			        "ActiveExitTimestampMonotonic": "0",
+			        "ActiveState": "inactive",
+			        。。。
+			        。。。
+			        "StartupCPUShares": "18446744073709551615",
+			        "StatusErrno": "0",
+			        "StopWhenUnneeded": "no",
+			        "SubState": "dead",
+			        "SyslogLevelPrefix": "yes",
+			        "SyslogPriority": "30",
+			        "SystemCallErrorNumber": "0",
+			        "TTYReset": "no",
+			        "TTYVHangup": "no",
+			        "TTYVTDisallocate": "no",
+			        "TimeoutStartUSec": "1min 30s",
+			        "TimeoutStopUSec": "1min 30s",
+			        "TimerSlackNSec": "50000",
+			        "Transient": "no",
+			        "Type": "notify",
+			        "UMask": "0022",
+			        "UnitFilePreset": "disabled",
+			        "UnitFileState": "disabled",
+			        "Wants": "system.slice",
+			        "WatchdogTimestampMonotonic": "0",
+			        "WatchdogUSec": "0"
+			    },
+			    "warnings": []
+			}
+			$ ansible web -m shell -a 'ss -tnl |  grep 80'
+			172.16.4.10 | SUCCESS | rc=0 >>
+			LISTEN     0      80                       :::3306                    :::*
+			LISTEN     0      128                      :::80                      :::*
+
+			172.16.1.20 | SUCCESS | rc=0 >>
+			LISTEN     0      128         :::80                      :::*
+
+			172.16.1.70 | SUCCESS | rc=0 >>
+			LISTEN     0      128         :::80                      :::*
+
+			172.16.1.100 | SUCCESS | rc=0 >>
+			LISTEN     0      128         :::80                      :::*
+
+
+		2、	'停止'
+			$ ansible web -m service -a 'name=httpd state=stopped'
+			172.16.4.10 | SUCCESS => {
+			    "changed": true,
+			    "name": "httpd",
+			    "state": "stopped"
+			}
+			172.16.1.70 | SUCCESS => {
+			    "changed": true,
+			    "name": "httpd",
+			    "state": "stopped",
+			    "status": {
+			        "ActiveEnterTimestamp": "Tue 2017-06-20 22:40:03 CST",
+			        "ActiveEnterTimestampMonotonic": "29745109169",
+			        "ActiveExitTimestampMonotonic": "0",
+			        "ActiveState": "active",
+			        "After": "network.target -.mount basic.target systemd-journald.socket nss-lookup.target remote-fs.target system.slice",
+			        "AllowIsolate": "no",
+			    "WatchdogUSec": "0"
+			    },
+			    "warnings": []
+			}
+
+		
+
+		3、	'重启'
+			$ ansible web -m service -a 'name=httpd state=restarted'
+			172.16.4.10 | SUCCESS => {
+			    "changed": true,
+			    "name": "httpd",
+			    "state": "started"
+			}
+			172.16.1.20 | SUCCESS => {
+			    "changed": true,
+			    "name": "httpd",
+			    "state": "started",
+			    "status": {
+			        "ActiveEnterTimestampMonotonic": "0",
+			        "ActiveExitTimestampMonotonic": "0",
+			        "ActiveState": "inactive",
+			        "After": "remote-fs.target system.slice -.mount network.target nss-lookup.target basic.target systemd-journald.socket",
+			        "AllowIsolate": "no",
+			        "WatchdogUSec": "0"
+			    },
+			    "warnings": []
+			}
+			$ ansible web -m shell -a 'ss -tnl |  grep 80'
+			172.16.4.10 | SUCCESS | rc=0 >>
+			LISTEN     0      80                       :::3306                    :::*
+			LISTEN     0      128                      :::80                      :::*
+
+			172.16.1.70 | SUCCESS | rc=0 >>
+			LISTEN     0      128         :::80                      :::*
+
+			172.16.1.20 | SUCCESS | rc=0 >>
+			LISTEN     0      128         :::80                      :::*
+
+			172.16.1.100 | SUCCESS | rc=0 >>
+			LISTEN     0      128         :::80                      :::*
+
+
+
+
+
+		
+
+		- user模块：
+			comment：注释信息
+			expires：用户过期时间
+			password：密码
+			remove：移除用户
+			state：用户状态
+				absent：移除用户
+			shell：用户shell
+			home：用户家目录
+			group：用户主组
+			groups：附加组
+			uid
+
+
+			ansible mageduweb -m user -a 'name=magedu home=/tmp/magedu/ shell=/bin/bash uid=2000 comment="test user" group=root'
+
+
+			'新增一个用户user：'
+
+			$ ansible web -m user -a 'name=tom comment="tom user" shell=/bin/bash uid=1007 groups=maxie home=/home/tomhome'
+			172.16.4.10 | SUCCESS => {
+			    "changed": true,
+			    "comment": "tom user",
+			    "createhome": true,
+			    "group": 1007,
+			    "groups": "maxie",
+			    "home": "/home/tomhome",
+			    "name": "tom",
+			    "shell": "/bin/bash",
+			    "state": "present",
+			    "system": false,
+			    "uid": 1007
+			}
+			$ ansible web -m shell -a 'getent passwd tom'
+			172.16.4.10 | SUCCESS | rc=0 >>
+			tom:x:1007:1007:tom user:/home/tomhome:/bin/bash
+
+			172.16.1.70 | SUCCESS | rc=0 >>
+			tom:x:1007:1007:tom user:/home/tomhome:/bin/bash
+
+			172.16.1.20 | SUCCESS | rc=0 >>
+			tom:x:1007:1007:tom user:/home/tomhome:/bin/bash
+
+			172.16.1.100 | SUCCESS | rc=0 >>
+			tom:x:1007:1007:tom user:/home/tomhome:/bin/bash
+
+
+
+		- hostname模块：(与系统命令无关，直接修改  比如centos6和centos7)
+
+			$ ansible 172.16.1.100 -m hostname -a 'name=master'
+			172.16.1.100 | SUCCESS => {
+			    "ansible_facts": {
+			        "ansible_domain": "",
+			        "ansible_fqdn": "master",
+			        "ansible_hostname": "master",
+			        "ansible_nodename": "master"
+			    },
+			    "changed": true,
+			    "name": "master"
+			}
+			[root@test-1 ~]# hostname
+			master
+
+
+		- script脚本功能：将本地的脚本复制到远程主机并在远程主机执行
+
+			$ ansible web -m script -a '/root/run.sh'
+			172.16.4.10 | SUCCESS => {
+			    "changed": true,
+			    "rc": 0,
+			    "stderr": "Shared connection to 172.16.4.10 closed.\r\n",
+			    "stdout": "",
+			    "stdout_lines": []
+			}
+			$ ansible web -m shell -a 'cat /tmp/run.sh.log'
+			172.16.4.10 | SUCCESS | rc=0 >>
+			Mon Apr 24 16:40:36 CST 2017
+
+			172.16.1.20 | SUCCESS | rc=0 >>
+			Tue Jun 20 23:11:24 CST 2017
+
+
+		- setup：获取变量
+
+
+
+
+
+
+
+
+		
+
+
+
+
+	'Ansible系列命令'
+		ansible           ansible-doc       ansible-playbook  ansible-vault     
+		ansible-console   ansible-galaxy    ansible-pull 
+
+		'ansible命令参数：'
+			-m NAME, --module-name=NAME ：指定执行使用的模块
+			-u USERNAME, --user=USERNAME USERNAME 运行命令
+			-s, --sudo ：相当于 Linux 系统下的 sudo 命令
+			-U SUDO_USERNAME, --sudo-user=SUDO_USERNAME ：使用 sudo ，相当于 Linux 下的 sudo 命令。
+			-C –check ：只检查不实际执行
+			-e EXTRA_VARS ：引用外部参数
+			-i INVENTORY ：指定仓库列表，默认/etc/ansible/hosts
+			--list-hosts, 列出执行主机列表 
+
+
+
+
+
+
+		'- ansible-galaxy：'上传或下载优秀的Playbook
+		
+			用法：
+			ansible-galaxy [delete|import|info|init|install|list|login|remove|search|setup] [--help] [options] ...
+
+			去 https://galaxy.ansible.com/ 上传或下载优秀的Playbook(roles)
+
+			* 列出所有已安装的galaxy
+			ansible-galaxy list
+
+			* 安装galaxy
+			ansible-galaxy install geerlingguy.redis
+
+			* 删除galaxy
+			ansible-galaxy remove geerlingguy.redis
+			ansible-galaxy delete geerlingguy.redis
+
+			- ansible-playbook用法 
+
+			Usage: ansible-playbook playbook.yml
+
+			'把下载好的放到/etc/ansible/roles目录下，然后就可以使用了'
+
+
+
+
+		'- ansible-valut用法'
+			Usage: ansible-vault [create|decrypt|edit|encrypt|rekey|view] [--help] [options] vaultfile.ym
+
+			ansible-vault encrypt hello.yml  '# 加密'
+			ansible-vault decrypt hello.yml  '# 解密'
+			ansible-vault view hello.yml  	 '# 查看'
+
+			'实例：'
+			[root@master ~]# vim crypt.yml
+			[root@master ~]# ansible-vault encrypt crypt.yml
+			Vault password:
+			Encryption successful
+			[root@master ~]# ansible-vault view crypt.yml
+			Vault password:
+			---
+			   host: hello
+
+
+
+
+
+		'- ansible-console用法 '交互式
+
+			Usage: ansible-console <host-pattern> [options]
+
+			root@mageduweb (2)[f:10] $ service name=httpd state=stopped
+
+			root@mageduweb (2)[f:10] $
+			'执行用户@当前操作的主机组 (当前组的主机数量)[f:并发数]$'
+
+
+			设置并发数： forks n  例如： forks 10
+			
+			切换组： cd groupname  例如： cd mageduweb
+			
+			列出当前组主机列表： list
+			
+			列出所有的内置模块： ?
+
+
+
+			'可以直接执行命令：'
+			root@all (4)[f:5]$ pwd
+			172.16.4.10 | SUCCESS | rc=0 >>
+			/root
+
+			172.16.1.70 | SUCCESS | rc=0 >>
+			/root
+
+			172.16.1.20 | SUCCESS | rc=0 >>
+			/root
+
+
+
+
+
+
+
+	'执行状态：'
+	绿色： 执行成功并且不需要做改变的操作
+	黄色：执行成功并且对目标主机做变更
+	红色：执行失败
+
+
+	$ ansible all -m ping -u bruce -b --become-user batman
+
+
+
+
+
+
+'YAML简介：'
+	 "YAML Ain't a Markup Language"
+		 YAML 的意思其实是："Yet Another Markup Language", 
+		 但为了强调这种语言以数据做为中心，而不是以标记语言为重点，而用反向缩略语重命名
+	1 ）首先以 “---” （ 3 个减号）开始，且需顶行首写。
+	2 ）次行开始正常写 Playbook 的内容，但笔者一般建议写明该Playbook 的功能。
+	3 ）使用 # 号注释代码。
+	4 ）缩进必须是统一的，不能空格和 tab 混用。
+	5 ）缩进的级别也必须是一致的，同样的缩进代表同样的级别， 程序判别配置的级别是通过缩进结合换行来实现的。
+	6 ） YAML 文件内容和 Linux 系统大小写判断方式保持一致，是区别大小写的， k/v 的值均需大小写敏感。
+	7 ） k/v 的值可同行写也可换行写。同行使用 : 分隔，换行写需要以 - 分隔。
+	8 ）一个完整的代码块功能需最少元素需包括 name: task 。
+	9 ）一个 name 只能包括一个 task 。
+
+
+
+
+'Ansible-playbook 剧本'
+
+	# ansible-playbook -h
+	Usage: ansible-playbook playbook.yml
+
+	---
+
+	- hosts: mageduweb
+	  remote_user: root
+	  
+	  tasks:
+	    - name: add group nginx
+	      user: name=nginx state=present
+
+	    - name: add user nginx
+	      user: name=nginx state=present group=nginx
+
+	    - name: Install Nginx
+	      yum: name=nginx state=present
+
+	    - name: Start Nginx
+	      service: name=nginx state=started enabled=yes
+
+
+
+
+
+
+	'* 安装http脚本实现：'
+
+	#!/bin/bash
+	# 安装Apache
+	yum install --quiet -y httpd httpd-devel   # command: yum install --quiet -y httpd httpd-devel
+	# 复制配置文件
+	cp /path/to/config/httpd.conf /etc/httpd/conf/httpd.conf -f
+	cp/path/to/httpd-vhosts.conf /etc/httpd/conf/httpd-vhosts.conf -f
+	# 启动Apache，并设置开机启动
+	service httpd start
+	chkconfig httpd on
+
+
+
+	'* 安装httpd ansible-playbook实现'
+
+	---
+	- hosts: all
+	  tasks:
+	   - name: "安装Apache"
+	     command: yum install --quiet -y httpd httpd-devel
+	   - name: "复制配置文件"
+	     command: cp /tmp/httpd.conf /etc/httpd/conf/httpd.conf
+	     command: cp /tmp/httpd-vhosts.conf /etc/httpd/conf/httpd-vhosts.conf
+	   - name: "启动Apache，并设置开机启动"
+	     command: service httpd start
+	     command: chkconfig httpd on
+
+
+
+	'* Playbook 核心组件'
+	  Hosts  #执行的远程主机列表
+	  Tasks  #任务集
+	  Varniables #内置变量或自定义变量在playbook中调用
+	  Templates #模板，可替换模板文件中的变量及可实现一些简单逻辑的文件。
+	  Handlers #和nogity结合使用，为条件触发操作，满足条件方才执行，否则不执行
+
+	
+
+	'* tags 标签'
+	  指定某条任务执行
+	  ansible-playbook --tags=user useradd.yml 
+
+	  多条执行时，使用逗号隔开： --tags=user,reload 
+
+	---
+
+	- hosts: mageduweb
+	  remote_user: root
+	  
+	  tasks:
+	    - name: add group nginx
+	      tags: user
+	      user: name=nginx state=present
+
+	    - name: add user nginx
+	      user: name=nginx state=present group=nginx
+
+	    - name: Install Nginx
+	      yum: name=nginx state=present
+
+	    - name: Start Nginx
+	      service: name=nginx state=started enabled=yes
+
+
+	'* limit/l 标签'
+		指定某个hosts执行任务：
+			ansible-playbook --tags=user -l 172.16.1.20 adduser.yml 
+
+
+
+	'* handlers 和 notify 结合使用触发条件,让playbook在满足一定触发条件时才去执行某条task'
+
+	---
+
+	- hosts: mageduweb
+	  remote_user: root
+	  
+	  tasks:
+	    - name: add group nginx
+	      tags: user
+	      user: name=nginx state=present
+
+	    - name: add user nginx
+	      user: name=nginx state=present group=nginx
+
+	    - name: Install Nginx
+	      yum: name=nginx state=present
+
+	    - name: config 
+	      copy: src=/root/config.txt dest=/etc/nginx/config.txt
+	      notify:
+	        - Restart Nginx
+	        - Check Nginx Process
+
+
+	  handlers:
+	    - name: Restart Nginx
+	      service: name=nginx state=restarted enabled=yes
+	    - name: Check Nginx Process
+	      shell: ss -tnl | grep 80
+
+
+	
+
+
+
+
+
+	'playbook 变量使用'
+		* 变量来源：
+		  （1）ansible setup facts远程主机的所有变量都可以用
+		  （2）'自定义变量'
+		      a. 在/etc/ansible/hosts 定义变量，在主机组中的主机单独定义，优先级高于组中公共变量
+		      b. 在/etc/ansible/hosts 定义变量，针对主机组中的所有主机集中定义变量
+		      c. 通过命令行指定变量，优先级最高
+
+		* 变量调用方式：
+		{{ variable_name }} 通过{{  }} 调用变量，且变量和{}两头之间必须有空格
+		额外介绍的是：
+		在playbook中调用变量时，有时"{{ variable_name }}"需要要双引号引起来方可生效，有时候必须不能用""引起来
+
+		* 变量定义：
+		key=value
+		例：
+		http_port=80
+
+		* 命令行调用变量并定义变量：
+			ansible-playbook hostname.yml -e "webport=80"
+
+		* 变量优先级
+			命令行变量 <-- 主机变量 <-- 组变量
+
+
+		'ssh端口自定义：'
+			在ansible/hosts文件中修改：
+				ansible_ssh_port
+
+
+		'获取组内成员的变量信息：'
+			$ ansible web -m setup
+
+
+
+
+	
+
+	'templates模块：'分发功能 --> 
+		功能：
+			根据模块文件动态生成对应的配置文件
+
+		（1） templates文件必须存放于目录名为templates下，且命名为 .j2 结尾
+		（2）yaml/yml playbook文件需和templates目录平级，目录结构如下：
+		    ./
+		    ├── temnginx.yml
+		    └── templates
+		        └── nginx.conf.j2
+
+
+		'Jinja写法：'
+			算术运算：
+				+ - * / % **
+			比较操作符：
+				== >= != <= < >
+			逻辑运算符：
+				And or not
+			流表达式：
+				For
+				If 
+				When 
+
+			'文件格式：'
+				以 .j2结尾
+
+
+	
+
+		'* template 流语句语法'
+
+		'案例1：'
+		// templates/nginx.conf.j2
+
+		{% for vhost in  nginx_vhosts %}
+		server {
+		   listen {{ vhost }}
+
+		}
+
+		{% endfor %}
+
+
+		// temnginx.yml
+		---
+
+		- hosts: mageduweb
+		  remote_user: root
+		  vars:
+		    nginx_vhosts:
+		      - web1
+		      - web2
+		      - web3
+		  #  nginx_vhosts:
+		  #    - listen: 8080
+		  
+
+
+		  tasks:
+		    - name: template config to remote hosts
+	!!!	      template: src=nginx.conf.j2 dest=/etc/nginx/nginx.conf
+
+
+
+		* 生成的结果：
+
+		server {
+		   listen web1
+		   
+		}
+
+
+		server {
+		   listen web2
+		   
+		}
+
+		server {
+		   listen web3
+		   
+		}
+
+
+		'案例2：'
+
+		shell脚本与Jinja语法对比：
+		-- shell脚本中写法
+		for i in {1..10}
+		do
+		   con
+		done
+
+
+		if [ xx ];then
+		    con
+		elif
+		     con
+		else
+		    con
+		fi
+
+
+		-- Jinja写法：
+
+		//  templates/nginx.conf.j2
+
+		{% for vhost in  nginx_vhosts %}
+		server {
+		   listen {{ vhost.listen  }}
+
+		}
+
+		{% endfor %}
+
+		* 生成的结果
+
+		server {
+		   listen 8080
+		   
+		}
+
+
+
+		* playbook调用文件
+		//  temnginx.yml
+
+		---
+
+		- hosts: mageduweb
+		  remote_user: root
+		  vars:
+		    nginx_vhosts:
+		      - listen: 8080
+
+
+
+		  tasks:
+		    - name: template config to remote hosts
+		      template: src=nginx.conf.j2 dest=/etc/nginx/nginx.conf
+
+
+		'* 案例3'
+
+		// temnginx.yml
+
+		---
+
+		- hosts: mageduweb
+		  remote_user: root
+		  vars:
+		    nginx_vhosts:
+		      - web1:
+		        listen: 8080
+		        server_name: "web1.magedu.com"
+		        root: "/var/www/nginx/web1/"
+		      - web2:
+		        listen: 8080
+		        server_name: "web2.magedu.com"
+		        root: "/var/www/nginx/web2/"
+		      - web3:
+		        listen: 8080
+		        server_name: "web3.magedu.com"
+		        root: "/var/www/nginx/web3/"
+
+
+		  ## 案例1
+		  #  nginx_vhosts:
+		  #    - web1
+		  #    - web2
+		  #    - web3
+		  ## 案例2
+
+
+
+		  tasks:
+		    - name: template config to remote hosts
+		      template: src=nginx.conf.j2 dest=/etc/nginx/nginx.conf
+
+
+
+
+		// templates/nginx.conf.j2
+
+		{% for vhost in  nginx_vhosts %}
+		server {
+		   listen {{ vhost.listen }}
+		   server_name {{ vhost.server_name }}
+		   root  {{ vhost.root }}
+		   
+		}
+
+		{% endfor %}
+
+
+
+		* 生成结果：
+
+		server {
+		   listen 8080
+		   server_name web1.magedu.com
+		   root  /var/www/nginx/web1/
+		   
+		}
+
+		server {
+		   listen 8080
+		   server_name web2.magedu.com
+		   root  /var/www/nginx/web2/
+		   
+		}
+
+
+		server {
+		   listen 8080
+		   server_name web3.magedu.com
+		   root  /var/www/nginx/web3/
+		   
+		}
+
+
+		
+		'* 案例4'
+		// templates/nginx.conf.j2
+
+		{% for vhost in  nginx_vhosts %}
+		server {
+		   listen {{ vhost.listen }}
+
+		   {% if vhost.server_name is defined %}
+		   server_name {{ vhost.server_name }}
+		   {% endif %}
+
+		   root  {{ vhost.root }}
+
+		}
+
+		{% endfor %}
+
+
+
+
+		// temnginx.yml
+
+		---
+
+		- hosts: mageduweb
+		  remote_user: root
+		  vars:
+		    nginx_vhosts:
+		      - web1:
+		        listen: 8080
+		        #server_name: "web1.magedu.com"
+		        root: "/var/www/nginx/web1/"
+		      - web2:
+		        listen: 8080
+		        server_name: "web2.magedu.com"
+		        root: "/var/www/nginx/web2/"
+		      - web3:
+		        listen: 8080
+		        server_name: "web3.magedu.com"
+		        root: "/var/www/nginx/web3/"
+
+
+		  ## 案例1
+		  #  nginx_vhosts:
+		  #    - web1
+		  #    - web2
+		  #    - web3
+		  ## 案例2
+
+
+
+		  tasks:
+		    - name: template config to remote hosts
+		      template: src=nginx.conf.j2 dest=/etc/nginx/nginx.conf
+
+
+		* 执行命令
+
+		ansible-playbook temnginx.yml
+
+
+		* 生成的结果
+
+		server {
+		   listen 8080
+
+
+		   root  /var/www/nginx/web1/
+
+		}
+
+		server {
+		   listen 8080
+
+		      server_name web2.magedu.com
+
+		   root  /var/www/nginx/web2/
+
+		}
+
+		server {
+		   listen 8080
+
+		      server_name web3.magedu.com
+
+		   root  /var/www/nginx/web3/
+
+		}
+
+
+		
+
+
+	'ansible-playbook when条件判断'
+
+
+	---
+
+	- hosts: mageduweb
+	  remote_user: root
+
+	  tasks:
+	    - name: add group nginx
+	      tags: user
+	      user: name=nginx state=present
+
+	    - name: add user nginx
+	      user: name=nginx state=present group=nginx
+
+	    - name: Install Nginx
+	      yum: name=nginx state=present
+
+	    - name: restart Nginx
+	      service: name=nginx state=restarted
+	      when: ansible_distribution_major_version == "6"
+
+	
+
+	'ansible-playbook with_items 列表'
+
+	---
+
+	- hosts: mageduweb
+	  remote_user: root
+
+	  tasks:
+	  - name: create rsyncd file
+	    copy: src={{ item }} dest=/tmp/{{ item }}
+	    with_items:
+	      - a
+	      - b
+	      - c
+	      - d
+
+
+	  - name: yum install httpd
+	    yum: name={{ item }}  state=present 
+	    with_items:
+	      - apr
+	      - apr-util
+	      - httpd
+
+
+
+	* with_itmes 嵌套子变量
+
+	---
+
+	- hosts: mageduweb
+	  remote_user: root
+
+
+	  tasks:
+	  - name: add several users
+	    user: name={{ item.name }} state=present groups={{ item.groups }}
+	    with_items:
+	      - { name: 'testuser1' , groups: 'wheel'}
+	      - { name: 'testuser2' , groups: 'root'}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+'### Roles （角色）'
+
+	针对大型项目使用Roles进行编排。
+
+
+
+	roles目录结构：
+	playbook.yml
+	roles/
+	  project/
+	    tasks/
+	    files/
+	    vars/  # 不经常用
+	    default/ # 不经常用
+	    templates/
+	    handlers/
+	    meta/ # 不经常用
+
+
+	userconf.yml
+	roles/
+	└── nginx
+	    ├── files
+	    │   └── main.yml
+	    ├── tasks
+	    │   ├── groupadd.yml
+	    │   ├── install.yml
+	    │   ├── main.yml
+	    │   ├── restart.yml
+	    │   └── useradd.yml
+	    └── vars
+	        └── main.yml
+
+
+
+	saltstack
+	puppet
+
+	class 面向对象，写程序一个较为高级的使用。
+
+
+	* 完整的roles架构
+
+	// nginx-role.yml 顶层任务调用yml文件
+
+	---
+
+	- hosts: mageduweb
+	  remote_user: root
+
+	  roles:
+	    - role: nginx
+	~                  
+
+
+	cat roles/nginx/tasks/main.yml 
+	---
+
+	- include: groupadd.yml
+	- include: useradd.yml
+	- include: install.yml
+	- include: restart.yml
+	- include: filecp.yml
+
+
+	cat roles/nginx/tasks/install.yml 
+	---
+
+	- name: Install Nginx
+	  yum: name=nginx state=present
+
+
+	ls roles/nginx/files/
+	main.yml  tom.md
+
+
+	* roles playbook tags使用
+	ansible-playbook --tags="nginx,httpd,mysql" nginx-role.yml
+
+	// nginx-role.yml
+	---
+
+	- hosts: mageduweb
+	  remote_user: root
+
+	  roles:
+	    - { role: nginx ,tags: [ 'nginx', 'web' ] }
+	    - { role: httpd ,tags: [ 'httpd', 'web' ]  }
+	    - { role: mysql ,tags: [ 'mysql', 'db' ] }
+	    - { role: marridb ,tags: [ 'mysql', 'db' ] }
+	    - { role: php }
+
+
+
+
+
+	---
+
+	- hosts: mageduweb
+	  remote_user: root
+
+	  roles:
+	    - { role: nginx ,tags: [ 'nginx', 'web' ] ,when: ansible_distribution_major_version == "6" }
+	    - { role: httpd ,tags: [ 'httpd', 'web' ]  }
+	    - { role: mysql ,tags: [ 'mysql', 'db' ] }
+	    - { role: marridb ,tags: [ 'mysql', 'db' ] }
+	    - { role: php }
+
+	## 其它自己研究的功能
+
+	* 委任（指定某一台机器做某一个task）
+	delegate_to
+	local_action (专指针对ansible命令执行的机器做的变更操作)
+	* 交互提示
+	prompt
+	* 暂停（java）
+	wait_for 
+	* Debug
+	debug: msg="This always executes."
+	* Include
+	* Template 多值合并
+	* Template 动态变量配置
+
+
+
+
+
+
+'## 推荐资料'
+http://galaxy.ansible.com
+https://galaxy.ansible.com/explore#/
+http://github.com/
+http://ansible.com.cn/
+https://github.com/ansible/ansible
+https://github.com/ansible/ansible-examples
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

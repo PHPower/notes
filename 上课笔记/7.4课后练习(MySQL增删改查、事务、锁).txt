@@ -1,0 +1,387 @@
+7.4课后练习(MySQL增删改查、事务、锁)
+
+
+wget 
+
+'练习题'
+	练习：导入hellodb.sql生成数据库
+		(1) 在students表中，查询年龄大于25岁，且为男性的同学的名字和年龄；
+			> SELECT Name,Age FROM students WHERE age > 25 AND Gender='M';
+			+--------------+-----+
+			| Name         | Age |
+			+--------------+-----+
+			| Xie Yanke    |  53 |
+			| Ding Dian    |  32 |
+			| Yu Yutong    |  26 |
+			| Shi Qing     |  46 |
+			| Tian Boguang |  33 |
+			| Xu Xian      |  27 |
+			| Sun Dasheng  | 100 |
+			+--------------+-----+
+			7 rows in set (0.00 sec)
+
+		(2) 以ClassID为分组依据，显示每组的平均年龄；
+			> SELECT ClassID,avg(age) FROM students GROUP BY ClassID;
+			+---------+----------+
+			| ClassID | avg(age) |
+			+---------+----------+
+			|    NULL |  63.5000 |
+			|       1 |  20.5000 |
+			|       2 |  36.0000 |
+			|       3 |  20.2500 |
+			|       4 |  24.7500 |
+			|       5 |  46.0000 |
+			|       6 |  20.7500 |
+			|       7 |  19.6667 |
+			+---------+----------+
+			8 rows in set (0.00 sec)
+
+		(3) 显示第2题中平均年龄大于30的分组及平均年龄；
+			> SELECT ClassID,avg(age) AS AGE FROM students GROUP BY ClassID HAVING  AGE > 30;
+			+---------+---------+
+			| ClassID | AGE     |
+			+---------+---------+
+			|    NULL | 63.5000 |
+			|       2 | 36.0000 |
+			|       5 | 46.0000 |
+			+---------+---------+
+			3 rows in set (0.00 sec)
+
+
+		(4) 显示以L开头的名字的同学的信息；
+			> SELECT * FROM students WHERE Name RLIKE '^L.*';
+			+-------+-------------+-----+--------+---------+-----------+
+			| StuID | Name        | Age | Gender | ClassID | TeacherID |
+			+-------+-------------+-----+--------+---------+-----------+
+			|     8 | Lin Daiyu   |  17 | F      |       7 |      NULL |
+			|    14 | Lu Wushuang |  17 | F      |       3 |      NULL |
+			|    17 | Lin Chong   |  25 | M      |       4 |      NULL |
+			+-------+-------------+-----+--------+---------+-----------+
+			3 rows in set (0.00 sec)
+
+		(5) 显示TeacherID非空的同学的相关信息；
+			> SELECT * FROM students WHERE TeacherID is not null;
+			+-------+-------------+-----+--------+---------+-----------+
+			| StuID | Name        | Age | Gender | ClassID | TeacherID |
+			+-------+-------------+-----+--------+---------+-----------+
+			|     1 | Shi Zhongyu |  22 | M      |       2 |         3 |
+			|     2 | Shi Potian  |  22 | M      |       1 |         7 |
+			|     3 | Xie Yanke   |  53 | M      |       2 |        16 |
+			|     4 | Ding Dian   |  32 | M      |       4 |         4 |
+			|     5 | Yu Yutong   |  26 | M      |       3 |         1 |
+			+-------+-------------+-----+--------+---------+-----------+
+			5 rows in set (0.00 sec)
+
+		(6) 以年龄排序后，显示年龄最大的前10位同学的信息；
+			> SELECT * FROM students ORDER BY  age DESC LIMIT 10;
+			+-------+--------------+-----+--------+---------+-----------+
+			| StuID | Name         | Age | Gender | ClassID | TeacherID |
+			+-------+--------------+-----+--------+---------+-----------+
+			|    25 | Sun Dasheng  | 100 | M      |    NULL |      NULL |
+			|     3 | Xie Yanke    |  53 | M      |       2 |        16 |
+			|     6 | Shi Qing     |  46 | M      |       5 |      NULL |
+			|    13 | Tian Boguang |  33 | M      |       2 |      NULL |
+			|     4 | Ding Dian    |  32 | M      |       4 |         4 |
+			|    24 | Xu Xian      |  27 | M      |    NULL |      NULL |
+			|     5 | Yu Yutong    |  26 | M      |       3 |         1 |
+			|    17 | Lin Chong    |  25 | M      |       4 |      NULL |
+			|    23 | Ma Chao      |  23 | M      |       4 |      NULL |
+			|    18 | Hua Rong     |  23 | M      |       7 |      NULL |
+			+-------+--------------+-----+--------+---------+-----------+
+			10 rows in set (0.00 sec)
+
+
+		(7) 查询年龄大于等于20岁，小于等于25岁的同学的信息；用三种方法；
+			> SELECT * FROM students WHERE age>=20 and age<=25;
+
+			> SELECT * FROM students WHERE age BETWEEN 20 AND 25;
+
+			> SELECT * FROM (SELECT * FROM students WHERE age>=20) AS a  WHERE a.age <= 25;
+
+			+-------+---------------+-----+--------+---------+-----------+
+			| StuID | Name          | Age | Gender | ClassID | TeacherID |
+			+-------+---------------+-----+--------+---------+-----------+
+			|     1 | Shi Zhongyu   |  22 | M      |       2 |         3 |
+			|     2 | Shi Potian    |  22 | M      |       1 |         7 |
+			|     9 | Ren Yingying  |  20 | F      |       6 |      NULL |
+			|    11 | Yuan Chengzhi |  23 | M      |       6 |      NULL |
+			|    16 | Xu Zhu        |  21 | M      |       1 |      NULL |
+			|    17 | Lin Chong     |  25 | M      |       4 |      NULL |
+			|    18 | Hua Rong      |  23 | M      |       7 |      NULL |
+			|    21 | Huang Yueying |  22 | F      |       6 |      NULL |
+			|    22 | Xiao Qiao     |  20 | F      |       1 |      NULL |
+			|    23 | Ma Chao       |  23 | M      |       4 |      NULL |
+			+-------+---------------+-----+--------+---------+-----------+
+			10 rows in set (0.00 sec)
+	
+	
+
+
+	练习：导入hellodb.sql，以下操作在students表上执行
+		1、以ClassID分组，显示每班的同学的人数；
+			> SELECT Classid,count(Name) FROM students GROUP BY ClassID;
+			+---------+-------------+
+			| Classid | count(Name) |
+			+---------+-------------+
+			|    NULL |           2 |
+			|       1 |           4 |
+			|       2 |           3 |
+			|       3 |           4 |
+			|       4 |           4 |
+			|       5 |           1 |
+			|       6 |           4 |
+			|       7 |           3 |
+			+---------+-------------+
+			8 rows in set (0.00 sec)
+
+		2、以Gender分组，显示其年龄之和；
+			> SELECT Gender,sum(Age) FROM students GROUP BY Gender; 
+			+--------+----------+
+			| Gender | sum(Age) |
+			+--------+----------+
+			| F      |      190 |
+			| M      |      495 |
+			+--------+----------+
+			2 rows in set (0.00 sec)
+
+		3、以ClassID分组，显示其平均年龄大于25的班级；
+			> SELECT ClassID,avg(age) AS AGE FROM students GROUP BY Gender HAVING AGE > 25; 
+			+---------+---------+
+			| ClassID | AGE     |
+			+---------+---------+
+			|       2 | 33.0000 |
+			+---------+---------+
+			1 row in set (0.00 sec)
+
+		4、以Gender分组，显示各组中年龄大于25的学员的年龄之和；
+			> SELECT Gender,sum(age) FROM (SELECT Age,Gender FROM students WHERE age > 25 ) as t GROUP BY Gender;
+			+--------+----------+
+			| Gender | sum(age) |
+			+--------+----------+
+			| M      |      317 |
+			+--------+----------+
+			1 row in set (0.00 sec)
+
+	练习：导入hellodb.sql，完成以下题目：
+		1、显示前5位同学的姓名、课程及成绩；
+			> SELECT Name,Course,Score FROM (SELECT * FROM students LIMIT 5) AS T1,courses AS C1,scores AS S1 WHERE T1.StuID = S1.StuID AND S1.CourseID = C1.CourseID;
+			+-------------+----------------+-------+
+			| Name        | Course         | Score |
+			+-------------+----------------+-------+
+			| Shi Zhongyu | Kuihua Baodian |    77 |
+			| Shi Zhongyu | Weituo Zhang   |    93 |
+			| Shi Potian  | Kuihua Baodian |    47 |
+			| Shi Potian  | Daiyu Zanghua  |    97 |
+			| Xie Yanke   | Kuihua Baodian |    88 |
+			| Xie Yanke   | Weituo Zhang   |    75 |
+			| Ding Dian   | Daiyu Zanghua  |    71 |
+			| Ding Dian   | Kuihua Baodian |    89 |
+			| Yu Yutong   | Hamo Gong      |    39 |
+			| Yu Yutong   | Dagou Bangfa   |    63 |
+			+-------------+----------------+-------+
+			10 rows in set (0.00 sec)
+
+		2、显示其成绩高于80的同学的名称及课程；
+			> SELECT Name,Course,Score FROM students AS T1,courses AS C1,(SELECT * FROM scores WHERE Score > 80) AS S1 WHERE T1.StuID = S1.StuID AND S1.CourseID = C1.CourseID;
+			+-------------+----------------+-------+
+			| Name        | Course         | Score |
+			+-------------+----------------+-------+
+			| Shi Zhongyu | Weituo Zhang   |    93 |
+			| Shi Potian  | Daiyu Zanghua  |    97 |
+			| Xie Yanke   | Kuihua Baodian |    88 |
+			| Ding Dian   | Kuihua Baodian |    89 |
+			| Shi Qing    | Hamo Gong      |    96 |
+			| Xi Ren      | Hamo Gong      |    86 |
+			| Xi Ren      | Dagou Bangfa   |    83 |
+			| Lin Daiyu   | Jinshe Jianfa  |    93 |
+			+-------------+----------------+-------+
+			8 rows in set (0.00 sec)
+		
+
+		3、求前8位同学每位同学自己两门课的平均成绩，并按降序排列；
+			> SELECT Name,AVG_SCORE FROM (SELECT * FROM students LIMIT 8) AS T1,(SELECT StuID,avg(score) AS AVG_SCORE FROM scores GROUP BY StuID) AS S1 WHERE T1.StuID = S1.StuID ORDER BY AVG_SCORE desc;
+			+-------------+-----------+
+			| Name        | AVG_SCORE |
+			+-------------+-----------+
+			| Shi Qing    |   96.0000 |
+			| Shi Zhongyu |   85.0000 |
+			| Xi Ren      |   84.5000 |
+			| Xie Yanke   |   81.5000 |
+			| Ding Dian   |   80.0000 |
+			| Lin Daiyu   |   75.0000 |
+			| Shi Potian  |   72.0000 |
+			| Yu Yutong   |   51.0000 |
+			+-------------+-----------+
+			8 rows in set (0.00 sec)
+		
+
+		4、显示每门课程课程名称及学习了这门课的同学的个数；
+			> SELECT course,count(name) FROM (SELECT Name,Course FROM students,courses,scores WHERE students.StuID = scores.StuID AND scores.CourseID = courses.CourseID) as A GROUP BY course;
+			+----------------+-------------+
+			| Course         | count(name) |
+			+----------------+-------------+
+			| Dagou Bangfa   |           2 |
+			| Daiyu Zanghua  |           2 |
+			| Hamo Gong      |           3 |
+			| Jinshe Jianfa  |           1 |
+			| Kuihua Baodian |           4 |
+			| Taiji Quan     |           1 |
+			| Weituo Zhang   |           2 |
+			+----------------+-------------+
+			7 rows in set (0.00 sec)
+
+			> SELECT courses.Course,count(StuID) FROM scores LEFT JOIN courses ON scores.CourseID = courses.CourseID GROUP BY scores.CourseID;
+			+----------------+--------------+
+			| Course         | count(StuID) |
+			+----------------+--------------+
+			| Hamo Gong      |            3 |
+			| Kuihua Baodian |            4 |
+			| Jinshe Jianfa  |            1 |
+			| Taiji Quan     |            1 |
+			| Daiyu Zanghua  |            2 |
+			| Weituo Zhang   |            2 |
+			| Dagou Bangfa   |            2 |
+			+----------------+--------------+
+			7 rows in set (0.00 sec)
+
+	思考：
+		1、如何显示其年龄大于平均年龄的同学的名字？
+			> SELECT Name,Age FROM students WHERE age > (SELECT avg(Age) From students);
+			+--------------+-----+
+			| Name         | Age |
+			+--------------+-----+
+			| Xie Yanke    |  53 |
+			| Ding Dian    |  32 |
+			| Shi Qing     |  46 |
+			| Tian Boguang |  33 |
+			| Sun Dasheng  | 100 |
+			+--------------+-----+
+			5 rows in set (0.00 sec)
+
+
+		2、如何显示其学习的课程为第1、2，4或第7门课的同学的名字？
+			> SELECT Name FROM students,(select DISTINCT StuID  FROM scores WHERE CourseID IN (1,2,4,7)) as s WHERE students.StuID = s.StuID;
+			+-------------+
+			| Name        |
+			+-------------+
+			| Shi Zhongyu |
+			| Shi Potian  |
+			| Xie Yanke   |
+			| Ding Dian   |
+			| Yu Yutong   |
+			| Shi Qing    |
+			| Xi Ren      |
+			| Lin Daiyu   |
+			+-------------+
+			8 rows in set (0.00 sec)
+
+		3、如何显示其成员数最少为3个的班级的同学中年龄大于同班同学平均年龄的同学？
+			> SELECT * FROM (SELECT * FROM students WHERE ClassID is not null) AS s LEFT JOIN classes AS c ON s.ClassID = c.ClassID  ORDER BY s.ClassID;
+
+			> select students.name,students.age,students.classid,class.avg_age from students,(select avg(age) as avg_age,classid as classid from students group by classid) AS class WHERE students.age > class.avg_age AND students.ClassID = class.ClassID;
+			+---------------+-----+---------+---------+
+			| name          | age | classid | avg_age |
+			+---------------+-----+---------+---------+
+			| Shi Potian    |  22 |       1 | 20.5000 |
+			| Xie Yanke     |  53 |       2 | 36.0000 |
+			| Ding Dian     |  32 |       4 | 24.7500 |
+			| Yu Yutong     |  26 |       3 | 20.2500 |
+			| Yuan Chengzhi |  23 |       6 | 20.7500 |
+			| Xu Zhu        |  21 |       1 | 20.5000 |
+			| Lin Chong     |  25 |       4 | 24.7500 |
+			| Hua Rong      |  23 |       7 | 19.6667 |
+			| Huang Yueying |  22 |       6 | 20.7500 |
+			+---------------+-----+---------+---------+
+			9 rows in set (0.00 sec)
+
+			> select student.name,student.age,student.classid,second.avg_age from (select students.name as name ,students.age as age,students.classid as classid from students left join (select count(name) as num,classid as classid from students group by classid having num>=3) as first on first.classid=students.classid) as student,(select avg(age) as avg_age,classid as classid from students group by classid) as  second where student.age>second.avg_age and student.classid=second.classid;
+			+---------------+-----+---------+---------+
+			| name          | age | classid | avg_age |
+			+---------------+-----+---------+---------+
+			| Shi Potian    |  22 |       1 | 20.5000 |
+			| Xie Yanke     |  53 |       2 | 36.0000 |
+			| Ding Dian     |  32 |       4 | 24.7500 |
+			| Yu Yutong     |  26 |       3 | 20.2500 |
+			| Yuan Chengzhi |  23 |       6 | 20.7500 |
+			| Xu Zhu        |  21 |       1 | 20.5000 |
+			| Lin Chong     |  25 |       4 | 24.7500 |
+			| Hua Rong      |  23 |       7 | 19.6667 |
+			| Huang Yueying |  22 |       6 | 20.7500 |
+			+---------------+-----+---------+---------+
+			9 rows in set (0.00 sec)
+
+
+			'标准答案：等值连接'
+			> select student.name,student.age,student.classid,class.avg_age from  (select students.name as name ,students.age as age,students.classid as classid from students,(select count(name) as num,classid as classid from students group by classid having num>=3) as first WHERE first.classid=students.classid) as student,(select avg(age) as avg_age,classid as classid from students group by classid) AS class WHERE student.age > class.avg_age AND student.ClassID = class.ClassID;
+			+---------------+-----+---------+---------+
+			| name          | age | classid | avg_age |
+			+---------------+-----+---------+---------+
+			| Shi Potian    |  22 |       1 | 20.5000 |
+			| Xie Yanke     |  53 |       2 | 36.0000 |
+			| Ding Dian     |  32 |       4 | 24.7500 |
+			| Yu Yutong     |  26 |       3 | 20.2500 |
+			| Yuan Chengzhi |  23 |       6 | 20.7500 |
+			| Xu Zhu        |  21 |       1 | 20.5000 |
+			| Lin Chong     |  25 |       4 | 24.7500 |
+			| Hua Rong      |  23 |       7 | 19.6667 |
+			| Huang Yueying |  22 |       6 | 20.7500 |
+			+---------------+-----+---------+---------+
+			9 rows in set (0.00 sec)
+
+
+			'标注答案2：右外连接'
+			> select student.name,student.age,student.classid,class.avg_age from  (select students.name as name ,students.age as age,students.classid as classid from students right join (select count(name) as num,classid as classid from students group by classid having num>=3) as first on first.classid=students.classid) as student,(select avg(age) as avg_age,classid as classid from students group by classid) AS class WHERE student.age >= class.avg_age AND student.ClassID = class.ClassID;
+			+---------------+-----+---------+---------+
+			| name          | age | classid | avg_age |
+			+---------------+-----+---------+---------+
+			| Shi Potian    |  22 |       1 | 20.5000 |
+			| Xie Yanke     |  53 |       2 | 36.0000 |
+			| Ding Dian     |  32 |       4 | 24.7500 |
+			| Yu Yutong     |  26 |       3 | 20.2500 |
+			| Yuan Chengzhi |  23 |       6 | 20.7500 |
+			| Xu Zhu        |  21 |       1 | 20.5000 |
+			| Lin Chong     |  25 |       4 | 24.7500 |
+			| Hua Rong      |  23 |       7 | 19.6667 |
+			| Huang Yueying |  22 |       6 | 20.7500 |
+			+---------------+-----+---------+---------+
+			9 rows in set (0.00 sec)
+
+
+
+		4、统计各班级中年龄大于全校同学平均年龄的同学。
+			> SELECT Name,Age,ClassID FROM students WHERE age > (SELECT avg(age) as avg_age  FROM students);
+			+--------------+-----+---------+
+			| Name         | Age | ClassID |
+			+--------------+-----+---------+
+			| Xie Yanke    |  53 |       2 |
+			| Ding Dian    |  32 |       4 |
+			| Shi Qing     |  46 |       5 |
+			| Tian Boguang |  33 |       2 |
+			| Sun Dasheng  | 100 |    NULL |
+			+--------------+-----+---------+
+			5 rows in set (0.00 sec)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

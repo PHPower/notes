@@ -1,0 +1,1140 @@
+6.26 (Mage Varnish)
+
+
+Web Page Cache：
+
+	squid --> varnish
+
+	'程序的运行具有局部性特征：'
+		时间局部性：一个数据被访问过之后，可能很快会被再次访问;使得缓存有意义
+
+		空间局部性：一个数据被访问时，其周边的数据也有可能被访问到
+		
+
+
+	cache：命中 
+		
+		热区：局部性；(承载一个站点80%的访问量)
+			'时效性：'
+				缓存空间耗尽：LRU算法(最近最少使用)
+				过期：缓存清理
+				
+	
+	'缓存命中率：hit/(hit+miss)'
+		范围：(0,1)
+
+		页面命中率：基于页面数量进行衡量
+		字节命中率：基于页面的体积大小进行衡量
+		数据命中率(mysql)：基于查询语句
+
+		读多写少的数据 --> 进行缓存
+
+			如果缓存命中率降低：
+				(1)提高缓存空间
+				(2)延长缓存有效时间
+		
+	
+	'缓存与否：'
+		私有数据：private，private cache；
+			cookie，用户的私有数据-->密码、账号
+			不一定cookie都是私有信息
+
+		公共数据：public, public or private cache;
+
+		MySQL: data cache 
+		网页：page cache 
+		php：opcode cache (动态程序生成的可缓存数据)
+
+		'只要代理服务器(反代)，一定有缓存 -- 而缓存服务器，不一定有代理功能'
+
+	'warm up：'
+		缓存热身
+
+
+	'标准化：'
+		系统标准化、路径标准化、绿化
+		'监控系统'
+		'自动解决故障'：脚本
+		'配置系统：'监控每个节点的配置是否正常，并能够自动推送、自动配置
+
+		配置系统+监控系统
+
+		或者 
+
+		'云化'：(小公司使用公有云、私有云解决方案)
+			使用虚拟机
+
+		'容器docker：'
+			使用一个打包好的镜像文件，所有的需要的软件包以及配置
+			在配置时，直接运行镜像文件即可
+
+		'CDN：'
+			内容分发网络
+			将域名使用CNAME解析到CDN IP 而非WEB的nginx代理服务器IP
+
+		'异地多机房：'
+			冗余
+			异地单或系统
+
+			数据需要做异地同步
+
+
+		'搜索引擎系统：'
+			solr
+			elk --> el stack
+
+		'大数据流处理：'
+			hadoop
+
+
+	
+	
+	Cache-related Headers Fields ('缓存控制首部')
+		The most important caching header fields are:
+
+			'Expires：过期时间；'
+				Expires:Thu, 22 Oct 2026 06:34:30 GMT
+			Cache-Control：max-age=
+			
+			
+			'Etag'
+			If-None-Match
+			
+			'Last-Modified'
+			If-Modified-Since
+			
+			'Vary'
+			Age
+
+
+
+		'缓存有效性判断机制：'
+			'过期时间：Expires'
+				HTTP/1.0
+					Expires
+				HTTP/1.1
+					Cache-Control: maxage= 		过期时间 
+					Cache-Control: s-maxage=	相对时间
+			
+			'条件式请求：'(用以下一种即可)
+				Last-Modified/If-Modified-Since：基于文件的修改时间戳来判别
+				Etag/If-None-Match ：基于校验码是否匹配来判别(更消耗资源)
+					匹配：返回304
+					不匹配：返回200，从服务器请求
+
+				
+			Expires:Thu, 13 Aug 2026 02:05:12 GMT
+			Cache-Control:max-age=315360000
+			ETag:"1ec5-502264e2ae4c0"
+			Last-Modified:Wed, 03 Sep 2014 10:00:27 GMT
+			
+			'两级式请求：'
+				过期时间+条件式请求
+
+
+		'缓存层级：'
+			私有缓存：用户代理附带的本地缓存机制；
+			公共缓存：反向代理服务器的缓存功能；
+
+		User-Agent <--> private cache <--> public cache <--> public cache 2 <--> Original Server
+		
+
+
+	'请求报文用于通知缓存服务如何使用缓存响应请求：'
+		cache-request-directive = 
+			"no-cache"，    					#要求 不能用缓存响应   (只需要这一项即可实现功能)                   
+			| "no-store"                         
+			| "max-age" "=" delta-seconds        
+			| "max-stale" [ "=" delta-seconds ]  
+			| "min-fresh" "=" delta-seconds      
+			| "no-transform"                    
+			| "only-if-cached"                  
+			| cache-extension                    
+
+	'响应报文用于通知缓存服务器如何存储上级服务器响应的内容：'
+		cache-response-directive =
+			"public"                           				'#缓存 公共缓存     '
+			| "private" [ "=" <"> 1#field-name <"> ]  		'#仅私有 缓存可缓存'
+			| "no-cache" [ "=" <"> 1#field-name <"> ]		'#可缓存，但响应给客户端之前需要revalidation(必须要做条件式请求验证，进行缓存有效性验证)；'
+			| "no-store" 									'不允许存储响应内容于缓存中，真正不允许缓存(不能存储)'
+			| "no-transform"                         		
+			| "must-revalidate"                      		'必须重新校验'
+			| "proxy-revalidate"                   			'由代理服务器进行重新校验'
+			| "max-age" "=" delta-seconds           
+			| "s-maxage" "=" delta-seconds          
+			| cache-extension     
+			
+
+'开源解决方案：'
+	squid：
+	varnish：
+		
+	varnish官方站点： http://www.varnish-cache.org/
+		Community
+		Enterprise
+		
+		 This is Varnish Cache, a high-performance HTTP accelerator. 
+		
+	'程序架构：'
+		Manager进程
+		Cacher进程，包含多种类型的线程：
+			accept, worker, expiry, ... 
+		shared memory log：
+			统计数据：计数器；
+			日志区域：日志记录；
+				varnishlog, varnishncsa, varnishstat... 
+			
+		配置接口：VCL
+			Varnish Configuration Language, 
+				vcl complier --> c complier --> shared object 
+
+	'varnish的程序环境：'
+		'配置文件'
+			/etc/varnish/varnish.params： 配置varnish服务进程的工作特性，例如监听的地址和端口，缓存机制；
+			/etc/varnish/default.vcl：配置各Child/Cache线程的缓存策略；
+			
+			'主程序：'
+				/usr/sbin/varnishd
+			
+			'CLI interface：'
+				/usr/bin/varnishadm
+			
+			'Shared Memory Log交互工具：'
+				/usr/bin/varnishhist
+				/usr/bin/varnishlog
+				/usr/bin/varnishncsa
+				/usr/bin/varnishstat
+				/usr/bin/varnishtop		
+			
+			'测试工具程序：'
+				/usr/bin/varnishtest
+			
+			'VCL配置文件重载程序：'
+				/usr/sbin/varnish_reload_vcl
+			
+			Systemd Unit File：
+				/usr/lib/systemd/system/varnish.service
+					varnish服务
+				/usr/lib/systemd/system/varnishlog.service
+				/usr/lib/systemd/system/varnishncsa.service	
+					日志持久的服务；
+					
+		
+
+
+		!!!!!!!!!! varnish 重启服务要谨慎 !!!!!!!!!!!!!!
+
+		
+
+
+		'varnish的缓存存储机制( Storage Types)：'
+			-s [name=]type[,options]
+			
+			· malloc[,size]
+				内存存储，[,size]用于定义空间大小；重启后所有缓存项失效；
+				久而久之会产生碎片，内存也会变得不那么高效，建议使用磁盘缓存
+			
+			· file[,path[,size[,granularity]]]   '建议使用SSD PCIE'   --> fury IO (IOPS 10W/s)
+				磁盘文件存储，黑盒；重启后所有缓存项失效；
+					内部索引是根据内存的
+					一样不能重启varnish
+
+				'修改配置文件：'
+					$ vim /etc/varnish/varnish.params
+					VARNISH_STORAGE="file,/data/varnish/cache 1g"
+					$ mkdir -pv /data/varnish/cache 
+					$ chown -R varnish.varnish /data/varnish/cache 
+					$ systemctl start varnish.service 
+			
+			· persistent,path,size
+				文件存储，黑盒；重启后所有缓存项有效；'实验状态中...'；
+				
+		
+		'varnish程序的选项：'
+			程序选项：/etc/varnish/varnish.params文件 --> 主要配置给varnishd传送的参数
+				-a address[:port][,address[:port][...]，默认为6081端口； 
+				-T address[:port]，默认为6082端口；
+				-s [name=]type[,options]，定义缓存存储机制；
+				-u user
+				-g group
+				-f config：VCL配置文件；
+				-F：运行于前台；
+				...
+			
+			运行时参数：/etc/varnish/varnish.params文件， DEAMON_OPTS
+				DAEMON_OPTS="-p thread_pool_min=5 -p thread_pool_max=500 -p thread_pool_timeout=300"
+					程序选项，开机启动选项
+				
+				-p param=value：设定运行参数及其值； 可重复使用多次；
+				-r param[,param...]: 设定指定的参数为只读状态； 
+				
+
+		
+		'重载vcl配置文件：'
+			~ ]# varnish_reload_vcl
+				
+		
+
+		varnishadm
+			-S /etc/varnish/secret -T [ADDRESS:]PORT 
+      
+			help [<command>]
+			ping [<timestamp>]
+			auth <response>
+			quit
+			banner
+			status
+			start
+			stop
+			vcl.load <configname> <filename>
+			vcl.inline <configname> <quoted_VCLstring>
+			vcl.use <configname>
+			vcl.discard <configname>
+			vcl.list
+			param.show [-l] [<param>]
+			param.set <param> <value>
+			panic.show
+			panic.clear
+			storage.list
+			vcl.show [-v] <configname>
+			backend.list [<backend_expression>]
+			backend.set_health <backend_expression> <state>
+			ban <field> <operator> <arg> [&& <field> <oper> <arg>]...
+			ban.list	
+			
+			'配置文件相关：'
+				vcl.list 
+				vcl.load：装载，加载并编译；
+				vcl.use：激活；
+				vcl.discard：删除；
+				vcl.show [-v] <configname>：查看指定的配置文件的详细信息；
+				
+			'运行时参数：'
+				param.show -l：显示列表；
+				param.show <PARAM>
+				param.set <PARAM> <VALUE>
+				
+			'缓存存储：'
+				storage.list
+				
+			'后端服务器：'
+				backend.list 
+				
+	
+
+
+
+		'VCL：'
+			”域“专有类型的配置语言；
+			
+			'state engine：状态引擎；'
+
+			
+			VCL有多个状态引擎，状态之间存在相关性，但状态引擎彼此间互相隔离；每个状态引擎可使用return(x)指明关联至哪个下一级引擎；每个状态引擎对应于vcl文件中的一个配置段，即为subroutine
+			
+				vcl_hash --> return(hit) --> vcl_hit
+				
+			Client Side：('客户端状态引擎')
+				vcl_recv, vcl_pass, vcl_hit, vcl_miss, vcl_pipe, vcl_purge, vcl_synth, vcl_deliver
+				
+				vcl_recv：'收到请求'
+					hash：vcl_hash		
+					pass: vcl_pass 
+					pipe: vcl_pipe 				
+					synth: vcl_synth
+					purge: vcl_hash --> vcl_purge 缓存修剪
+					
+				vcl_hash：
+					lookup：
+						hit: vcl_hit
+						miss: vcl_miss
+						pass, hit_for_pass: vcl_pass
+						purge: vcl_purge
+				
+			Backend Side：('后端服务状态引擎')
+				vcl_backend_fetch, vcl_backend_response, vcl_backend_error
+				
+
+			'两个特殊的引擎：'
+				vcl_init：在处理任何请求之前要执行的vcl代码：主要用于'初始化VMODs；'
+				vcl_fini：所有的请求都已经结束，在vcl配置被丢弃时调用；主要用于'清理VMODs'；
+			
+		
+
+		'vcl的语法格式：'
+			(1) VCL files start with vcl 4.0;
+				vcl 4.0;
+
+			(2) //, # and /* foo */ for comments; 
+				这些都是注释符号
+
+			(3) Subroutines are declared with the sub keyword; 例如sub vcl_recv { ...}；
+				声明vcl --> sub vcl_recv {...}
+
+			(4) No loops, state-limited variables（受限于引擎的内建变量）；
+				不允许循环
+
+			(5) Terminating statements with a keyword for next action as argument of the return() function, i.e.: return(action)；用于实现状态引擎转换； 
+
+
+			(6) Domain-specific;
+				区域专用
+			
+		
+		'The VCL Finite State Machine：有限状态机'
+			(1) Each request is processed separately;
+				每个请求会被单独处理
+
+			(2) Each request is independent from others at any given time;
+				每个请求与其他请求都是独立，隔离的
+
+			(3) States are related, but isolated;
+				状态是有关联的，但是是隔离的
+
+			(4) return(action); exits one state and instructs Varnish to proceed to the next state;
+				return ：退出一个状态，进入到另一个状态
+
+			(5) Built-in VCL code is always present and appended below your own VCL;
+				有默认配置，可以在默认配置后加上自定义 的配置
+
+
+
+
+		'三类主要语法：'
+			sub subroutine {
+				...
+			}
+			
+			
+
+			if CONDITION {
+				...
+			} else if{	
+				...
+			} else {
+
+			}
+
+			或者
+
+			if CONDITION {
+				...
+			} else {
+
+			}
+			
+			
+			
+			return(), hash_data()
+			
+		
+
+
+
+		VCL Built-in Functions and Keywords
+			'內建函数：'
+				regsub(str, regex, sub)   	-->正则表达式替换(只替换第一次出现的)
+				regsuball(str, regex, sub)	-->全局替换
+				ban(boolean expression)		
+				hash_data(input)			-->hash运算
+				synthetic(str)
+				
+			Keywords:
+				call subroutine， return(action)，new，set，unset 
+				
+			'操作符：'
+				==, !=, ~, >, >=, <, <=
+				逻辑操作符：&&, ||, !
+				变量赋值：=
+				(?i) ：后面匹配字符不区分的大小写
+				
+
+			'举例：obj.hits'內建变量，用于保存某缓存项的从缓存中命中的次数
+				if (obj.hits>0) {
+					set resp.http.X-Cache = "HIT via " + server.ip;
+					'# set 自定义响应报文，http表示http的首部，后面X-Cache是自定义的首部(X-HIS都有可以，随便定义)， server.ip -—> 內建变量'
+				
+				} else {
+					set resp.http.X-Cache = "MISS via " + server.ip;
+				}
+						
+		
+		'变量类型：'
+			内建变量：
+				req.*：request，表示由客户端发来的请求报文相关；
+					req.http.*
+						req.http.User-Agent(浏览器类型), req.http.Referer(跳转来自哪里), ...
+				bereq.*：由varnish发往BE主机的httpd请求相关；
+					bereq.http.*
+				beresp.*：由BE主机响应给varnish的响应报文相关；
+					beresp.http.*
+				resp.*：由varnish响应给client相关；
+				obj.*：存储在缓存空间中的缓存对象的属性；只读；
+				
+				
+
+				'常用变量：'(变量的适用范围，都有限制，根据具体情况使用)
+
+					bereq.*, req.*：
+						bereq.http.HEADERS 		：各种各样的头部信息
+						bereq.request 			：请求方法；
+						bereq.url 				：请求的url；
+						bereq.proto 			：请求的协议版本；
+						bereq.backend 			：指明要调用的后端主机；
+						
+						req.http.Cookie 		：客户端的请求报文中Cookie首部的值； 
+						req.http.User-Agent ~ "chrome"
+						
+						
+					beresp.*(fetch中使用), resp.*：
+						beresp.http.HEADERS
+						beresp.status：响应的状态码；
+						reresp.proto：协议版本；
+						beresp.backend.name：BE主机的主机名；
+						beresp.ttl：BE主机响应的内容的余下的可缓存时长；
+						
+					obj.*   
+						obj.hits：此对象从缓存中命中的次数；
+							'內建变量，用于保存某缓存项的从缓存中命中的次数'
+
+						obj.ttl：对象的ttl值
+							缓存时长
+
+						obj.grace：缓存宽限期
+						
+					server.*
+						server.ip
+						server.hostname
+
+					client.*
+						client.ip					
+				
+
+
+
+			用户自定义：
+				set 
+				unset 
+			
+		
+		'示例1：强制对某类资源的请求不检查缓存：'
+			vcl_recv {
+				if (req.url ~ "(?i)^/(login|admin)") {
+					return(pass);
+				}
+			}
+				
+		
+
+		'示例2：对于特定类型的资源，例如公开的图片等，取消其私有标识，并强行设定其可以由varnish缓存的时长； '
+			
+			定义在vcl_backend_responece中
+
+			if (beresp.http.cache-control !~ "s-maxage") {
+				if (bereq.url ~ "(?i)\.(jpg|jpeg|png|gif|css|js)$") {
+					unset beresp.http.Set-Cookie;  	#删除后端响应报文头部
+
+					set beresp.ttl = 3600s;			#设定缓存时长
+				}
+			}
+			
+		
+		'示例3：'记录真正的客户端访问地址(定义在vcl_recv)
+			这里的方法适用于http作为Web服务器时，而非nginx，nginx有自带的 'http_x_forwarded_for'
+
+			if (req.restarts == 0) {
+				if (req.http.X-Fowarded-For) {
+					set req.http.X-Forwarded-For = req.http.X-Forwarded-For + "," + client.ip;
+				} else {
+					set req.http.X-Forwarded-For = client.ip;
+				}
+			}		
+				
+
+
+
+		
+
+		'缓存对象的修剪：purge, ban '
+			当缓存项保存的内容与我们后端服务器的内容不相同时，需要
+
+			(1) 能执行purge操作
+				sub vcl_purge {
+					return (synth(200,"Purged")); 	'通知用户，修剪完成'
+				}
+				
+			(2) 何时执行purge操作
+				sub vcl_recv {
+					if (req.method == "PURGE") {  	'如果请求方法是PURGE，则执行vcl_pruge中的操作'
+						return(purge);
+					}
+					...
+				}
+
+			(3) 使用curl进行自定义请求：
+				-X method：自定义请求方法
+
+				$ curl -X PURGE http://172.16.3.10/index.html
+
+
+
+				
+			'添加此类请求的访问控制法则：'
+				
+				'定义ACL：仅允许这里定义的IP执行purge操作'
+
+					acl purgers {  
+						"127.0.0.0"/8;     	!!!!!!!!'注意这里的IP格式'!!!!!!!!!
+						"10.1.0.0"/16;
+					}
+					
+					sub vcl_recv {
+						if (req.method == "PURGE") {
+							if (!client.ip ~ purgers) {  		'#匹配如果客户端IP不在我们acl之前定义prugers中，则执行下面的操作'
+								return(synth(405,"Purging not allowed for " + client.ip));
+							}
+							return(purge);  		'如果clientIP在purgers中，执行pruge'  --> 执行的pruge在 vcl_purge中定义
+						}
+						...
+					}
+					
+
+
+			'banning使用方法：'(一般是临时清理)
+				实现禁止使用缓存的功能
+				执行完之后，生效只有一次，刷新2次页面就会缓存到varnish
+
+				1、'使用 varnishadm 命令'
+
+				> ban req.url ~ ^/javascript
+
+				> ban req.url ~ .(js|jpg|css) 
+
+
+
+				2、添加到vcl配置文件中
+				sub vcl_recv {
+				    if (req.method == "BAN") {
+				        ban("req.http.host == " + req.http.host + " && req.url == " + req.url); 		
+				        
+				        'http.host是你请求的主机地址——> http://www.maxie.com  http://172.16.3.100  的 www.maxie.com 或者 172.16.3.100'
+				        
+				        # Throw a synthetic page so the request won't go to the backend.
+				        return(synth(200, "Ban added"));
+				    }
+				}
+
+				
+				3、清空缓存：
+				> ban req.url == / && req.http.host ~ "maxie.com"
+				'#清理匹配某个域名下的所有缓存信息'
+
+				4、在配置文件中定义，使用ban()函数;
+
+
+				总结：
+					1、在vcl配置文件中使用'PURGE'
+					2、在命令行varnishadm中使用'ban'
+
+
+
+
+
+		'varnish如何设定使用多个后端主机：'(如果要验证，则需要使用ban清空缓存，或者使用不缓存的页面)
+			
+		
+			backend default {
+				.host = "172.16.100.6";
+				.port = "80";
+			}
+
+			backend appsrv {
+				.host = "172.16.100.7";
+				.port = "80";
+			}
+			
+			sub vcl_recv {				
+				if (req.url ~ "(?i)\.php$") {   
+				# if (req.url ~ "(?i)\.php.*$") 		只有这样向后端代理时，才能全部缓存到php的有关信息，否则php的图片将无法缓存，就算使用jpg匹配，都匹配不到，因为php中的图片url是：http://172.16.3.10/index.php?=PHPE9568F34-D428-11d2-A769-00AA001ACF42
+					set req.backend_hint = appsrv;
+				} else {
+					set req.backend_hint = default;
+				}	
+				
+				...
+			}
+
+	
+
+		'基于cookie的seesion sticky会话粘性使用实例：'
+			sub vcl_init {
+			    new h = directors.hash();
+			    h.add_backend(one, 1);   // backend 'one' with weight '1'
+			    h.add_backend(two, 1);   // backend 'two' with weight '1'
+			}
+
+			sub vcl_recv {
+			    // pick a backend based on the cookie header of the client
+			    set req.backend_hint = h.backend(req.http.cookie);
+			}
+
+
+
+
+		'集群配置：'
+			'使用之前，要加载一个模块：(导入集群模块)'
+				import directors;    // load the directors VMOD
+
+
+			varnish负载均衡集群算法：
+				random         #随机
+		        round_robin     #轮询
+		        fallback        #备份
+		        hash            #固定后端
+
+			初始化：
+				sub vcl_init {    '#实现负载均衡的功能'
+				    new round_robin_director = directors.round_robin();  #定义一个backend组
+				    round_robin_director.add_backend(one);    #这里one是，backend的名字，可以自定义
+				    round_r1obin_director.add_backend(two);
+ 
+				    new random_director = directors.random();  #定义另一个组，使用权重，但只能使用 random()调度算法
+				    random_director.add_backend(one, 10);  '# 2/3 to backend one  权重'
+				    random_director.add_backend(two, 5);   '# 1/3 to backend two  权重'
+				}
+
+			调用：
+				sub vcl_recv {
+				    set req.backend_hint = round_robin_director.backend();
+				}
+
+
+
+
+
+
+
+
+		BE Health Check：(通过backend.list查看)
+			'健康状态检查'
+
+			backend BE_NAME {
+				.host =  
+				.port = 
+				.probe = {
+					.url = "/"; 		#需要加引号 "/index.thml"也是可以的
+					.timeout = 
+					.interval = 
+					.window =
+					.threshold =
+				}
+			}
+			
+			.probe：定义健康状态检测方法；
+				.url：检测时请求的URL，默认为"/"; 
+				.request：发出的具体请求；
+					.request = 
+						"GET /.healthtest.html HTTP/1.1"
+						"Host: www.magedu.com"
+						"Connection: close"
+				.window：基于最近的多少次检查来判断其健康状态； 
+				.threshold：最近.window中定义的这么次检查中至有.threshhold定义的次数是成功的；
+				.interval：检测频度； 
+				.timeout：超时时长；
+				.expected_response：期望的响应码，默认为200；
+
+				'当 threshold/window > (window/2) 时，判断为 health'
+					一般这俩定义时，window的值是threshold的2倍，不过也要根据具体情况而定
+
+			
+
+			'健康状态检测的定义配置方式：'
+
+				方法(1) probe PB_NAME  { 
+						}
+				     backend NAME = {
+						.probe = PB_NAME;
+						...
+				     }
+				     
+				方法(2) backend NAME  {
+					.probe = {
+						...
+					}
+				}
+
+			手动设置健康状态：
+				> backend.set_health backend_name Healthy
+
+				> backend.set_health backend_name Sick
+
+
+
+		'设置后端的主机属性：'
+			'定义在backend中'
+			backend default {
+				.connect_timeout = 0.5s;			
+			    .first_byte_timeout = 20s; 			首字节超时时间
+			    .between_bytes_timeout = 5s;		字节之间的超时时间
+			    .max_connections = 50; 				最大并发送数
+			}
+
+		
+
+		'压缩功能的开关：'
+
+			sub vcl_backend_response {
+			    if (beresp.http.content-type ~ "text") {
+			       set beresp.do_gzip = true;
+			    }
+			}
+
+
+
+
+
+
+
+
+		'varnish的运行时参数：'
+			'线程模型：'
+				cache-worker
+				cache-main
+				ban lurker
+				acceptor：
+				epoll/kqueue：
+				...
+				
+
+			'线程相关的参数：'
+				'$ vim /etc/varnish/varnish.params'
+
+				在线程池内部，其每一个请求由一个线程来处理； 其worker线程的最大数决定了varnish的并发响应能力；
+					'线程池数量，要小于等于CPU核心数'
+
+				thread_pools：Number of worker thread pools. 
+					最好小于或等于CPU核心数量； 
+				
+				thread_pool_max：The maximum number of worker threads in each pool. 每线程池的最大线程数；默认5000个
+				
+
+				thread_pool_min：The minimum number of worker threads in each pool. 额外意义为“最大空闲线程数”；
+				
+
+
+
+					最大并发连接数=thread_pools  * thread_pool_max
+				
+
+
+
+				thread_pool_timeout：Thread idle threshold.  Threads in excess of thread_pool_min, which have been idle for at least this long, will be destroyed.
+					'线程超时时间'
+
+				thread_pool_add_delay：Wait at least this long after creating a thread.
+					创建线程的延迟；默认为0，不延迟
+
+				thread_pool_destroy_delay：Wait this long after destroying a thread.
+					删除线程的延迟，默认1s
+
+				thread_pool_fail_delay：在重试线程创建之前的时间段。这在线程创建失败后。
+					隔多久再重新创建
+
+				workspace_thread：每线程辅助工作空间的字节数。
+
+
+				'设置方式：'
+					vcl.param 
+					param.set：需要使用交互式命令设置
+					param.show thread_pool_max：查看每个线程池最大的线程数
+
+				
+
+				'永久有效的方法：都定义在DEAMON_OPTS中即可，-p选项分割开来即可'
+
+					'varnish.params文件'
+						DEAMON_OPTS="-p PARAM1=VALUE -p PARAM2=VALUE"
+
+						DEAMON_OPTS="-p thread_pools=4 -p thread_pool_min=5 -p thread_pool_max=2000"
+
+				!!!	'重启后有效，但是不要经常重启，重启很危险'
+						
+				
+
+
+!!!			'varnish最大有效并发2w个并发连接，保持varnish正常运行'
+
+			
+
+			'时间设置(超时)：'定时器
+				参数						默认				描述							范围
+				connect_timeout			3.500 [秒]		OS /网络延迟					后端
+				first_byte_timeout		60.000 [秒]		网页生成						后端
+				between_bytes_timeout	60.000 [秒]		打嗝							后端
+				send_timeout			600.000 [秒]		客户端等待时长					客户端
+一般修改此项!!!    timeout_idle			5.000 [秒]		保持连接的超时(值越大，复用性高)	客户端
+				timeout_req				2.000 [秒]		等待客户端发送请求报文首部的超时时间	客户端
+				cli_timeout				60.000 [秒]		管理线程 --> 子进程				管理
+
+
+
+
+
+
+
+
+		'varnish日志区域：'
+			shared memory log 
+				计数器
+				日志信息
+				
+			1、'varnishstat命令' - Varnish Cache statistics '查看统计数据'
+				-1
+				-1 -f FILED_NAME ：'指定只显示指定段的信息' 可以查看多个段，用空格分割，再加 -f FILED_NAME 即可
+				-l：可用于-f选项指定的字段名称列表；'查看每个段的意义'
+				
+				MAIN.cache_hit 
+				MAIN.cache_miss
+				
+				# varnishstat -1 -f MAIN.cache_hit -f MAIN.cache_miss
+				# varnishstat -l -f MAIN -f MEMPOOL
+				
+
+			2、varnishtop - Varnish log entry ranking
+				'日志排序'
+
+				-1  ：仅显示一次日志(显示详细信息)；Instead of a continously updated display, print the statistics once and exit.
+				
+				-i taglist，可以同时使用多个-i选项，也可以一个选项跟上多个标签；
+					只查看哪些'标签'
+						标签内不能有空格
+				
+				-I <[taglist:]regex>
+					正则表达式查看
+				
+				-x taglist：排除列表(黑名单)
+				
+				-X  <[taglist:]regex>
+					排出列表 -- 基于正则表达式
+
+				-a file：追加到指定文件中
+
+				-w filename：写到哪个文件中(覆盖)
+
+
+
+				'按时间的流逝，进行排序。'
+					对日志里的各项信息进行排序，出现的次数来排序
+
+				'输出的各种各样的段：'
+					MAIN：主段(主要查看MAIN端的信息)
+						MAIN.trheads 线程数量
+						MAIN.cache.hit 命中数
+						MAIN.cache.miss 未命中数
+						MAIN.client_req 请求数
+							'命中数/请求数=命中率'
+					MGT
+					LCK：锁
+
+
+				
+			3、varnishlog - Display Varnish logs
+				'查看原始日志'
+				
+			4、 'varnishncsa命令' - Display Varnish logs in Apache / NCSA combined log format
+				'使用 NCSA格式来显示日志信息'
+			
+		
+
+
+		'内建函数：'
+			hash_data()：指明哈希计算的数据；减少差异，以提升命中率；
+			regsub(str,regex,sub)：把str中被regex第一次匹配到字符串替换为sub；主要用于URL Rewrite
+			regsuball(str,regex,sub)：把str中被regex每一次匹配到字符串均替换为sub；
+			return()：
+			ban(expression) 
+			ban_url(regex)：Bans所有的其URL可以被此处的regex匹配到的缓存对象；
+			synth(status,"STRING")：purge操作；
+			
+				
+	
+
+	总结：
+		'在使用varnish时，缓存单独放在一个磁盘上(SSD)，访问日志放在另一块磁盘'
+		监控：
+			根据缓存命中率 设定缓存规则
+
+		varnish： state engine, vcl 
+			varnish 4.0：
+				vcl_init 
+				vcl_recv
+				vcl_hash 
+				vcl_hit 
+				vcl_pass
+				vcl_miss 
+				vcl_pipe 
+				vcl_waiting
+				vcl_purge 
+				vcl_deliver
+				vcl_synth
+				vcl_fini
+				
+				vcl_backend_fetch
+				vcl_backend_response
+				vcl_backend_error 
+				
+			sub VCL_STATE_ENGINE {
+				...
+			}
+			backend BE_NAME {} 
+			probe PB_NAME {}
+			acl ACL_NAME {}
+			
+
+
+
+
+
+!!!!!!!!!'实验： '
+	!!!!!!5视频 做后10分种的实验
+
+
+
+
+
+
+
+'实验：使用varnish实现动静分离'
+	backend imgsrv1 {
+		.host = "172.16.3.200";
+		.port = "80";
+	}
+
+
+	backend imgsrv2 {
+		.host = "172.16.3.210";
+		.port = "80";
+	}
+
+
+	backend appsrv1 {
+		.host = "172.16.3.220";
+		.port = "80";
+	}
+
+	backend appsrv2 {
+		.host = "172.16.3.230";
+		.port = "80";
+	}
+
+	sub vcl_init {
+		new imgsrvs = directors.random();
+		imgsrvs.add_backend(imgsrv1,10);
+		imgsrvs.add_backend(imgsrv2)
+	}
+
+
+
+
+在wordpress中由于我们会安装一些各种各样的插件，有些插件会使得wordpress的每个页面都带有写入cookies的set-cookie标记，
+而我们前边在vcl_fetch函数中禁止了这类内容的缓存，问题就在这里了，我们希望将这些多余的cookie关闭掉，但是，wordpress自身的登录和管理页面是需要cookies才可以正常工作的，所以我们还需要让反向代理不缓存这些页面，我们使用以下VCL配置：
+sub vcl_recv {
+	if (!(req.url ~ "wp-(login|admin)"))
+	{
+	unset req.http.cookie;
+	}
+	}
+
+sub vcl_fetch {
+	if (!(req.url ~ "wp-(login|admin)"))
+	{
+	unset obj.http.set-cookie;
+	}
+}
+
+可以看到，除了wordpress自身的登录和管理页面以外，我们将其它内容的HTTP头信息中有关cookie的标记全部都清除掉，这使得Varnish可以将大部分内容缓存起来，提高缓存命中率，同时不影响我们登录和管理wordpress。
+这个例子给了我们一些启示，对于我们自己的站点，如果从长远考虑，那么在规划的时候就要费点心思，我们可以根据内容是否可以缓存在反向代理服务器上，将它们置于不同的主机，这样便可以在必要的时候将可以缓存的内容快速与反向代理服务器对接，获得较好的加速效果。
+
+
+
+
+
+
+示例：
+	backend imgsrv1 {
+		.host = "192.168.10.11";
+		.port = "80";
+	}
+	
+	backend imgsrv2 {
+		.host = "192.168.10.12";
+		.port = "80";
+	}	
+	
+	backend appsrv1 {
+		.host = "192.168.10.21";
+		.port = "80";
+	}
+	
+	backend appsrv2 {
+		.host = "192.168.10.22";
+		.port = "80";
+	}
+	
+	sub vcl_init { 							#实现负载均衡的功能
+		new imgsrvs = directors.random();
+		imgsrvs.add_backend(imgsrv1,10);
+		imgsrvs.add_backend(imgsrv2,20);
+		
+		new staticsrvs = directors.round_robin();
+		appsrvs.add_backend(appsrv1);
+		appsrvs.add_backend(appsrv2);
+		
+		new appsrvs = directors.hash();
+		appsrvs.add_backend(appsrv1,1);
+		appsrvs.add_backend(appsrv2,1);		
+	}
+	
+	sub vcl_recv {
+		if (req.url ~ "(?i)\.(css|js)$" {
+			set req.backend_hint = staticsrvs.backend();
+		} 		
+		if (req.url ~ "(?i)\.(jpg|jpeg|png|gif)$" {
+			set req.backend_hint = imgsrvs.backend();
+		} else {		
+			set req.backend_hint = appsrvs.backend(req.http.cookie);
+		}
+	}
+	
+	
+
+
+
+
+
+官方资料：
+	http://book.varnish-software.com/4.0/chapters/VCL_Basics.html
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

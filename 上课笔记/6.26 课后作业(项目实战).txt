@@ -1,0 +1,980 @@
+6.26 课后作业(项目实战)
+
+
+
+
+
+
+												                  +-------------+
+												                  |    ROUTER   |
+												                  +-------------+
+							                                 			|
+							                               			    +
+							    MASTER                   			keep|alived                 		    BACKUP
+							  172.16.3.10               			172.16.3.100               			  172.16.3.40
+							+-------------+    		  			  +-------------+            			+-------------+
+							|   nginx01   |-----------------------|  virtualIP  |-----------------------|   nginx02   |
+							+-------------+            			  +-------------+            			+-------------+
+							  192.168.1.10                    	         |                     			  192.168.1.20
+		                          +-----------------------------------------------------------------------------+
+		                          |                             						  						|
+		                    +-------------+              												+-------------+
+		                    |    web01    |               												|    web02    |
+		                    +-------------+               												+-------------+
+ 				                   |  													 						|
+		       +------------------------------------------+								   +------------------------------------------------+
+		       |               |           |              |       						   |                  |              |              |
+		   +---------+    +---------+   +---------+    +---------+  					   +---------+    +---------+   +---------+    +---------+ 
+		   |  jpg01  |    |  jpg02  |   |  fpm01  |    |  fpm02  |  					   |  jpg01  |    |  jpg02  |   |  fpm01  |    |  fpm02  |
+		   +---------+    +---------+   +---------+    +---------+  					   +---------+    +---------+   +---------+    +---------+
+
+
+
+
+
+
+准备：
+	1、同步时间
+		$ ntpdate 172.16.0.1
+
+	2、
+
+
+
+'实验1：使用varnish缓存一个nginx服务器，使其监听在80端口'
+	1、缓存服务器安装 varnish并修改配置文件
+		$ yum install -y varnish 
+		$ cd /etc/varnish
+		$ vim varnish.params
+		VARNISH_LISTEN_PORT=80
+		#这里选择缓存的类型：malloc使用内存，file是用磁盘，使用file时，需要指明路径
+		VARNISH_STORAGE="malloc,256M"  
+		$ vim default.vcl
+		backend default {
+		    .host = "172.16.3.20"; 	#这里填写的是被代理的nginx服务器的地址
+		    .port = "80";
+		}
+		#定义发送响应报文之前的最后操作，如果命中数大于1，则设置自定义头部 Hit ，反之设置Miss
+		sub vcl_deliver {
+	        if (obj.hits>0) {
+	                set resp.http.X-Cache = "Hit Via " + server.ip;
+	        }
+	        else {
+	                set resp.http.X-Cache = "Miss from" + server.ip;
+	        }
+    	}
+
+    	$ systemctl start varnish
+
+    2、配置nginx
+    	配置测试页即可
+
+   	3、打开网页输入 varnish的IP地址进行测试
+
+
+
+
+'示例1：强制对某类资源的请求不检查缓存：'
+	vcl_recv {
+		if (req.url ~ "(?i)^/(login|admin)") {
+			return(pass);
+		}
+	}
+		
+	$ varnish -S /etc/varnish/secret -T  127.0.0.1:6082
+	> vcl.load test1 default.vcl 
+	> vcl.use test1
+		
+
+'示例2：对于特定类型的资源，例如公开的图片等，取消其私有标识，并强行设定其可以由varnish缓存的时长； '
+	
+	定义在vcl_backend_responece中
+
+	if (beresp.http.cache-control !~ "s-maxage") {
+		if (bereq.url ~ "(?i)\.(jpg|jpeg|png|gif|css|js)$") {
+			unset beresp.http.Set-Cookie;  	#删除后端响应报文头部
+
+			set beresp.ttl = 3600s;
+		}
+	}
+	
+	$ varnish -S /etc/varnish/secret -T  127.0.0.1:6082
+	> vcl.load test1 default.vcl 
+	> vcl.use test1
+
+'示例3：'记录真正的客户端访问地址(定义在vcl_recv)
+	这里的方法适用于http作为Web服务器时，而非nginx，nginx有自带的 'http_x_forwarded_for'
+
+	if (req.restarts == 0) {
+		if (req.http.X-Fowarded-For) {
+			set req.http.X-Forwarded-For = req.http.X-Forwarded-For + "," + client.ip;
+		} else {
+			set req.http.X-Forwarded-For = client.ip;
+		}
+	}
+
+	$ varnish -S /etc/varnish/secret -T  127.0.0.1:6082
+	> vcl.load test1 default.vcl 
+	> vcl.use test1
+
+	nginx只需修改日志中 $remote_addr 改为 $http_x_forwarded_for 即可
+
+
+
+'实验3：使用purge修剪缓存'
+	$ vim /etc/varnish/default.vcl 
+	sub vcl_purge {
+		return(synth(200,"Purge Completed"));
+	}
+
+	sub vcl_recv {
+		if (req.method == "PURGE")		'#这里引号中的内容是自定义的，可以是任意字符串，为了有辨识意义，我们就定义成了PURGE'
+			{
+				return(pruge);
+			}
+	}
+
+	$ varnish -S /etc/varnish/secret -T  127.0.0.1:6082
+	> vcl.load test2 default.vcl 
+	> vcl.use test2 
+
+	'测试：'
+
+		$ curl -X CutCache  http://172.16.3.10/index.html
+		<!DOCTYPE html>
+		<html>
+		  <head>
+		    <title>200 Pruged Succeed</title>
+		  </head>
+		  <body>
+		    <h1>Error 200 Pruged Succeed</h1>
+		    <p>Pruged Succeed</p>
+		    <h3>Guru Meditation:</h3>
+		    <p>XID: 32823</p>
+		    <hr>
+		    <p>Varnish cache server</p>
+		  </body>
+		</html>
+
+		# maxie @ maxie in ~ [20:35:46]
+		$ curl -I  http://172.16.3.10/index.html
+		HTTP/1.1 200 OK
+		Via: 1.1 varnish-v4
+		X-Cache: Miss from 172.16.3.10
+		Connection: keep-alive
+
+
+		# maxie @ maxie in ~ [20:35:48]
+		$ curl -I  http://172.16.3.10/index.html
+		HTTP/1.1 200 OK
+		Via: 1.1 varnish-v4
+		X-Cache: Hit Via 172.16.3.10
+		Connection: keep-alive
+
+
+	定义允许使用'pruge'方法的IP地址：
+		$ vim /etc/varnish/default.vcl 
+			acl prugers {
+			        "172.16.1.11";
+			        "172.16.250.15";
+			        "127.0.0.0"/8;
+			}
+
+			sub vcl_recv {
+				if (req.method == "PURGE") {
+                if (client.ip !~ prugers)
+                {
+                        return(synth(403,"Purging not allowed for" + client.ip));
+                }
+                return(purge);
+        		}
+			}
+
+	测试：
+		与上面测试无异，只需更换不同IP地址进行使用 PURGE请求方法测试即可
+
+		[root@node1 ~]# curl -X PURGE http://172.16.3.10
+		<!DOCTYPE html>
+		<html>
+		  <head>
+		    <title>403 Purging not allowed for172.16.3.20</title>
+		  </head>
+		  <body>
+		    <h1>Error 403 Purging not allowed for172.16.3.20</h1>
+		    <p>Purging not allowed for172.16.3.20</p>
+		    <h3>Guru Meditation:</h3>
+		    <p>XID: 58</p>
+		    <hr>
+		    <p>Varnish cache server</p>
+		  </body>
+		</html>
+
+
+
+
+
+
+'实验4：使用banning清空某些/某个页面的缓存'
+	$ varnish -S /etc/varnish/secret -T  127.0.0.1:6082
+	> vcl.load test3 default.vcl 
+	> vcl.use test3 
+
+	在另一台机器上进行请求：
+	$ curl -I  http://172.16.3.10/morning.jpg
+	$ curl -I  http://172.16.3.10/index.html 
+	$ curl -I  http://172.16.3.10/night.jpg
+
+	清空 jpg的缓存
+	$ varnish -S /etc/varnish/secret -T 127.0.0.1:6082
+	ban req.url ~ .jpg
+	200
+
+	回到之前请求的机器：
+		$ curl -I  http://172.16.3.10/night.jpg
+		HTTP/1.1 200 OK
+		Via: 1.1 varnish-v4
+		X-Cache: Miss from 172.16.3.10
+		Connection: keep-alive
+
+
+		# maxie @ maxie in ~ [21:12:52]
+		$ curl -I  http://172.16.3.10/index.html
+		HTTP/1.1 200 OK
+		X-Varnish: 65538 76
+		Via: 1.1 varnish-v4
+		X-Cache: Hit Via 172.16.3.10
+		Connection: keep-alive
+
+
+
+
+'实验5：定义多个后端主机，根据访问的URL来分别将不同的URL调度到不同的后端服务器'
+	'varnish操作：'
+	$ vim /etc/varnish/default.vcl
+	backend default {
+	    .host = "172.16.3.20";
+	    .port = "80";
+	}
+
+	backend appsrv {
+	    .host = "172.16.3.30";
+	    .port = "80";
+	}
+		
+	sub vcl_recv {
+        if (req.url ~ "(?i)\.php.*$") {
+                set req.backend_hint = appsrv;
+        } else {
+                set req.backend_hint = default;
+        }
+
+        if (req.url ~ "(?i)\.(jpg|jpeg|png|gif|bmp)$")  {
+                set req.backend_hint = appsrv;
+        }
+    }
+
+
+
+
+	'nginx php主机操作：'
+	$ yum install -y php-fpm php-mysql php-mbstring
+	$ vim /etc/nginx/nginx.conf 
+	在server中添加一条location
+
+	location ~* \.php$ {
+		fastcgi_pass	172.16.3.30:9000;
+		fastcgi_index	index.php;
+		fastcgi_param	SCRIPT_FILENAME /data/php$fastcgi_script_name;
+
+		include			fastcgi_params;
+	}
+
+	$ vim /etc/php-fpm.d/www.conf
+	;listen.allowed_clients = 127.0.0.1
+	user = nginx
+	group = nginx
+
+	$ mkdir /var/lib/php/session
+	$ chown -R nginx.nginx /var/lib/php/session
+
+	$ systemctl start php-fpm
+	$ nginx -t
+	$ nginx -s reload
+
+
+
+	'打开网页输入http://172.16.3.10/index.php'进行测试
+
+
+	'查看缓存命中信息：'
+	$ varnishstat -1 -f MAIN.cache_hit -f MAIN.client_req -f MAIN.cache_miss
+	MAIN.cache_hit             104         0.01 Cache hits
+	MAIN.client_req            172         0.02 Good client requests received
+	MAIN.cache_miss             45         0.00 Cache misses
+
+
+
+
+'实验6：健康状态检查'
+	$ vim /etc/varnish/default.vcl 
+
+	probe chk_health {
+	        .url = "/index.html";
+	        .timeout = 3s;
+	        .interval = 3s;
+	        .window = 5;
+	        .threshold = 3;
+	}
+
+	backend default {
+	    .host = "172.16.3.20";
+	    .port = "80";
+	    .probe = chk_health;
+	}
+
+	backend appsrv {
+	    .host = "172.16.3.30";
+	    .port = "80";
+	    .probe = chk_health;
+	}
+
+
+
+	'添加配置并验证：'
+	varnish> backend.list
+	200
+	Backend name                   Refs   Admin      Probe
+	default(172.16.3.20,,80)       14     probe      Healthy (no probe)
+	appsrv(172.16.3.30,,80)        5      probe      Healthy (no probe)
+	
+	vcl.load test15 default.vcl
+	200
+	VCL compiled.
+	vcl.use test15
+	200
+	VCL 'test15' now active
+	
+
+	backend.list 		#执行这步之前，将node1节点的nginx关闭，停掉服务
+	200
+	Backend name                   Refs   Admin      Probe
+	default(172.16.3.20,,80)       15     probe      Healthy 5/5
+	appsrv(172.16.3.30,,80)        6      probe      Healthy 5/5
+	backend.list
+	200
+	Backend name                   Refs   Admin      Probe
+	default(172.16.3.20,,80)       15     probe      Healthy 4/5
+	appsrv(172.16.3.30,,80)        6      probe      Healthy 5/5
+	backend.list
+	200
+	Backend name                   Refs   Admin      Probe
+	default(172.16.3.20,,80)       15     probe      Healthy 3/5
+	appsrv(172.16.3.30,,80)        6      probe      Healthy 5/5
+	backend.list
+	200
+	Backend name                   Refs   Admin      Probe
+	default(172.16.3.20,,80)       15     probe      Sick 2/5
+	appsrv(172.16.3.30,,80)        6      probe      Healthy 5/5
+	backend.list
+	200
+	Backend name                   Refs   Admin      Probe
+	default(172.16.3.20,,80)       15     probe      Sick 2/5
+	appsrv(172.16.3.30,,80)        6      probe      Healthy 5/5
+	backend.list
+	200
+	Backend name                   Refs   Admin      Probe
+	default(172.16.3.20,,80)       15     probe      Sick 1/5
+	appsrv(172.16.3.30,,80)        6      probe      Healthy 5/5
+	backend.list
+	200
+	Backend name                   Refs   Admin      Probe
+	default(172.16.3.20,,80)       15     probe      Sick 0/5
+	appsrv(172.16.3.30,,80)        6      probe      Healthy 5/5
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+实验完之后的整个配置文件：
+
+# cat default.vcl
+#
+# This is an example VCL file for Varnish.
+#
+# It does not do anything by default, delegating control to the
+# builtin VCL. The builtin VCL is called when there is no explicit
+# return statement.
+#
+# See the VCL chapters in the Users Guide at https://www.varnish-cache.org/docs/
+# and http://varnish-cache.org/trac/wiki/VCLExamples for more examples.
+
+# Marker to tell the VCL compiler that this VCL has been adapted to the
+# new 4.0 format.
+vcl 4.0;
+
+import directors;
+
+# Default backend definition. Set this to point to your content server.
+#
+
+probe chk_health {
+	.url = "/index.html";
+	.timeout = 3s;
+	.interval = 3s;
+	.window = 5;
+	.threshold = 3;
+}
+
+backend default {
+    .host = "172.16.3.20";
+    .port = "80";
+    .probe = chk_health;
+}
+
+backend appsrv {
+    .host = "172.16.3.30";
+    .port = "80";
+    .probe = chk_health;
+}
+
+#sub vcl_init {
+#	new maxie_grp = directors.round_robin();
+#	maxie_grp.add_backend(default);
+#	maxie_grp.add_backend(appsrv);
+#}
+
+sub vcl_purge {
+	return (synth(200,"Pruged Succeed"));
+}
+
+acl prugers {
+	"172.16.1.11";
+	"172.16.250.15";
+	"127.0.0.0"/8;
+}
+
+sub vcl_recv {
+	if (req.url ~ "(?i)\.php.*$") {
+		set req.backend_hint = appsrv;
+	} else {
+		set req.backend_hint = default;
+	}
+
+	if (req.url ~ "(?i)^\.(jpg|jpeg|png|gif|bmp)$")  {
+		set req.backend_hint = appsrv;
+	}
+
+
+	if (req.restarts == 0) {
+		if (req.http.X-Forwarded-For) {
+			set req.http.X-Forwarded-For = req.http.X-Forforwarded-For + "," + client.ip;
+		} else {
+			set req.http.X-Forwarded-For = client.ip;
+		}
+	}
+	if (req.method == "PURGE") {
+		if (client.ip !~ prugers)
+		{
+			return(synth(403,"Purging not allowed for" + client.ip));
+		}
+		return(purge);
+	}
+
+	if (req.url ~ "(?i)^/(login|admin)") {
+		return(pass);
+	}
+    # Happens before we check if we have this in cache already.
+    #
+    # Typically you clean up the request here, removing cookies you don't need,
+    # rewriting the request, etc.
+}
+
+sub vcl_backend_response {
+	set beresp.ttl = 600s;
+    # Happens after we have read the response headers from the backend.
+    #
+    # Here you clean the response headers, removing silly Set-Cookie headers
+    # and other mistakes your backend does.
+}
+
+sub vcl_deliver {
+	if (obj.hits>0) {
+		set resp.http.X-Cache = "Hit Via " + server.ip;
+	}
+	else {
+		set resp.http.X-Cache = "Miss from " + server.ip;
+	}
+    # Happens when we have all the pieces we need, and are about to send the
+    # response to the client.
+    #
+    # You can do accounting or modifying the final object here.
+}
+
+
+
+
+
+node1节点的nginx配置文件：
+	只修改了root目录，添加了index.html
+
+
+node2节点的nginx配置文件：
+
+		root            /data/www1;
+
+        # Load configuration files for the default server block.
+        include /etc/nginx/default.d/*.conf;
+
+        location / {
+        }
+
+        location ~* \.php$ {
+                fastcgi_pass    127.0.0.1:9000;
+                fastcgi_index   index.php;
+                fastcgi_param   SCRIPT_FILENAME /data/php$fastcgi_script_name;
+                include         fastcgi_params;
+        }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+'项目实战：'
+
+
+	'初始化脚本：'
+
+# cat init.sh
+#!/bin/bash
+#
+
+#hostname
+hname=$1
+hostnamectl set-hostname ${hname}
+
+#yum software
+
+ver=$2
+
+if [ "$ver" == nginx ];then
+	yum install -y -q nginx keepalived
+	[ $? -eq 0 ]  && echo "yum success" || echo "failed"
+elif [ "$ver" == varnish ];then
+	yum install -y -q varnish keepalived
+	[ $? -eq 0 ]  && echo "yum success" || echo "failed"
+elif [ "$ver" == http ];then
+	yum install -y -q httpd
+	[ $? -eq 0 ]  && echo "yum success" || echo "failed"
+	echo "$hname Static Server" > /var/www/html/index.html
+	mkdir -pv /var/www/html/{wordpres,discuzx}
+	mount -t nfs 192.168.1.100:/data/my_wordpress /var/www/html/wordpress
+	mount -t nfs 192.168.1.100:/data/my_discuzx /var/www/html/discuzx
+elif [ "$ver" == ap ];then
+	yum install -y -q httpd php php-mysql php-mbstring php-mcrypt
+	[ $? -eq 0 ]  && echo "yum success" || echo "failed"
+	mkdir -pv /var/www/html/{wordpres,discuzx}
+	mount -t nfs 192.168.1.100:/data/my_wordpress /var/www/html/wordpress
+	mount -t nfs 192.168.1.100:/data/my_discuzx /var/www/html/discuzx
+	cat > index.php<<EOF
+${hname}
+<?php
+  phpinfo();
+?>
+EOF
+elif [ "$ver" == nfs ];then
+	cat > index.php<<EOF
+/data/my_wordpress      192.168.1.50(rw,no_root_squash) 192.168.1.60(rw,no_root_squash) 192.168.1.70(rw,no_root_squash) 192.168.1.80(rw,no_root_squash)
+/data/my_discuzx        192.168.1.50(rw,no_root_squash) 192.168.1.60(rw,no_root_squash) 192.168.1.70(rw,no_root_squash) 192.168.1.80(rw,no_root_squash)
+EOF
+	mkdir -pv /data/my_wordpress
+	mkdir -pv /data/my_discuzx
+	scp maxie@172.16.1.11:/Users/machiyuan/Downloads/LinuxPackages/wordpress-4.7.4-zh_CN.tar.gz /data/
+	scp maxie@172.16.1.11:/Users/machiyuan/Downloads/LinuxPackages/Discuz_X3.3_SC_UTF8.zip /data/
+	tar -xf /data/wordpress-4.7.4-zh_CN.tar.gz
+	mv /data/wordpress/* /data/my_wordpress
+	unzip /data/Discuz_X3.3_SC_UTF8.zip
+	mv /data/upload/* /data/my_discuzx
+	useradd -u 48 apache
+	chown -R apache.apache /data
+	systemctl restart nfs
+	[ $? -eq 0 ] && echo "nfs deploy success" || echo "failed"
+elif [ "$ver" == mysql ];then
+	scp root@172.16.1.10:/root/server.conf /etc/my.cnf.d/
+	scp root@172.16.1.10:/root/init.sql /root/
+	systemctl start mariadb.service
+	mysql < /root/init.sql
+else
+	echo "Usage: arg1 is hostname u want set var"
+	echo "Usage: arg2 is (nginx|varnish|http|ap|nfs|mysql)"
+fi
+
+
+
+
+
+
+
+	准备工作：
+!!!	!!!	1、同步时间
+		2、配置主机名
+		3、测试网络
+		4、在修改为内网IP之前，安装所有所需软件包
+	
+
+	'前端：负载均衡调度器--> Nginx  + 高可用 keepalived'
+		n1:
+			外网IP：172.16.3.10/16
+			内网IP：192.168.1.10/24
+			VIP：172.16.3.200/16
+
+		n2：
+			外网IP：172.16.3.20/16
+			内网IP：192.168.1.20/24
+			VIP：172.16.3.200/16
+
+		需要安装的软件：
+			$ yum install -y nginx keepalived
+
+
+			'需要在做负载均衡时，需要设置ip_hash，否则第一次没有命中缓存，第二次可能也不会命中'
+
+
+	'varnish配置：'
+		v1： 
+			IP：192.168.1.30/24
+
+		v2： 
+			IP：192.168.1.40/24
+
+		需要的软件： 
+			$ yum install varnish 
+
+		需要配置的机器有：
+			web1 web2 ap1 ap2 pic1 pic2 
+	
+
+	'web静态主机配置：'
+		使用nginx作为静态页面的服务器
+
+		web1：
+			IP：192.168.1.50/24
+
+		web2：
+			IP：192.168.1.60/24
+
+		需要安装的软件：
+			$ yum install -y nginx 
+
+		需要将WordPress的nfs文件挂载到nginx配置文件中为/wordpress定义的目录下
+
+
+	'ap主机配置：'
+		httpd+php 
+
+		ap1：
+			IP：192.168.1.70/24
+
+		ap2:
+			IP：192.168.1.80/24
+
+		安装的软件：
+			$ yum install -y httpd php php-mysql php-mbstring php-mcrypt
+
+		只需要把wordpress放到DocumentRoot下即可
+
+
+	'pic主机配置：'
+		存放图片
+
+
+
+
+1、'前端nginx负载均衡调度器配置'
+	$ yum install nginx keepalived
+	$ vim /etc
+
+
+
+
+
+
+
+2、配置静态服务器
+	$ yum install 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# 不缓存有密码控制的内容和 Post 请求
+if (req.http.Authorization || req.method == "POST") {
+return (pass);
+}
+
+# 不缓存管理员页面和预览页面
+if (req.url ~ "wp-(login|admin)" || req.url ~ "preview=true") {
+return (pass);
+}
+
+# 不缓存已登录用户的内容
+if (req.http.Cookie ~ "wordpress_logged_in_") {
+return (pass);
+}
+
+# 清除 cookie，因为 WordPress 会根据用户 cookie 在评论框中直接输出昵称
+unset req.http.cookie;
+
+# 进行 hash 操作，见下面的定义
+return (hash);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+cat default.vcl
+#
+# This is an example VCL file for Varnish.
+#
+# It does not do anything by default, delegating control to the
+# builtin VCL. The builtin VCL is called when there is no explicit
+# return statement.
+#
+# See the VCL chapters in the Users Guide at https://www.varnish-cache.org/docs/
+# and http://varnish-cache.org/trac/wiki/VCLExamples for more examples.
+
+# Marker to tell the VCL compiler that this VCL has been adapted to the
+# new 4.0 format.
+vcl 4.0;
+
+# Default backend definition. Set this to point to your content server.
+#backend default {
+#    .host = "192.168.1.50";
+#    .port = "80";
+#}
+
+backend default {
+   .host = "192.168.1.70";
+   .port = "80";
+}
+
+sub vcl_recv {
+    if (req.restarts == 0) {
+    	if (req.http.X-Forwarded-For) {
+        	set req.http.X-Forwarded-For = req.http.X-Forforwarded-For + "," + client.ip;
+    	} else {
+        set req.http.X-Forwarded-For = client.ip;
+    	}
+    }
+#    if (req.url ~ "(?i)\.php.*$") {
+#	set req.backend_hint = default;
+#    }
+
+#    if (req.url ~ "(?i)\.(html|css|js).*$") {
+#	set req.backend_hint = default;
+#    }
+    if (req.http.Authorization || req.method == "POST") {
+	return (pass);
+    }
+
+    if (req.url ~ "wp-(login|admin)" || req.url ~ "preview=true") {
+	return (pass);
+    }
+
+    if (req.http.Cookie ~ "wordpress_logged_in_") {
+	return (pass);
+    }
+    unset req.http.cookie;
+
+    return (hash);
+
+    # Happens before we check if we have this in cache already.
+    #
+    # Typically you clean up the request here, removing cookies you don't need,
+    # rewriting the request, etc.
+}
+
+sub vcl_pass {
+	return (fetch);
+}
+
+sub vcl_hash {
+	hash_data(req.http.host + req.url);
+	return (lookup);
+}
+
+sub vcl_backend_response {
+	unset beresp.http.X-Powered-By;
+	unset beresp.http.x-mod-pagespeed;
+
+	set beresp.ttl = 600s;
+
+    if (bereq.url ~ "\.(html|css|js)$") {
+        set beresp.ttl = 1200s;
+    }
+
+    if (bereq.url ~ "\.(css|js|png|gif|jp(e?)g|swf|ico|txt|eot|svg|woff)") {
+    	unset beresp.http.cookie;
+    	set beresp.http.cache-control = "public, max-age=2700000";
+    }
+
+    if (bereq.url ~ "wp-(login|admin)" || bereq.url ~ "preview=true") {
+    	set beresp.uncacheable = true;
+   	set beresp.ttl = 30s;
+    	return (deliver);
+    }
+
+    if ( bereq.method == "POST" || bereq.http.Authorization ) {
+    	set beresp.uncacheable = true;
+    	set beresp.ttl = 120s;
+    	return (deliver);
+    }
+
+    if ( beresp.status != 200 && beresp.status != 404 ) {
+ 	set beresp.uncacheable = true;
+    	set beresp.ttl = 120s;
+    	return (deliver);
+    }
+
+    unset beresp.http.set-cookie;
+
+    set beresp.ttl = 24h;
+    set beresp.grace = 30s;
+    return (deliver);
+    # Happens after we have read the response headers from the backend.
+    #
+    # Here you clean the response headers, removing silly Set-Cookie headers
+    # and other mistakes your backend does.
+}
+
+sub vcl_deliver {
+	if (obj.hits>0) {
+		set resp.http.X-Cache = "Hit Via " + server.ip;
+	} else {
+		set resp.http.X-Cache = "Miss from " + server.ip;
+	}
+    # Happens when we have all the pieces we need, and are about to send the
+    # response to the client.
+    #
+    # You can do accounting or modifying the final object here.
+}
+
+
+
+
+
+
+
+
+
+backend default {
+    .host = "127.0.0.1";
+    .port = "8080";
+}
+
+backend web1 {
+    .host = "192.168.1.50";
+    .port = "80";
+}
+
+backend web2 {
+    .host = "192.168.1.60";
+    .port = "80";
+}
+
+backend appsrv1 {
+    .host = "192.168.1.70";
+    .port = "80";
+}
+
+backend appsrv2 {
+    .host = "192.168.1.80";
+    .port = "80";
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

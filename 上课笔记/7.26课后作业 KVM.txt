@@ -1,0 +1,276 @@
+7.26课后作业 KVM
+
+
+1、使用virt-manager创建虚拟机
+
+	(1) 安装所需安装包
+		$ yum install -y libvirt-daemon qemu-kvm virt-manager
+
+	(2) 加载kvm模块
+		$ lsmod | grep kvm 
+		$ modprobe kvm 
+		$ lsmod | grep kvm 
+		kvm_intel             162153  16
+		kvm                   525259  1 kvm_intel
+
+	(3) 启动libvirtd服务
+		$ systemctl start libvirtd
+		$ systemctl status libvirtd
+
+	(4) 使用支持 ssh -X的主机进行远程登陆主机，或者开启宿主机的图形化界面
+		$ ssh -X root@172.16.3.11
+
+		$ virt-manager
+		打开图形化之后，
+			--> 选择 new virtual machine
+			--> 选择 import existing disk image ，手动导入镜像文件，这里选择我们下载好的cirros.img文件
+				$ wget ftp://172.16.0.1/pub/ISOs/cirros-no_cloud-0.3.0-x86_64-disk.img
+				$ mkdir /vms/imgs
+				$ cp cirros-no_cloud-0.3.0-x86_64-disk.img /vms/imgs/cirros1.img
+				$ cp cirros-no_cloud-0.3.0-x86_64-disk.img /vms/imgs/cirros2.img
+
+			--> 选择browse，进入文件浏览界面，选择browse local，之后选择 /vms/imgs目录
+			--> 打开目录后，选择我们拷贝的任意一个镜像即可 cirros1.img
+			--> 为我们的虚拟机配置CPU和内存设置，根据具体情况配置即可，由于本次的镜像文件特别小，只需要256的内存即可运行
+			--> 为我们的虚拟机配置名字，以及其他进阶设置，如果没有特殊要求，只需要使用默认设置即可。
+			--> 点击finish之后，就等待创建完成了
+			--> 等待创建完成之后，我们输入界面提示的账户和密码就可以登陆了
+
+
+
+
+
+2、使用 qemu-kvm命令以及 qemu-img创建虚拟机
+
+	(1) 使用qemu-img创建虚拟机磁盘映像文件
+		$ cd /vms
+		$ qemu-img create -f qcow2 -o preallocation=metadata,size=80G /vms/centos7.img
+		Formatting '/vms/centos7.img', fmt=qcow2 size=85899345920 encryption=off cluster_size=65536 preallocation='metadata' lazy_refcounts=off
+
+		$ qemu-img info centos7.img
+		$ ls -lh centos7.img
+		-rw-r--r-- 1 root root 81G Jul 26 15:12 centos7.img
+
+	(2) 下载iso镜像文件
+		$ wget ftp://172.16.0.1/pub/ISOs/archlinux-2015.12.01-dual.iso
+		$ mv archlinux-2015.12.01-dual.iso /vms/
+
+	(3) qemu-kvm 创建虚拟机
+		$ cd /vms
+		$ qemu-kvm -name archlinux -m 512m -cpu host -smp 2 -drive file=/vms/centos7.img,if=virtio,media=disk,cache=writeback,format=qcow2 -drive file=/vms/archlinux-2015.12.01-dual.iso,media=cdrom -boot order=dc,once=d -vnc :::5900
+
+
+	(4) 寻找一台支持 ssh -X 的主机，连接至宿主机，并执行如下命令
+		$ ssh -X root@172.16.3.11
+
+		$ yum install -y tigervnc
+		$ vncviewer :5900
+
+		这时候打开一个vnc界面，就应该是archLinux的安装界面了！
+
+
+
+
+
+3、创建一对儿虚拟网卡，一块放置到虚拟网络空间中，使其能够ping通本机的一块虚拟网卡
+
+	(1) 创建一对儿网卡
+		$ ip link add vethx.1 type veth peer name vethx.2
+
+	(2) 创建一个虚拟网络空间
+		$ ip netns list
+		$ ip netns add route1
+		$ ip netns list
+		route1
+
+	(3) 将 vethx.2 添加至 route1这个虚拟网络空间中
+
+		$ ip link set dev vethx.2 netns route1
+
+	(4) 使用ip netns exec命令配置 虚拟网络名称空间中 vethx.2的IP地址
+
+		$ ip netns exec route1 ifconfig vethx.2 10.0.0.2/24 up
+		$ ip netns exec route1 ifconfig
+
+	(5) 配置 vethx.1的IP地址
+
+		$ ifconfig vethx.1 10.0.0.1/24 up 
+
+	(6) 测试是否可以通信
+
+		$ ping 10.0.0.2
+
+		$ ip netns exec route1 ping 10.0.0.1
+
+	(7) 删除虚拟网卡
+
+		$ ip link delete vethx.1
+		$ ip link sh 
+
+
+4、添加网桥
+
+	(1) 创建网桥
+		$ brctl addbr br-int
+
+	(2) 启动网桥
+		$ ifconfig br-int up 
+		$ ip link show 
+
+
+
+
+
+
+
+5、利用之前创建的网桥，作为我们虚拟机的网桥
+	
+	(1) 编写网桥启动脚本
+
+		$ vim /etc/qemu-ifup 
+		#!/bin/bash
+		#
+		bridge=br-int
+		if [ -n "$1" ]; then
+		        ip link set "$1" up
+		        sleep 1
+		        brctl addif $bridge "$1"
+		else
+		        echo "No interface specified"
+		fi
+
+
+	(2) 创建两台虚拟机
+
+		$ ls /vms/
+		centos7.img  cirros1.img  cirros2.img
+
+		$ cd vms 
+		$ qemu-kvm -name c1 -m 256 -smp 2 -drive file=/vms/cirros1.img,media=disk,if=virtio,format=qcow2 -net nic,model=virtio,macaddr=52:54:00:00:00:01 -net tap,script=/etc/qemu-ifup -vnc :0 -daemonize
+		$ qemu-kvm -name c2 -m 256 -smp 2 -drive file=/vms/cirros2.img,media=disk,if=virtio,format=qcow2 -net nic,model=virtio,macaddr=52:54:00:00:00:02 -net tap,script=/etc/qemu-ifup -vnc :4 -daemonize
+		$ ss -tnl 
+		$ ps aux 
+		root      18471 69.2  4.3 725592 89264 ?        Sl   16:07   2:07 qemu-kvm -name c1 -m 256 -smp 2 -drive file=/vms/cirros1.img,media=disk,if=virtio,format=qcow2 -net nic,mod
+		root      18739 96.8  3.4 624204 69752 ?        Sl   16:09   0:26 qemu-kvm -name c2 -m 256 -smp 2 -drive file=/vms/cirros2.img,media=disk,if=virtio,format=qcow2 -net nic,mod
+
+		启动之后使用vncviewer查看
+
+	(3) vncviewer查看网卡配置
+
+		$ vncviewer :0
+
+		$ vncviewer :4
+
+
+	(4) 在c1和c2虚拟机上配置各自的IP地址
+		c1：
+			$ ifconfig eth0 10.0.0.1/24 up
+
+		c2：
+			$ ifconfig eth0 10.0.0.2/24 up
+
+		测试网络：
+			$ ping 10.0.0.1
+			$ ping 10.0.0.2
+
+
+	(5) 在宿主机配置 br-int的ip地址
+		$ ifconfig br-int 10.0.0.254/24 up 
+
+		$ ping 10.0.0.1
+		$ ping 10.0.0.2
+
+
+
+
+	(6) 配置c1的默认网关为 10.0.0.254，并开启宿主机的核心转发功能
+		$ sysctl -w net.ipv4.ip_forward=1
+		net.ipv4.ip_forward = 1
+
+		$ iptable -t nat -vnL 
+		如果生成了 MASQUERADE 规则，则无需添加，如果没有生成，需要手动设置SNAT规则
+
+		$ iptables -t nat -A POSTROUTING -s 10.0.0.0/24 -j SNAT --to-source 172.16.3.11
+
+		$ iptable -t nat -vnL
+		Chain POSTROUTING (policy ACCEPT 0 packets, 0 bytes)
+ 		 pkts bytes target     prot opt in     out     source               destination
+    		0     0 SNAT       all  --  *      *       10.0.0.0/24          0.0.0.0/0            to:172.16.3.11
+
+
+    	c1： 
+    		$ route add default gw 10.0.0.254
+    		$ ping 172.16.0.1
+
+    (7) 配置宿主机 DNAT规则，使外部主机可以访问我们宿主机的虚拟机 c1 
+
+    	$ iptables -t nat -A PREROUTING -d 172.16.3.11 -p tcp --dport 22122 -j DNAT --to-destination 10.0.0.1:22
+
+    	在mac主机连接 172.16.3.11 的 22122端口
+
+    	# maxie @ maxie in ~ [21:14:56] C:130
+		$ ssh -p 22122  mageedu@172.16.3.11
+		mageedu@172.16.3.11s password:
+		$ ls
+		$ sudo su -
+		# ifconfig
+		eth0      Link encap:Ethernet  HWaddr 52:54:00:00:00:01
+		          inet addr:10.0.0.1  Bcast:10.255.255.255  Mask:255.0.0.0
+		          inet6 addr: fe80::5054:ff:fe00:1/64 Scope:Link
+		          UP BROADCAST RUNNING MULTICAST  MTU:1500  Metric:1
+		          RX packets:170 errors:0 dropped:0 overruns:0 frame:0
+		          TX packets:138 errors:0 dropped:0 overruns:0 carrier:0
+		          collisions:0 txqueuelen:1000
+		          RX bytes:22023 (21.5 KiB)  TX bytes:16127 (15.7 KiB)
+
+
+
+
+
+
+
+
+6、使用virsh命令创建虚拟机并配置
+
+	$ virsh-manager 
+		打开界面就如我们之前的介绍那样配置即可
+		但把机器先关闭掉
+
+	# 连接至虚拟机
+	$ virsh console c1 
+
+	ctrl+] 退出虚拟机
+
+
+	# 导出c1的xml配置文件
+	$ virsh dumpxml c1 
+
+	这些文件存放路径：
+	$ ls /etc/libvirt/qemu
+	c1.xml  cirros_nocloud_version.xml  networks
+
+	可以使用cp命令拷贝 c1.xml ，并修改其中的参数，直接可以运行为虚拟机
+
+	$ vim 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

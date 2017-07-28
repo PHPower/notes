@@ -1,0 +1,527 @@
+6.30课后作业 Tomcat
+
+
+
+
+'实验1：配置一个测试jsp页面，并配置tomcat-user文件'
+	$ yum install -y java-1.8.0-openjdk-devel tomcat tomcat-lib tomcat-admin-webapps tomcat-webapps tomcat-docs-webapp
+	$ vim /etc/tomcat/tomcat-users.xml
+	<role rolename="admin-gui"/>
+	<role rolename="manager-gui"/>
+	<user username="root" password="root@123" roles="manager-gui"/>
+	<user username="tomcat" password="root@123" roles="admin-gui"/>
+
+	$ systemctl start tomcat 
+
+	$ mkdir /usr/share/tomcat/webapps/test/{classes,META-INF,WEB-INF}
+	$ vim /usr/share/tomcat/webapps/test/index.jsp
+	<%@ page language="java" %>
+	<%@ page import="java.util.*" %>
+	<html>
+	    <head>
+	        <title>Test Page</title>
+	    </head>
+	    <body>
+	        <font size=10 color="#38B0DE" > Tomcat One Server  </font>
+	        <table align="centre" border="1">
+	        <tr>
+	                <td>Session ID</td>
+	                <% session.setAttribute("magedu.com","magedu.com"); %>
+	                <td><%= session.getId() %></td>
+	        </tr>
+	        <tr>
+	                <td>Created on</td>
+	                        <td><%= session.getCreationTime() %></td>
+	                </tr>
+	        </table>
+	        <br>
+	        <% out.println("hello world");
+	        %>
+	    </body>
+	</html>
+
+	$ systemctl restart tomcat
+
+
+
+'实验2：配置LNMT，nginx反向代理'
+
+	本机IP：
+		172.16.3.10    192.168.1.30
+
+	
+	在实验1的基础上：
+
+	1、安装nginx,并修改其配置文件
+		$ yum install -y nginx 
+		$ cd /etc/nginx/
+		$ vim con.d/maxie.conf 
+		upstream 
+		server {
+			listen 80;
+			server_name www1.maxie.com;
+			location / {
+				proxy_pass http://192.168.1.30:80;
+			}
+		}
+
+		$ nginx -t
+		$ systemctl start nginx 
+
+	2、修改客户端hosts文件
+		$ vim /etc/hosts
+		172.16.3.10 www1.maxie.com
+
+	3、打开网页测试即可：
+		http://www1.maxie.com  
+
+
+
+'实验3：使用http作为tomcat的反向代理'(http协议与ajp协议)
+	在实现之前，需要将nginx服务停止
+
+
+	'http协议'
+	1、安装httpd，并修改其配置
+		$ yum install httpd 
+		$ cd /etc/httpd/conf.d/
+		$ vim maxie.conf
+		<VirtualHost *:80>
+			ServerName www1.maxie.com
+			ProxyRequests Off              # 关闭正向代理
+			ProxyVia	  On           # 添加首部Via(由谁代理)--> 有可能会httpd被取消掉 
+			ProxyPreserveHost On           # 把主机头部发送到后端；保留代理服务器上虚拟主机的头部(域名)
+			<Proxy *>
+				Require all granted
+			</Proxy>
+			ProxyPass / http://192.168.1.30:8080/          # 把/ 代理到后端服务器的地址
+			#或者可以定义成：
+			ProxyPass / http://192.168.1.30:8080/test/     # 把 / 代理到后端的 /test 上
+			ProxyPassReverse / http://192.168.1.30:8080/   # 把重定向返回给客户端
+
+			<Location />                                   # 设置代理的/ 允许谁访问
+				Require all granted
+			</Location>
+
+		</VirtualHost>	
+
+
+	2、查看httpd是否支持代理模块，并启动
+
+		$ httpd -t 
+		$ httpd -M | grep proxy 
+		$ systemctl start httpd 
+
+	3、打开网页测试
+		http://www1.maxie.com 
+
+
+
+	'ajp协议'
+
+	1、修改conf文件即可
+		$ vim maxie.conf
+
+		<VirtualHost *:80>
+			ServerName www1.maxiecloud.com
+			DocumentRoot "/data/maxie/"
+			ProxyRequests Off 			
+			ProxyVia	  On 					
+			ProxyPreserveHost On 		
+			<Proxy *>
+				Require all granted
+			</Proxy>
+			ProxyPass / ajp://192.168.1.30:8009/ 
+			ProxyPassReverse / ajp://192.168.1.30:8009/ 
+
+			<Location /> 
+				Require all granted
+			</Location>
+
+		</VirtualHost>
+
+	2、重新启动服务
+		$ systemctl restart httpd 
+
+	3、打开网页测试
+
+
+
+'实验4：使用nginx负载均衡后端tomcat服务器'
+	增加一台tomcat服务器，并将其配置与之前的一台tomcat服务器的配置相同
+
+	1、停止httpd服务，并修改nginx配置文件
+		$ systemctl stop httpd 
+		$ cd /etc/nginx/conf.d
+		$ vim /etc/nginx/conf.d/maxie.conf 
+		upstream tomcatsrv {
+			server 192.168.1.50:8080;
+			server 192.168.1.60:8080;
+		}
+		server {
+		    listen          80;
+		    server_name     www.maxie.com;
+		    
+		    location / {
+		    	proxy_pass http://tomcatsrv;
+		    }
+		}
+
+	2、启动服务 
+		$ nginx -t 
+		$ nginx -s reload 
+
+	3、打开网页测试即可 
+		http://www.maxie.com 
+
+
+	4、nginx实现会话粘性：
+		'设置会话保持'
+				在upstream中添加
+					hash $request_uri consistent;
+					或者
+					ip_hash;
+					或者
+					hash $cookie_name consistent;
+
+
+
+
+'实验5：使用httpd负载均衡后端tomcat服务器，并设置httpd內建的负载均衡状态页开启'
+
+	停止nginx服务
+
+	1、编辑httpd配置文件
+		$ vim /etc/http/conf.d/maxie.conf 	
+		<Proxy balancer://tomcatsrv>
+			BalancerMember http://192.168.1.50:8080
+			BalancerMember http://192.168.1.60:8080
+			ProxySet lbmethod=byrequests
+		</Proxy>
+
+
+		<VirtualHost *:80>
+			ServerName www.maxie.com
+			ProxyRequests Off                  # 关闭正向代理
+			ProxyVia	  On               # 添加首部Via(由谁代理)--> 有可能会httpd被取消掉 
+			ProxyPreserveHost On               # 把主机头部发送到后端；保留代理服务器上虚拟主机的头部(域名)
+			<Proxy *>
+				Require all granted
+			</Proxy>
+			ProxyPass / balancer://tomcatsrv/              # 把/ 代理到后端服务器的地址
+			
+			ProxyPassReverse / balancer://tomcatsrv/       # 把重定向返回给客户端
+
+			<Location />                                   # 设置代理的/ 允许谁访问
+				Require all granted
+			</Location>
+
+		</VirtualHost>	
+
+		$ httpd -t 
+		$ systemctl restart httpd 
+
+	2、打开网页测试即可
+		http://www.maxie.com 
+
+
+	3、'添加负载均衡状态页，并设置会话粘性'
+		$ vim /etc/http/conf.d/maxie.conf 	
+
+		Header add Set-Cookie "MYID=.%{BALANCER_WORKER_ROUTE}e; path=/" env=BALANCER_ROUTE_CHANGED
+
+		<Proxy balancer://tomcatsrv>
+		        BalancerMember http://192.168.1.50:8080 route=tom1 loadfactor=2
+		        BalancerMember http://192.168.1.60:8080 route=tom2 loadfactor=1
+		        ProxySet lbmethod=byrequests
+		        ProxySet stickysession=MYID
+		</Proxy>
+		<VirtualHost *:80>
+		    ServerName wwww.maxie.com
+		    ProxyRequests Off
+		    ProxyVia      On
+		    ProxyPreserveHost On
+		    <Proxy *>
+		        Require all granted
+		    </Proxy>
+		    ProxyPass / balancer://tomcatsrv/
+		    ProxyPassReverse / balancer://tomcatsrv/
+
+		    <Location />
+		        Require all granted
+		    </Location>
+
+		    <Location /http-stats>                  # 开启管理负载均衡的接口
+		        SetHandler balancer-manager         # 启动balancer-manager这个內建功能
+		        ProxyPass !                         # !表示 不反代，只在本机处理
+		        Require all granted
+		    </Location>
+
+		</VirtualHost>
+
+		$ httpd -t 
+		$ systemctl restart httpd 
+
+
+	4、打开网页进行测试
+		http://www.maxie.com 
+
+		http://www.maxie.com/http-stats
+
+
+
+
+
+
+
+
+
+
+'实验6：创建一个博客项目，项目为 solo blog'
+
+	部署tomcat+openjdk环境
+
+	如需使用80端口，则安装 authbind 软件，并修改/etc/tomcat/server.xml中8080 --> 80
+		$ touch /etc/authbind/byport/80
+		$ chown tomcat.tomcat  /etc/authbind/byport/80
+		$ chmod 755 /etc/authbind/byport/80
+
+	1、将项目war包拷贝至webapp中
+		$ scp solo-2.1.0.war root@172.16.1.100:/usr/share/tomcat/webapps/solo.war
+
+	2、启动tomcat服务，并自动解压缩war包，再将服务停掉，对solo项目的配置文件进行修改
+
+		$ authbind --deep /usr/libexec/tomcat/server start
+		$ authbind --deep /usr/libexec/tomcat/server stop
+		$ cd /user/share/tomcat/webapps
+		$ cd solo/WEB-INF/classes
+		$ vim latke.properties
+			#### Server ####
+			# Browser visit protocol
+			serverScheme=http
+			# Browser visit domain name
+			serverHost=172.16.1.100 			'这里修改为我们的tomcat IP地址'
+			# Browser visit port, 80 as usual, THIS IS NOT SERVER LISTEN PORT!
+			serverPort=80						'这里为浏览器访问的端口，一般为80'
+		$ vim local.properties
+			#### H2 runtime ####				'內建的数据库引擎，将其全部删除'
+			#### MySQL runtime ####
+			runtimeDatabase=MYSQL 				'将前面的注释全部取消，使用mysql作为数据库'
+			jdbc.username=solo 					'数据库用户名'	
+			jdbc.password=root@123 				'数据库密码'
+			jdbc.driver=com.mysql.jdbc.Driver
+			jdbc.URL=jdbc:mysql://172.16.1.100:3306/solo?useUnicode=yes&characterEncoding=utf8
+			jdbc.pool=druid
+	
+	3、为solo博客创建数据库以及登陆用户，并授权
+		$ mysql 
+		> CREATE DATABASE solo;
+		> GRANT ALL PRIVILEGES ON solo.* TO 'solo'@'172.16.1.100' IDENTIFIED BY 'root@123';
+		> FLUSH PRIVILEGES;
+
+	4、启动tomcat
+		$ authbind --deep /usr/libexec/tomcat/server stop
+		$ authbind --deep /usr/libexec/tomcat/server start
+
+	5、打开网页输入： http://172.16.1.100/solo 即可
+
+	6、配置solo博客即可，注意：配置用户名时，不能使用admin、root之类的，使用maxie即可
+
+		'还有在上传图片或文件时，需要使用七牛云。'
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  <Service name="myhost">
+
+       <Connector port="10080" protocol="HTTP/1.1"
+                  connectionTimeout="20000"
+                  redirectPort="8443" />
+
+       <Engine name="myhost" defaultHost="localhost">
+
+         <Host name="localhost"  appBase="/data/www1"
+               unpackWARs="true" autoDeploy="true"/>
+
+        <Valve className="org.apache.catalina.valves.AccessLogValve" directory="logs"
+               prefix="maxie_access_log." suffix=".log"
+               pattern="%h %l %u %t %r %s %b %{Referer}i %{User-Agent}i" />
+
+         </Host>
+       </Engine>
+  </Service>
+
+
+
+'tomcat配置文件:'
+
+
+	<Host name="www1.maxie.com" appBase="webapps2"
+	    unpackWARs="true" autoDeploy="true">
+
+        <Valve className="org.apache.catalina.valves.AccessLogValve" directory="logs"
+               prefix="maxie_access_log." suffix=".log"
+	       pattern="%h %l %u %t %r %s %b %{Referer}i %{User-Agent}i"/>
+    </Host>
+
+
+'tomcat用户认证配置文件：'
+
+$ cat /etc/tomcat/tomcat-users.xml
+<role rolename="admin-gui"/>
+<role rolename="manager-gui"/>
+<user username="root" password="root@123" roles="manager-gui"/>
+<user username="tomcat" password="root@123" roles="admin-gui"/>
+
+
+'tomcat测试主页：'
+
+$ cat webapps/test/index.jsp
+<%@ page language="java" %>
+<%@ page import="java.util.*" %>
+<html>
+    <head>
+        <title>Test Page</title>
+    </head>
+    <body>
+	<font size=10 color="#38B0DE" > Tomcat One Server  </font>
+	<table align="centre" border="1">
+   	<tr>
+        	<td>Session ID</td>
+    		<% session.setAttribute("magedu.com","magedu.com"); %>
+        	<td><%= session.getId() %></td>
+    	</tr>
+    	<tr>
+        	<td>Created on</td>
+        		<td><%= session.getCreationTime() %></td>
+    		</tr>
+	</table>
+	<br>
+        <% out.println("hello world");
+        %>
+    </body>
+</html>
+
+
+'tomcat自定义host路径结构'
+
+	主站文件必须放在ROOT目录
+
+$ ll webapps2/ROOT/
+classes/   index.jsp  lib/       META-INF/  WEB-INF/
+[root@tomcat-1 tomcat]# ll webapps2/ROOT/index.jsp
+-rw-r--r-- 1 root root 275 Jun 30 21:59 webapps2/ROOT/index.jsp
+
+
+
+
+
+'http反向代理配置文件：'
+
+$ cat maxie.conf.bak
+<VirtualHost *:80>
+    ServerName wwww.maxie.com
+    ProxyRequests Off
+    ProxyVia      On
+    ProxyPreserveHost On
+    <Proxy *>
+        Require all granted
+    </Proxy>
+    ProxyPass / http://192.168.1.50:8080/
+    ProxyPassReverse / http://192.168.1.50:8080/
+
+    <Location />
+        Require all granted
+    </Location>
+
+</VirtualHost>
+
+
+'http负载均衡配置文件：'
+
+cat maxie.conf
+#Header add Set-Cookie "MYID=.%{BALANCER_WORKER_ROUTE}e; path=/" env=BALANCER_ROUTE_CHANGED
+
+<Proxy balancer://tomcatsrv>
+	BalancerMember http://192.168.1.50:8080 route=tom1 loadfactor=2
+	BalancerMember http://192.168.1.60:8080 route=tom2 loadfactor=1
+	ProxySet lbmethod=byrequests
+	#ProxySet stickysession=MYID
+</Proxy>
+<VirtualHost *:80>
+    ServerName wwww.maxie.com
+    ProxyRequests Off
+    ProxyVia      On
+    ProxyPreserveHost On
+    <Proxy *>
+        Require all granted
+    </Proxy>
+    ProxyPass / balancer://tomcatsrv/
+    ProxyPassReverse / balancer://tomcatsrv/
+
+    <Location />
+        Require all granted
+    </Location>
+
+</VirtualHost>
+
+
+
+
+
+
+'nginx负载均衡配置文件：'
+
+$ cat /etc/nginx/conf.d/maxie.conf
+upstream tom {
+	server 192.168.1.50:8080;
+	server 192.168.1.60:8080;
+}
+server {
+    listen 80;
+    server_name www.maxie.com;
+    location / {
+        proxy_pass http://tom;
+    }
+}

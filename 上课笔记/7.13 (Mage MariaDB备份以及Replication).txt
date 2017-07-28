@@ -1,0 +1,867 @@
+7.13 (Mage MariaDB备份以及Replication)
+
+
+
+
+回顾：
+	备份：
+		完全备份、部分备份
+		全量备份、增量备份、差异备份
+		物理备份、逻辑备份
+		热备、温备、冷备
+
+
+
+
+
+
+
+'MySQL备份：'
+
+	基于lvm2的备份：
+		
+		前提：要求数据文件和事务日志位于同一个逻辑卷；
+		
+		(1) 请求锁定所有表；
+			mysql> FLUSH TABLES WITH READ LOCK;
+			
+		(2) 记录二进制文件事件位置；
+			mysql> FLUSH LOGS;
+			mysql> SHOW MASTER STATUS;
+			
+			mysql  -e  'SHOW MASTER STATUS;' >> /PATH/TO/SOME_POS_FILE
+			
+		(3) 创建快照卷
+			lvcreate  -L # -s -p r - SNAM-NAME /dev/VG-NAME/LV-NAME 
+			
+		(4) 释放锁
+			mysql> UNLOCK TABLES
+			
+		(5) 挂载快照卷，并执行备份，备份完成后删除快照卷；
+		
+		(6) 周期性备份二进制日志； 
+
+	
+
+
+
+
+	'percona：'
+		InnoDB --> XtraDB (mariadb)
+		Innobackup --> Xtrabackup
+		
+	
+
+		www.percona.com 
+			open source database tools --> 开源的数据库工具
+			'percona TokuDB：'mysql存储引擎，存储海量数据
+
+
+	'Xtrabackup：'
+		非阻塞的、高安全的备份工具 --> 支持所有版本的 Percona server、mysql、MariaDB
+		'不支持并行恢复copy-back，innodb原生支持并行恢复'
+
+		$ rpm -ql percona-xtrabackup-24
+		$ rpm -ql percona-xtrabackup
+
+
+		MyISAM：温备，不支持增量备份；
+		InnoDB：热备，增量；
+		
+		物理备份，速率快、可靠；备份完成后自动校验备份结果集是否可用；还原速度快； 
+		
+	
+	
+
+	'innobackupex使用：'   --> 全量支持所有数据库引擎，增量仅支持innodb；热备仅支持innodb存储引擎
+
+
+		Usage: [innobackupex [--defaults-file=#] --backup | innobackupex [--defaults-file=#] --prepare] [OPTIONS]
+		
+			The  innobackupex tool is a Perl script that acts as a wrapper for the xtrabackup C program.
+			
+		备份 --> 应用日志 --> 还原
+			应用日志：--apply-log 
+			还原：--copy-back
+			
+		完全备份：
+			
+		'恢复过程：'
+			备份 --> preparing(将增量/差异备份合并至全量中) --> 通过全量备份还原
+			(1) 如果备份是全量备份，而且后期没有增量或者差异备份，则需要将未完成的事务回滚
+			(2) 如果备份是全量备份，且后期有增量或者差异备份，则无需回滚未完成的事务、只需完成事务合并即可
+
+		
+		完全+binlog(总结)：
+			
+			'备份：'innobackupex  --user  --password=  --host=  /PATH/TO/BACKUP_DIR 
+					BASEDIR：指明要备份到个目录下
+
+			'准备：'innobackupex --apply-log  /PATH/TO/BACKUP_DIR 
+			'恢复：'innobackupex --copy-back 
+				注意：--copy-back需要在mysqld主机本地进行，mysqld服务不能启动；
+					innodb_log_file_size可能要重新设定；
+		
+		
+
+		'增量备份：' --> 不支持MyISAM
+			1、innobackupex -u USER -p PASSWORD --incremental /data/backups --incremental-basedir=BASEDIR
+				指明全量备份的路径
+					--incremental-basedir=BASEDIR ：
+							如果是增量备份，这里则是上一次增量/全量备份；如果上一次是增量，这里则是上一次增量备份的路径；如果上一次是全量，这里则是全量备份的路径
+							如果是差异备份，这里永远都是全量备份的路径
+
+			2、innobackupex -u USER -p PASSWORD --incremental /data/backups --incremental-lsn=1291135
+				指明全量备份的结束点LSN序号
+
+
+
+
+		'准备：'
+				(1) 直接进行准备(仅有全量备份)  + binlog 
+					innobackupex --apply-log  BASEDIR
+						如果是在全量备份的路径下，则无需使用BASEDIR此选项
+
+				(2) 将增量/差异合并至全量中的准备工作  + binlog 		('在把增量备份全部合并到全量备份之前，需要使用--redo-only'，最后合并完，执行时无需再加redo-only)
+					innobackupex --apply-log --redo-only BASEDIR  --incremental-dir=INCREMENTAL-DIR
+						BASEDIR：全量备份目录路径
+						--incremental-dir=INCREMENTAL-DIR：指明增量备份路径(如果有多个增量备份，则先合并最旧的增量备份，以此类推)
+
+						'需要先对全量备份进行准备工作，再合并其他增量备份。'
+						等待全量和增量都准备完成后，进行回滚 --> innobackupex --apply-log  /PATH/TO/BACKUP_DIR 
+						'回滚完成后，进行恢复操作即可'
+
+					'实例：'
+
+
+		'恢复：'
+			恢复时，数据库的数据目录下必须是干净的(如果是全量备份的恢复)
+			innobackupex --copy-back BASEDIR
+				BASEDIR：指明全量备份路径
+
+			'恢复完成后，需要修改数据库的数据目录下的属主属组、并再执行一次全量备份'
+
+
+
+
+		总结：完全+增量+binlog 
+			备份：完全+增量+增量+...
+			           完全+差异
+			
+
+
+				
+		备份单库：
+			--databases 
+
+		备份完成：
+			xtrabackup_checkpoint：检查点
+			xtrabackup_logfile：事务日志
+
+
+
+				
+		
+		注意：未尽的内容，请参考官方文档；
+
+			1、还原时需要离线MariaDB
+			2、备份时，可以在线备份
+		
+	'总结：'
+		mysqldump+binlog
+		lvm2+cp/tar+binlog
+		xtrabackup(innodb)+binlog 
+		
+	博客作业：mysqldump和xtrabackup的使用；
+
+
+
+
+
+
+
+
+
+数据库分片机制： mongodb 、 redis 、 HBase 都支持
+	通过语句路由器 --> 创建一个块 --> 通过在每个块中写入数据 --> 将每个块放在不同数据库中即可
+	shard：分片
+
+	更新时，无需更新每行数据，只需更新 块的信息
+	'扩展、收缩极为简单'
+	'冗余：'
+		在 块级别做冗余即可
+
+
+
+
+
+
+
+
+
+
+
+'MySQL Replication：' mysql复制
+	每个节点拥有所有数据集
+
+		主节点：可读可写
+		从节点：只读 read only
+
+			主节点故障：
+				提升从节点为主节点 --> 使用IP地址漂移 --> keepalived
+				主从同步时是使用 --> 异步同步
+					会导致 --> 提示用户写入成功，但是查询时是使用从节点，有可能查不到数据
+						通过监控系统检测从节点，实现让从节点不落后于主节点
+
+						通过从节点连接到主节点，同步主节点的二进制日志
+							--> 将主节点二进制日志内容 同步到从节点的中继日志中
+							--> 通过从节点将中继日志 写入到本机的二进制日志中
+
+							但是主服务器是并行执行事务，但是从服务器同步二进制日志，只能是顺序执行，也就是串行执行
+
+							(1) 会导致主从服务器的数据内容不一样
+							(2) 主从时间赶不上，不一样
+								
+								'需要人工介入；或者双写主节点数据库'
+
+
+			'主从两层不一样，需要加入另一个层，在主从之上'
+				也就是 读写分离器(MySQL语句路由器)，工作在7层
+
+
+		'MySQL双主：'
+			每个节点都读对方的二进制日志
+			都使用中继日志
+
+				会出现 --> 同样自增长的字段 --> 主键冲突
+
+					通过全局ID号分发器进行分发，程序需要的ID号，都由其分发生成
+
+				还会出现 --> 数据不一致的情况
+
+	
+	
+	
+
+
+	Master/Slave
+		Master: write/read
+		Slaves: read
+		
+	为什么？
+		冗余：promte（提升为主），异地灾备
+			人工
+			工具程序：MHA
+		负载均衡：转移一部分“读”请求；
+		支援安全的备份操作；  --> 让从节点停止，进行冷备
+		测试；
+		...
+		
+	
+	'主/从架构：'
+		异步复制：
+		半同步复制：
+		一主多从；
+		一从一主； 
+		级联复制；
+		循环复制；
+		双主复制；
+		
+		一从多主：
+			每个主服务器提供不同的数据库；
+				
+				
+	
+	'配置：'
+		1、时间同步；
+		
+		2、复制的开始位置：
+			从0开始；
+			从备份中恢复到从节点后启动的复制，复制的起始点备份操作时主节点所处的日志文件及其事件位置；
+		
+		3、主从服务器mysqld程序版本不一致？ --> 主服务器版本可以高于从服务器
+			从的版本号高于主的版本号；
+			
+		4、主服务器：
+			配置文件my.cnf
+			server_id=#
+			log_bin=log-bin
+			
+			'启动服务：授权 用于复制的用户'
+				$ mysql 
+				mysql> GRANT REPLICATION SLAVE,REPLICATION CLIENT ON *.* TO 'USERNAME'@'HOST' IDENTIFIED BY 'YOUR_PASSWORD';
+				mysql> FLUSH PRIVILEGES;
+			
+		5、从服务器：
+			'配置文件my.cnf'
+				innodb_file_per_table=ON
+				skip_name_resolve=ON
+				log-bin=mysql-bin
+
+				server_id=#
+				relay_log=relay-log
+				# 开启从节点只读，对super用户无限制功能
+				read_only=ON
+			
+			'启动服务：'
+				mysql> CHANGE MASTER TO MASTER_HOST='HOST',MASTER_USER='USERNAME',MASTER_PASSWORD='YOUR_PASSWORD',MASTER_LOG_FILE='BINLOG',MASTER_LOG_POS=#;
+				mysql> START SLAVE [IO_THREAD|SQL_THREAD];
+			
+				mysql> SHOW SLAVE STATUS;
+
+				错误日志会记录 从服务器 复制线程开启状态
+				$ tail /var/log/mysql/error.log
+
+			
+		课外作业：基于SSL的复制的实现； 
+
+
+		
+
+
+
+	
+
+	'主主复制：'(双主模型)  --> '不能配置 read_only参数'
+
+		互为主从：两个节点各自都要开启binlog和relay log；
+			1、数据不一致；
+		
+			2、'自动增长id；'
+		
+				定义一个节点使用奇数id
+					auto_increment_offset=1 		# 从1开始，起始偏移值
+					auto_increment_increment=2 		# 一次增长2，步进值
+				另一个节点使用偶数id
+					auto_increment_offset=2
+					auto_increment_increment=2
+					
+		
+		配置：
+			1、server_id必须要使用不同值； 
+
+			2、均启用binlog和relay log；
+			
+			3、存在自动增长id的表，为了使得id不相冲突，需要定义其自动增长方式；
+				auto_increment_offset=1 		# 从1开始，起始偏移值
+				auto_increment_increment=2 	
+
+				auto_increment_offset=2
+				auto_increment_increment=2
+
+			服务启动后执行如下两步：
+				4、都授权有复制权限的用户账号；
+
+				5、各把对方指定为主节点；
+			
+	
+	
+
+	
+
+
+	'复制时应该注意的问题：'
+		1、从服务设定为“只读”；
+			在从服务器启动read_only，但仅对非SUPER权限的用户有效；
+			
+			阻止所有用户：
+				mysql> FLUSH TABLES WITH READ LOCK;
+					'能写不能读，不会阻止SQL Thread'
+
+				
+		2、尽量确保复制时的事务安全
+			在master节点启用参数：
+				sync_binlog = ON  --> '事务提交，直接同步至二进制日志中'
+				
+				如果用到的是InnoDB存储引擎：
+					innodb_flush_logs_at_trx_commit=ON   --> 同步至事务日志中
+					innodb_support_xa=ON 				 --> 分布式事务，两段式提交
+					
+		3、从服务器意外中止时尽量避免自动启动复制线程	('7.13第三个视频40分钟之后，补充笔记')
+			从服务器掉电，重启MariaDB时，从服务器会自动 从主服务器复制数据 --> 这样可能导致事件不一致 --> 删除之前的同步的数据 --> 手动重新指定同步的位置
+
+
+			'需要手动指向，尽量不要自动启动复制线程'
+				
+		
+		4、从节点：设置参数
+			sync_master_info=ON   --> 立即同步至磁盘的 mater.info文件
+			
+			sync_relay_log_info=ON --> 立即同步至磁盘的 relay_log.info文件
+
+		5、relay_log.info 、master.info ：同步修改
+			
+	
+
+	'半同步复制'
+
+		提升一台从节点为 同步写的备用节点。
+			当客户端请求时，需要等待主节点和备用节点都写入完毕之后，才会响应客户端
+			但是可能出现，备用节点长时间无法响应主节点。这时需要定义超时时间，超过此时间，直接响应客户端
+
+
+		支持多种插件：/usr/lib64/mysql/plugins/
+		
+		需要安装方可使用：
+			mysql> INSTALL PLUGIN plugin_name SONAME 'shared_library_name'; 
+				plugin_name：插件名称
+				SONAME：
+				'shared_library_name'：插件文件
+
+
+		'半同步复制：'
+			semisync_master.so
+			semisync_slave.so
+			
+		
+		'主节点：'
+			> INSTALL PLUGIN rpl_semi_sync_master SONAME 'semisync_master.so';
+			
+				MariaDB [mydb]> SHOW GLOBAL VARIABLES LIKE 'rpl_semi%';
+				+------------------------------------+-------+
+				| Variable_name                      | Value |
+				+------------------------------------+-------+
+				| rpl_semi_sync_master_enabled       | OFF   |
+				| rpl_semi_sync_master_timeout       | 10000 |
+				| rpl_semi_sync_master_trace_level   | 32    |
+				| rpl_semi_sync_master_wait_no_slave | ON    |
+				+------------------------------------+-------+			
+
+			# 启用插件
+			MariaDB [mydb]> SET GLOBAL rpl_semi_sync_master_enabled=ON;	
+				
+		
+		'从节点：'
+			INSTALL PLUGIN rpl_semi_sync_slave SONAME 'semisync_slave.so';
+			
+				MariaDB [mydb]> SHOW GLOBAL VARIABLES LIKE 'rpl_semi%';                        
+				+---------------------------------+-------+
+				| Variable_name                   | Value |
+				+---------------------------------+-------+
+				| rpl_semi_sync_slave_enabled     | OFF   |
+				| rpl_semi_sync_slave_trace_level | 32    |
+				+---------------------------------+-------+			
+			
+			MariaDB [mydb]> STOP SLAVE IO_THREAD;
+			MariaDB [mydb]> SHOW GLOBAL VARIABLES LIKE 'rpl_semi%';
+			MariaDB [mydb]> START SLAVE IO_THREAD;
+			
+		
+
+		'判断方法：'
+			主节点：
+				MariaDB [mydb]> SELECT @@global.rpl_semi_sync_master_clients；
+				
+	
+
+
+	'复制过滤器：'
+
+		通过SQL Thread，进行过滤，对某个数据库的某个表修改的数据进行复制 、或者排除(不复制)
+
+		
+		仅复制有限一个或几个数据库相关的数据，而非所有；由复制过滤器进行；
+		
+		有两种实现思路：
+		
+		(1) '主服务器'
+			主服务器仅向二进制日志中记录有关特定数据库相关的写操作；
+			问题：其它库的time-point-recovery将无从实现； 
+			
+				binlog_do_db=			# 主端的白名单  仅记录这里定义的数据库
+				binlog_ignore_db= 		# 主端的黑名单  不记录这里定义的数据库
+		
+		(2) '从服务器'
+			从服务器的SQL THREAD仅重放关注的数据库或表相关的事件，并将其应用于本地；
+			问题：会浪费网络IO和磁盘IO； --> 可能会导致主从复制不同步
+			
+				Replicate_Do_DB= 					# 数据库白名单
+				Replicate_Ignore_DB=				# 数据库黑名单
+				Replicate_Do_Table= 				# 表级别白名单
+				Replicate_Ignore_Table= 			# 表级别黑名单
+				Replicate_Wild_Do_Table= 			# 通配符白名单，使用*号通配任意长度任意字符，globbing类型的
+				Replicate_Wild_Ignore_Table=	 	# 通配符黑名单
+				
+				> SET @@global.replicate_do_db=mydb;
+				> SHOW GLOBAL VARIABLES LIKE '%do_db%';
+
+	作业：基于SSL复制的实现
+		前提：启用SSL功能；
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+MySQL：		
+	'复制的监控和维护：'
+		(1) 清理日志：PURGE  --> 清理二进制日志
+			PURGE { BINARY | MASTER } LOGS { TO 'log_name' | BEFORE datetime_expr };
+			
+			> SHOW MASTER LOGS;
+			> PURGE MASTER LOGS TO 'master-log.000004';
+			不会删除 log_name ，只会删除其之前的日志文件
+
+		(2) 复制监控
+			MASTER:
+				> SHOW MASTER STATUS;
+				> SHOW BINLOG EVENTS;
+				> SHOW BINARY LOGS;
+				
+			SLAVE:
+				> SHOW SLAVE STATUS;
+				
+				判断从服务器是否落后于主服务器：
+					Seconds_Behind_Master: 0
+					
+		(3) 如何确定主从节点数据是否一致？
+			通过表的CHECKSUM检查；
+			使用percona-tools中pt-table-checksum；
+			
+		(4) 主从数据不一致时的修复方法？
+			重新复制；
+			
+
+	
+
+	'主从复制的读写分离：' --> 添加读写分离器 (mysql的七层代理)
+		READ/WRITE splitter ：读写分离器
+
+		mysql-proxy --> atlas(国内稳定发行版)
+
+		mysql-router --> MySQL被收购之后的语句路由器 --> 较少使用、不推荐使用
+
+
+
+		amoeba for MySQL：读写分离、分片；
+		OneProxy
+		
+
+		'ProxySQL'：代理SQL --> 配置简单，运行方便
+			http://www.proxysql.com/, ProxySQL is a high performance, high availability, protocol aware proxy for MySQL and forks (like Percona Server and MariaDB).
+
+			'亮点：'
+				1、几乎所有的配置均可在线更改(其配置数据基于SQLite存储)，无需重启proxysql
+				2、基于正则和client_addr的强大和灵活的路由规则
+				3、详细的状态统计，统计结果和pt-query-digest对慢日志的分析结果类型，相当于有了统一的查看SQL性能和SQL语句统计的入口
+				4、自动重连和重新执行机制：若一个请求在链接或执行过程中意外中断，proxysql会根据其内部机制重新执行该操作
+				5、query cache功能：比MySQL自带QC更灵活，可在mysql_query_rules表中依据digest，match_pattern，client_addr等维度控制哪类语句。
+				6、支持连接池，区别于atlas之流的连接池实现
+		
+
+
+		'MaxScale：'生产可用的语句路由器 --> MariaDB
+		
+		cobar：阿里开源的 --> amoeba读写分离 --> cobar 分片(分散写请求压力) ，每个主机都可以添加主从复制集群，每个主机都持有一部分数据，而非全部数据
+		gizzard
+		
+		AliSQL：
+
+		mycat：国内版本的代理SQL
+		
+		
+		'双主或多主模型是无须实现读写分离，仅需要负载均衡'：haproxy, nginx, lvs, ...
+			pxc：Percona XtraDB Cluster --> 多主模型实时复制集群，脱离MySQL的复制功能，较底层实现
+				haproxy+pxc调度 --> 配置比较简单
+
+			MariaDB Cluster：pxc在MariaDB上的实现
+			
+	
+
+
+
+
+	ProxySQL：
+		$ wget ftp://172.16.0.1/pub/Sources/7.x86_64/proxysql/proxysql-1.3.6-1-centos7.x86_64.rpm
+		$ yum install ./proxysql-1.3.6-1-centos7.x86_64.rpm
+		$ vim /etc/proxysql.cnf
+
+		配置示例：
+			datadir="/var/lib/proxysql"
+			admin_variables=
+			{
+				admin_credentials="admin:admin"
+				mysql_ifaces="127.0.0.1:6032;/tmp/proxysql_admin.sock"
+			}
+			mysql_variables=
+			{
+				threads=4
+				max_connections=2048
+				default_query_delay=0
+				default_query_timeout=36000000
+				have_compress=true
+				poll_timeout=2000
+				interfaces="0.0.0.0:3306;/tmp/mysql.sock"
+				default_schema="my_db"
+				stacksize=1048576
+				server_version="5.5.30"
+				connect_timeout_server=3000
+				monitor_history=600000
+				monitor_connect_interval=60000
+				monitor_ping_interval=10000
+				monitor_read_only_interval=1500
+				monitor_read_only_timeout=500
+				ping_interval_server=120000
+				ping_timeout_server=500
+				commands_stats=true
+				sessions_sort=true
+				connect_retries_on_failure=10
+			}
+			mysql_servers =
+			(
+				{
+					address = "172.18.0.67" # no default, required . If port is 0 , address is interpred as a Unix Socket Domain
+					port = 3306           # no default, required . If port is 0 , address is interpred as a Unix Socket Domain
+					hostgroup = 0           # no default, required
+					status = "ONLINE"     # default: ONLINE
+					weight = 1            # default: 1
+					compression = 0       # default: 0
+				},
+				{
+					address = "172.18.0.68"
+					port = 3306
+					hostgroup = 1
+					status = "ONLINE"     # default: ONLINE
+					weight = 1            # default: 1
+					compression = 0       # default: 0
+				},
+				{
+					address = "172.18.0.69"
+					port = 3306
+					hostgroup = 1
+					status = "ONLINE"     # default: ONLINE
+					weight = 1            # default: 1
+					compression = 0       # default: 0
+				}
+			)
+			mysql_users:
+			(
+				{
+					username = "root"
+					password = "mageedu"
+					default_hostgroup = 0
+					max_connections=1000
+					default_schema="mydb"
+					active = 1
+				}
+			)
+				mysql_query_rules:
+			(
+			)
+				scheduler=
+			(
+			)
+			mysql_replication_hostgroups=
+			(
+				{
+					writer_hostgroup=0
+					reader_hostgroup=1
+				}
+			)
+			
+		maxscale配置示例：
+			[maxscale]
+			threads=auto
+			
+			[server1]
+			type=server
+			address=172.18.0.67
+			port=3306
+			protocol=MySQLBackend
+			
+			[server2]
+			type=server
+			address=172.18.0.68
+			port=3306
+			protocol=MySQLBackend
+			
+			[server3]
+			type=server
+			address=172.18.0.69
+			port=3306
+			protocol=MySQLBackend
+			
+			[MySQL Monitor]
+			type=monitor
+			module=mysqlmon
+			servers=server1,server2,server3
+			user=maxscale
+			passwd=201221DC8FC5A49EA50F417A939A1302
+			monitor_interval=1000
+			
+			[Read-Only Service]
+			type=service
+			router=readconnroute
+			servers=server2,server3
+			user=maxscale
+			passwd=201221DC8FC5A49EA50F417A939A1302
+			router_options=slave
+			
+			[Read-Write Service]
+			type=service
+			router=readwritesplit
+			servers=server1
+			user=maxscale
+			passwd=201221DC8FC5A49EA50F417A939A1302
+			max_slave_connections=100%
+			
+			[MaxAdmin Service]
+			type=service
+			router=cli
+			
+			[Read-Only Listener]
+			type=listener
+			service=Read-Only Service
+			protocol=MySQLClient
+			port=4008
+			
+			[Read-Write Listener]
+			type=listener
+			service=Read-Write Service
+			protocol=MySQLClient
+			port=4006
+			
+			[MaxAdmin Listener]
+			type=listener
+			service=MaxAdmin Service
+			protocol=maxscaled
+			port=6602			
+		
+	mysqlrouter：
+		语句透明路由服务；
+		MySQL Router 是轻量级 MySQL 中间件，提供应用与任意 MySQL 服务器后端的透明路由。MySQL Router 可以广泛应用在各种用案例中，比如通过高效路由数据库流量提供高可用性和可伸缩的 MySQL 服务器后端。Oracle 官方出品。
+
+	作业：简单复制、双主复制及半同步复制；
+	
+
+	
+	
+	
+	
+	
+	
+	
+	master/slave：
+		切分：
+			垂直切分：切库，把一个库中的多个表分组后放置于不同的物理服务器上；
+			水平切分：切表，分散其行至多个不同的table partitions中；
+				range, list, hash
+				
+		sharding(切片)：
+			数据库切分的框架：
+				cobar
+				gizzard
+				Hibernat Shards
+				HiveDB
+				...
+				
+		qps: queries per second 
+		tps: transactions per second
+		
+		MHA:
+			manager: 10.1.0.6
+			
+			master: 10.1.0.67
+			slave1: 10.1.0.68
+			slave2: 10.1.0.69
+		
+
+
+
+
+
+MHA：
+	master HA：是一款开源的MySQL的高可用程序，它为MySQL主从复制架构提供了automating master failover功能。
+
+	MHA服务有两种角色，MHA manager(管理节点)和MHA Node(数据节点)：
+		MHA manager：通常单独部署在一台独立机器上管理多个master/slave集群，每个master/slave集群称作一个application
+
+		MHA node：运行在每台MySQL服务器上(master/slave/manager)，他通过监控具备解析和清理logs功能的脚本来加快故障转移
+
+
+	'MHA组件：'
+		manager节点：
+			- masterha_manager：MHA服务主程序
+			- masterha_master_switch：master节点切换工具
+			- master_stop：关闭MHA服务的工具
+
+		Node节点：
+			- save_binary_logs：保存和复制master的二进制日志
+			- apply_diff_relay_logs：识别差异的中继日志事件并应用于其他slave
+			- filter_mysqlbinlog：去除不必要的ROLLBACK事件(MHA已不再使用这个工具)
+			- purge_relay_logs：清除中继日志(不会阻塞 SQL 线程)
+
+		自定义扩展：
+			- master_ip_failover_script：更新 application 使用的 masterip
+			- shutdown_script：强制关闭 master 节点
+			- report_script：发送报告
+			- init_conf_load_script：加载初始配置参数
+			- master_ip_online_change_script：更新 master 节点 ip 地址
+
+
+	'准备MySQL replication环境'
+		
+
+
+
+
+
+
+
+
+
+博客作业： 
+	1、备份和恢复
+	2、主从复制
+	3、读写分离
+	4、从节点提升为主节点
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

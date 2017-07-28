@@ -1,0 +1,767 @@
+7.2 (Mage Tomcat进阶+Memcached)
+
+'session replication cluster ：'  --> tomcat 自带功能
+	优点：
+		会话将同步发送到其他节点上，当前节点失败后，调度到其他节点，会话依然有效
+	缺点：
+		不适合用于并发量特别大的环境
+
+
+'session server：'
+	1、memcached：data cache  --> 不持久数据 --> 重启就会丢失数据
+		自身不支持集群机制
+		冗余：double write --> 双写
+	2、redis：保存在缓存 --> 通过自身机制，将内存中的数据，会写入到磁盘中，当重启后还可以从硬盘中读取出来
+		自带冗余
+
+
+
+
+'Channel：定义通信信道'
+	Membership：
+		address：定义多播地址
+		port：监听端口
+		frequency：
+		dropTime：定义超时时间 默认为ms
+
+	Receiver：接收器
+		address：接收的IP地址
+		prot：接收时监听的端口
+		autoBind：
+		maxThreads：最大线程数
+
+
+	Sender：传送器
+
+	Deployer：部署器
+		当一台tomcat部署了新程序，是否将此程序通过多播地址发送到其他集群节点
+
+
+
+	'只有在tomcat中某个程序的 web.xml中添加 <distributable/> 一行信息，否则将无法使用集群'
+
+	使用ifconfig 手动临时指定的IP地址，默认'不支持多播'，建议使用'nmtui或者直接修改网卡配置文件'
+
+
+'Tomcat Session Replication Cluster：'
+	(1) 配置启用集群，将下列配置放置于<engine>或<host>中；
+		<Cluster className="org.apache.catalina.ha.tcp.SimpleTcpCluster"
+				channelSendOptions="8">
+
+			<Manager className="org.apache.catalina.ha.session.DeltaManager"
+				expireSessionsOnShutdown="false"
+				notifyListenersOnReplication="true"/>
+
+			<Channel className="org.apache.catalina.tribes.group.GroupChannel">
+			<Membership className="org.apache.catalina.tribes.membership.McastService"
+					address="228.0.0.4"
+					port="45564"
+					frequency="500"
+					dropTime="3000"/>
+			<Receiver className="org.apache.catalina.tribes.transport.nio.NioReceiver"
+!!!	这里	需要	修改	address="auto"
+	成本机IP地址		port="4000"
+	这里会反解主机名	autoBind="100"
+	/etc/hosts		selectorTimeout="5000"
+				maxThreads="6"/>
+
+			<Sender className="org.apache.catalina.tribes.transport.ReplicationTransmitter">
+			<Transport className="org.apache.catalina.tribes.transport.nio.PooledParallelSender"/>
+			</Sender>
+			<Interceptor className="org.apache.catalina.tribes.group.interceptors.TcpFailureDetector"/>
+			<Interceptor className="org.apache.catalina.tribes.group.interceptors.MessageDispatch15Interceptor"/>
+			</Channel>
+
+			<Valve className="org.apache.catalina.ha.tcp.ReplicationValve"
+				filter=""/>
+			<Valve className="org.apache.catalina.ha.session.JvmRouteBinderValve"/>
+
+			<Deployer className="org.apache.catalina.ha.deploy.FarmWarDeployer"
+				tempDir="/tmp/war-temp/"
+				deployDir="/tmp/war-deploy/"
+				watchDir="/tmp/war-listen/"
+				watchEnabled="false"/>
+
+			<ClusterListener className="org.apache.catalina.ha.session.JvmRouteSessionIDBinderListener"/>
+			<ClusterListener className="org.apache.catalina.ha.session.ClusterSessionListener"/>
+			</Cluster>	
+	
+		确保Engine的jvmRoute属性配置正确。
+	
+	(2) 配置webapps
+		编辑WEB-INF/web.xml，添加<distributable/>元素；
+		
+			在 <servlet> 上添加即可
+
+
+
+		注意：'Cento7上的 tomcat自带的文档中的配置实例有语法错误'
+			<ClusterListener /> ：必须要有结尾的 />
+
+			1、绑定的地址时为auto时，会自动解析本地的主机名(/etc/hosts)，并解析成
+
+
+
+
+
+
+
+'httpd的mod_jk'：第三方模块  --> 需要安装 httpd-devel --> 进行源码编译
+		apxs：将其他模块加载到httpd的工具
+	
+	1、安装httpd-devel
+
+	2、安装开发包
+		$ yum groupinstall -y "Development Tools"  "Server Platform Development"
+
+	3、下载mod_jk
+		https://tomcat.apache.org/download-connectors.cgi
+
+		或者 ftp上下载
+
+		$ lftp 172.16.0.1/pub/Sources/sources/tomcat/tomcat-connector
+		> get tomcat-connectors-1.2.40-src.tar.gz
+
+		$ tar -xf tomcat-connectors-1.2.40-src.tar.gz
+		$ cd tomcat-connector
+
+!!!	4、开始编译安装：
+		$ ./configure --with-apxs=/usr
+
+
+	
+
+	5、编译完之后，执行提示的命令：
+		$ chmod 755 /usr/lib64/httpd/modules/mod_jk.so
+
+	6、装载模块：
+		$ vim /etc/httpd/conf.modules.d/mod_jk.conf
+		#Load mod_jk module
+		# Update this path to match your modules location
+		LoadModule    jk_module  modules/mod_jk.so
+
+		$ httpd -t  #装载模块
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+'Tomcat的常用优化配置'：
+
+	JVM运行时区域：
+		方法区：线程共享；用于存储被JVM加载的class信息、常量、静态变量、方法等
+		堆：是jvm所管理的内存中占用的位置
+		java栈：线程私有，存储线程自己的局部变量
+		PC寄存器：线程私有的内存空间，程序的指令指针
+		本地方法栈：用的比较少
+
+		指令指针：指向内存中存储下一条指令的位置
+
+		标记清除、
+
+	(1) 内存空间：
+		/etc/sysconfig/tomcat
+			JAVA_OPTS="-server -Xms -Xmx -XX:NewSize= -XX:MaxNewSize= -XX:PermSize= -XX:MaxPermSize="
+				-server：工作在服务器模型 --> 默认在混合模型
+				-Xms：堆内存初始化大小；
+					-Xms16g
+					-Xms512m
+				
+				-Xmx：堆内存空间上限； --> '新生代+老年代总共的空间' --> 单JAVA内存不能超过32G
+					-Xmx32g
+					-Xms512m
+				
+				-XX:NewSize=：'新生代空间初始化'大小；					
+				-XX:MaxNewSize=：新生代空间'最大值'；
+				-XX:PermSize=：'持久代空间初始化大小'；
+				-XX:MaxPermSize=：'持久代空间最大值'； 
+
+					jdk 1.8之后就没有了'持久代'
+
+				'建议初始化大小和上限大小一致；'
+
+				'JAVA运行时需要的内存非常大，堆内存空间 ，在启动任何java程序时，都要调整jdk的堆大小'
+
+				
+
+	(2) 线程池设置：
+		<Connector port="8080" protocol="HTTP/1.1"  connectionTimeout="20000" redirectPort="8443" />
+		
+		'常用属性：'
+			maxThreads：最大线程数；
+			minSpareThreads：最小空闲线程数；
+			maxSpareThreads：最大空闲线程数；
+			acceptCount：等待队列的最大长度；
+			URIEncoding：URI地址编码格式，建议使用UTF-8；   --> 'shopxx++ 时提示字符集编码 修改这里即可'
+			enableLookups：是否启用dns解析，建议禁用； 
+			compression：是否启用传输压缩机制，建议"on";
+			compressionMinSize：启用压缩传输的数据流最小值，单位是字节；
+			compressableMimeType：定义启用压缩功能的MIME类型；
+				text/html, text/xml, text/css, text/javascript
+	
+
+			
+	(3) 禁用8005端口；
+		<Server port="-1" shutdown="SHUTDOWN">
+		
+	(4) 隐藏版本信息：
+		<Connector port="8080" protocol="HTTP/1.1"  connectionTimeout="20000" redirectPort="8443" />
+		
+		Server="SOME STRING"
+			这里随便添加一些字符串，将server修改成我们自定义的字符串
+
+		
+	Tomcat Session Server (memcached)
+	
+		https://github.com/magro/memcached-session-manager
+		
+		支持的session server类型：
+			memcached：
+			couchbase：
+			redis：
+			
+	
+
+
+
+	'博客作业：tomcat'
+		(1) nginx + tomcat cluster, httpd(proxy_http_module)+tomcat cluster, httpd(proxy_ajp_module)+tomcat cluster；
+			特别说明会话保持的实现方式；
+		(2) tomcat cluster升级为'session cluster', 使用'deltaManager'；
+		(3) tomcat cluster将'会话保存至memcached中'；
+	
+
+
+
+
+
+
+
+'JVM常用的分析工具： '
+	https://www.ibm.com/developerworks/cn/java/j-5things8.html
+
+
+	'如果想使用这些工具，必须要使用tar包进行安装tomcat  使用rpm安装oracle jdk'
+		
+		'JDK:'
+		$ lft 172.16.0.1/pub/Sources
+		> get 7.x86_64/jdk/jdk-8u25-linux-x64.rpm
+		$ yum install ./jdk-8u25-linux-x64.rpm 
+		$ vim /etc/profile.d/java.sh
+		export JAVA_HOME=/usr/java/latest
+		export PATH=$JAVA_HOME/bin:$PATH
+		$ . /etc/profile.d/java.sh
+
+
+		'Tomcat'
+		$ lftp 172.16.0.1/pub/Sources
+		$ tar -xf apache-tomcat-8.0.23.tar.gz -C /usr/local/
+		$ cd /usr/local/
+		$ ln -sv apache-tomcat-8.0.23/ tomcat
+		$ useradd -r tomcat
+		$ chown -R tomcat.tomcat tomcat/
+		$ vim /etc/profile.d/
+		export CATALINA_BASE=/usr/local/tomcat 
+		export PATH=$CATALINA_BASE/bin:$PATH
+
+		启动tomcat：
+		$ useradd -r tomcat 
+		$ su - tomcat -c '/usr/local/tomcat/catalina.sh start'
+		$ ss -tnl
+
+		$ jps 
+
+
+
+
+
+
+!!!	必须安装 java-1.8.0-openjdk-devel 包 !!!  --> 但是其他功能只能通过 rpm 安装 oracle jdk来实现
+
+
+	jps：用来查看运行的所有jvm进程；
+	jinfo：'查看进程的运行环境参数，主要是jvm命令行参数；'
+	jstat：'对jvm应用程序的资源和性能进行实时监控；'
+	jstack：查看所有线程的运行状态；
+	jmap：查看jvm占用物理内存的状态；
+	jconsole：
+	jvisualvm：
+	
+	jps：Java virutal machine Process Status tool，
+		'java ps '：ps工具的java版本
+
+		jps [-q] [-mlvV] [<hostid>]
+			-q：静默模式；
+			-v：显示传递给jvm的命令行参数；
+			-m：输出传入main方法的参数；
+			-l：输出main类或jar完全限定名称；
+			-V：显示通过flag文件传递给jvm的参数；
+			[<hostid>]：主机id，默认为localhost；
+			
+	
+	jinfo：'输出给定的java进程的所有配置信息；查看进程的运行环境参数，主要是jvm命令行参数'
+		jinfo [option] <pid>
+			-flags：to print VM flags
+			-sysprops：to print Java system properties
+			-flag <name>：to print the value of the named VM flag
+			
+			'使用systemd运行的程序，可能查看不到，会出现异常。'
+
+
+	
+	jstack：查看指定的java进程的线程栈的相关信息；
+		jstack [-l] <pid>
+		jstack -F [-m] [-l] <pid>
+			-l：long listings，会显示额外的锁信息，因此，发生死锁时常用此选项；
+			-m：混合模式，既输出java堆栈信息，也输出C/C++堆栈信息；
+			-F：当使用"jstack -l PID"无响应，可以使用-F强制输出信息；
+			
+	
+	
+	jstat：'输出指定的java进程的统计信息 ; 对jvm应用程序的资源和性能进行实时监控；'
+		jstat -help|-options
+		jstat -<option> [-t] [-h<lines>] <vmid> [<interval> [<count>]]
+		
+		vmid：java程序运行的进程号；VM的进程号，即当前运行的java进程号
+		interval： 间隔时间，单位为秒或者毫秒
+
+		$ jstat -options 			'显示支持哪些option'
+			-class：class loader
+			-compiler：JIT
+			-gc：gc 					'垃圾回收器'
+			-gccapacity：统计堆中各代的容量
+			-gccause：
+			-gcmetacapacity
+			-gcnew：新生代
+			-gcnewcapacity
+			-gcold：老年代
+			-gcoldcapacity
+			-gcutil
+			-printcompilation
+			
+		[<interval> [<count>]]
+			interval：时间间隔，单位是毫秒；
+			count：显示的次数；
+			
+		'-gc：'
+			YGC：新生代的垃圾回收次数；
+			YGCT：新生代垃圾回收消耗的时长； 
+			FGC：Full GC的次数；  --> 完全GC --> 对JAVA是灾难性的 --> 说明 JAVA内存空间溢出，不够用了，然后GC开始全部进行资源回收
+			FGCT：Full GC消耗的时长；
+			GCT：GC消耗的总时长；
+			
+	
+	jmap：Memory Map, 用于查看堆内存的使用状态； 
+	
+
+	jhat：Java Heap Analysis Tool
+		jmap [option] <pid>
+		
+		查看堆空间的详细信息：
+			jmap -heap <pid>
+			
+		查看堆内存中的对象的数目：
+			jmap -histo[:live] <pid>
+				live：只统计活动对象；
+				
+		保存堆内存数据至文件中，而后使用jvisualvm或jhat进行查看：
+			jmap -dump:<dump-options> <pid>
+				dump-options:
+				live         dump only live objects; if not specified, all objects in the heap are dumped.
+				format=b     binary format
+				file=<file>  dump heap to <file>	
+	
+	ssh -X  ROOT@IP
+
+
+	'性能监控图形化工具：' jdk
+
+		jvisualvm：打开图形界面  --> oracle jdk提供的功能，需要使用tar包安装
+			右键打开tomcat
+
+		jconsole：打开图形界面
+			-h：查看帮助
+
+
+		jmx：java监控系统，后期需要使用监控系统调用时使用
+
+
+
+'课外作业：了解何为full gc，如何应对；'
+
+
+
+				
+		
+		
+
+
+
+'memcached详解：'
+	
+	CRUD：增删改查
+ 
+	'缓存系统'：高性能分布式缓存服务器，缓存所有的“可流式化”数据；LiveJournel, Danga Interactive, 
+	
+	
+
+	'键值存储：'
+		key/value
+		只能描述一个实体的一个信息
+
+
+	'使用telnet直接可以连接'
+
+		'大多数存储服务，都慢慢使用http协议开始适配'
+
+		RESTful API：表针状态转义
+
+
+	'缓存服务器：'
+		缓存：cache、无持久
+		旁挂式缓存：bypass缓存
+		kv/cache：仅支持存储流式化数据
+
+
+	Livejournal旗下的Danga Interactive研发
+
+		'特性：'
+			kv/cache：仅可存储可序化数据；   存储项：k/v
+			智能性一半依赖于客户端(调动memcached的API程序)，一半依赖于服务端
+			分布式缓存：互不通信的分布式集群
+				分布式系统请求路由方法：取模法、一致性哈希算法
+			算法复杂度：O(1) --> 速度是O(1) --> 无论数据增减，查询速度都不会影响
+			清理过期缓存项：
+				缓存耗尽：LRU
+				缓存项过期：惰性清理机制
+
+
+
+
+	'安装memcached：CentOS 7'
+		base repository；
+		
+		服务端程序：memcached
+			'监听的端口'
+				11211/tcp 11211/udp
+
+			
+			'程序环境：			'
+				配置文件：/etc/sysconfig/memcached
+				主程序：/usr/bin/memcached
+				工具程序：/usr/bin/memcached-tool
+				UnitFile：/usr/lib/systemd/system/memcached.service	
+				
+			'协议格式：memcached协议'
+				文本格式
+				二进制格式
+
+			'命令：'
+				统计类：stats、stats items，stats slabs，stats sizes 
+				存储类：set、add、replace、append(补充)、prepend(在其前面补充)
+					命令格式： <command name> <key> <flags> <>
+				检索类：
+
+
+
+
+		'内存分页：'
+			默认4k
+
+			增长因子：(类似于步进的概念)
+				growth factor  --> 通过 slab allocation 内存分配器 --> slab class
+				降低缓存碎片
+
+
+		libmemcached：
+			libmemcached is a C/C++ client library and tools for the memcached server (http://memcached.org/).
+			
+		libmemcached-devel：
+			This package contains the header files and development libraries for libmemcached.
+			
+
+
+
+	'memcached命令：'
+		
+		memcached [options]：
+			-l <ip_addr>：监听的地址；
+			-d：Run memcached as a daemon.
+			-m <num>：缓存空间最大值； 
+			-u <username>：进程属主；
+			-p <num>：监听的tcp协议端口； 
+			-U <num>：监听的udp协议端口，0表示关闭； 
+			-c <num>：最大并发连接数；
+			-t <threads>：用于服务用户请求的线程数；每个线程响应'多个请求'；小于等于CPU核心数 
+
+			
+		
+
+		协议命令：
+			Storage commands："set", "add", "replace", "append", "prepend" and "cas"
+				命令格式：
+					<command name> <key> <flags> <exptime> <bytes> [noreply]\r\n
+					cas <key> <flags> <exptime> <bytes> <cas unique> [noreply]\r\n
+			Retrieval commands："get" and "gets"
+				get <key>*\r\n
+				gets <key>*\r\n
+			其它命令：
+				delete <key> [noreply]\r\n
+				incr <key> <value> [noreply]\r\n
+				decr <key> <value> [noreply]\r\n
+				touch <key> <exptime> [noreply]\r\n
+			General-purpose statistics
+				STAT <name> <value>\r\n
+				
+		memcached命令行工具程序：libmemcached
+			memping, memexist, ...
+			
+	
+
+	'Slab Allocator：内存分配器；'
+		预先分配好固定大小(slab class)内存块，每种大小的块(chunk)有1或多个；
+		相邻的slab class的大小差别由增长因子控制： -f <factor>，默认是1.25；
+		
+	
+
+	'认证：'
+		借助于SASL，
+			Simple Authencate Secure Layer；
+			
+	
+
+	'php连接memcached服务的适配器：'
+		php-pecl-memcache
+		php-pecl-memcached
+		
+	
+
+
+
+	'实验：安装与配置memcached'
+
+		1、安装
+			$ yum install memcached 
+
+		2、启动
+			$ systemctl start memcached
+
+		3、进入并测试
+			$ yum install -y telnet
+			$ telnet 127.0.0.1 11211
+			> stats #查看状态项
+	
+
+
+
+
+
+
+
+'session会话保持之session服务器'
+
+	配置之前需要下载的工具包：
+		1、memcached-session-manager-VERSION.jar
+		2、memcached-session-manager-tc7-VERSION.jar
+		3、msm-javolution-serializer-VERSION.jar
+		4、序列化工具 javolution-VERSION.jar 
+		5、spymemcached-VERSION.jar
+
+
+	
+	jar文件存放路径：(将下载jar包放入到这里即可)
+		/usr/share/java/tomcat/
+
+
+
+	前提：
+	两个tomcat节点：172.16.100.7(tomcatA.magedu.com)，172.16.100.8(tomcatB.magedu.com)
+	两个memcached节点：172.16.100.9, 172.16.100.10
+	一个负载均衡节点：172.16.100.6
+
+	Clients-->172.16.100.6-->(tomcatA, tomcatB)
+
+
+	memcached-session-manager项目地址，http://code.google.com/p/memcached-session-manager/, https://github.com/magro/memcached-session-manager
+
+	'下载如下jar文件至各tomcat节点的tomcat安装目录下的lib目录中，其中的${version}要换成你所需要的版本号，tc${6,7,8}要换成与tomcat版本相同的版本号。'
+		memcached-session-manager-${version}.jar
+		memcached-session-manager-tc${6,7,8}-${version}.jar
+		spymemcached-${version}.jar
+		msm-javolution-serializer-${version}.jar
+		javolution-${version}.jar
+
+		'建议安装测试最新版本的memcached,并测试 kryo，而非javolution'
+
+
+	分别在两个tomcat上的某host上定义一个用于测试的context容器，并在其中创建一个会话管理器，如下所示：
+
+	           <Context path="/test" docBase="/usr/local/tomcat/webapps/test" reloadable="true">
+	              <Manager className="de.javakaffee.web.msm.MemcachedBackupSessionManager"
+	                memcachedNodes="n1:172.16.100.9:11211,n2:172.16.100.10:11211"
+	                failoverNodes="n1"
+	                requestUriIgnorePattern=".*\.(ico|png|gif|jpg|css|js)$"
+	                transcoderFactoryClass="de.javakaffee.web.msm.serializer.javolution.JavolutionTranscoderFactory"
+	              />
+	             </Context>
+
+	        '配置参数：'
+	             memcachedNodes				memcached的节点有哪些
+	             failoverNodes				故障转移到哪一个节点
+	             requestUriIgnorePattern	对哪些请求进行忽略，通过
+	             transcoderFactoryClass		
+
+
+
+
+
+	分别为两个context提供测试页面：
+
+	tomcatA:
+	# mkdir -pv /usr/local/tomcat/webapps/test/WEB-INF/{classes,lib}
+	# vim /usr/local/tomcat/webapps/test/index.jsp
+	添加如下内容：
+	<%@ page language="java" %>
+	<html>
+	  <head><title>TomcatA</title></head>
+	  <body>
+	    <h1><font color="red">TomcatA.magedu.com</font></h1>
+	    <table align="centre" border="1">
+	      <tr>
+	        <td>Session ID</td>
+	    <% session.setAttribute("magedu.com","magedu.com"); %>
+	        <td><%= session.getId() %></td>
+	      </tr>
+	      <tr>
+	        <td>Created on</td>
+	        <td><%= session.getCreationTime() %></td>
+	     </tr>
+	    </table>
+	  </body>
+	</html>
+
+
+	tomcatB:
+	# mkdir -pv /usr/local/tomcat/webapps/test/WEB-INF/{classes,lib}
+	# vim /usr/local/tomcat/webapps/test/index.jsp
+	添加如下内容：
+	<%@ page language="java" %>
+	<html>
+	  <head><title>TomcatB</title></head>
+	  <body>
+	    <h1><font color="blue">TomcatB.magedu.com</font></h1>
+	    <table align="centre" border="1">
+	      <tr>
+	        <td>Session ID</td>
+	    <% session.setAttribute("magedu.com","magedu.com"); %>
+	        <td><%= session.getId() %></td>
+	      </tr>
+	      <tr>
+	        <td>Created on</td>
+	        <td><%= session.getCreationTime() %></td>
+	     </tr>
+	    </table>
+	  </body>
+	</html>
+
+
+	在172.16.100.6上配置反向代理的负载均衡内容，类似如下所示：
+	<Proxy balancer://tomcat>
+	    BalancerMember  http://172.16.100.7:8080 loadfactor=1
+	    BalancerMember  http://172.16.100.8:8080 loadfactor=1
+	    ProxySet  lbmethod=byrequests
+	</Proxy>
+
+	ProxyVia Off
+	ProxyRequests Off
+	ProxyPass / balancer://tomcat/
+	ProxyPassReverse / balancer://tomcat/
+	<Proxy *>
+	    Order Allow,Deny
+	    Allow From all
+	</Proxy>
+
+	<Location />
+	    Order Allow,Deny
+	    Allow From all
+	</Location>
+
+
+
+	测试结果，在浏览器中访问http://172.16.100.6/test，结果如下所示，其session ID在负载均衡环境中保持不变。
+
+	TomcatA.magedu.com
+
+	Session ID	4DD0340CE6294FF2BBE802CD4CD039EC-n2
+	Created on	1399890838103
+
+
+	TomcatB.magedu.com
+
+	Session ID	4DD0340CE6294FF2BBE802CD4CD039EC-n2
+	Created on	1399890838103
+
+
+
+				
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

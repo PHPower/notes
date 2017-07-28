@@ -1,0 +1,4085 @@
+ 
+ Linux Services and Security：
+	
+	OpenSSL(ssl/tls)
+	OpenSSH(ssh)
+	bind(dns)
+	web(http)：httpd(apache), php, mariadb(mysql),  LAMP, nginx(tengine, openresty), lnmp
+	file server: nfs, samba, ftp
+	dhcp, pxe
+	iptables
+	sudo, pam, nsswitch
+	
+OpenSSL
+
+	传输层协议：TCP，UDP，SCTP
+		port：进程地址，进程向内核注册使用某端口（独占）
+
+	同一主机上的进程间通信：IPC， message queue, shm, semerphor
+	不同主上的进程间通信：socket 
+		cip:port <-- --> sip:port
+			cip:55673 <-- --> sip:80
+			
+			监听模式：LISTEN （ip:port）
+			
+	SSL: Secure Sockets Layer
+		http --> ssl --> https
+		
+	安全的目标：
+		保密性：confidentiality
+		完整性：integrity
+		可用性：availability
+		
+	攻击类型：
+		威胁保密性的攻击：窃听、通信量分析；
+		威胁完整性的攻击：更改、伪装、重放、否认
+		威胁可用性的攻击：拒绝服务（DoS）
+	
+	解决方案：
+		技术（加密和解密）、服务（用于抵御攻击的服务，也即是为了上述安全目标而特地设计的安全服务）
+		
+		加密和解密：
+			传统加密方法：替代加密方法、置换加密方法
+			现代加密方法：现代块加密方法
+			
+		服务：
+			认证机制
+			访问控制机制
+			
+		密钥算法和协议
+			对称加密
+			公钥加密
+			单向加密
+			认证协议
+			
+	Linux系统：OpenSSL(ssl)， GPG(pgp)
+		
+		OpenSSL由三部分组成：
+			libencrypto库
+			libssl库
+			openssl多用途命令行工具
+			
+		加密算法和协议：
+			对称加密：加密和解密使用同一个密钥；
+				DES：Data Encryption Standard; 
+				3DES：Triple DES;
+				AES：Advanced Encryption Standard;  (128bits, 192bits, 256bits, 384bits)
+				Blowfish
+				Twofish
+				IDEA
+				RC6
+				CAST5
+				
+				特性：
+					1、加密、解密使用同一个密钥；
+					2、将原始数据分割成为固定大小的块，逐个进行加密；
+					
+				缺陷：
+					1、密钥过多；
+					2、密钥分发困难；
+				
+			公钥加密：密钥分为公钥与私钥
+				公钥：从私钥中提取产生；可公开给所有人；pubkey
+				私钥：通过工具创建，使用者自己留存，必须保证其私密性；secret key；
+				特点：用公钥加密的数据，只能使用与之配对儿的私钥解密；反之亦然；
+				
+				用途：
+					数字签名：主要在于让接收方确认发送方的身份；
+					密钥交换：发送方用对方公钥加密一个对称密钥，并发送给对方；
+					数据加密
+				
+				算法：RSA， DSA， ELGamal
+					DSS: Digital Signature Standard
+					DSA：Digital Signature Algorithm
+					
+			单向加密：即提出数据指纹；只能加密，不能解密；
+				特性：定长输出、雪崩效应；
+				功能：完整性；
+				算法：
+					md5：Message Digest 5, 128bits
+					sha1：Secure Hash Algorithm 1, 160bits
+						sha224, sha256, sha384, sha512
+
+			密钥交换： IKE（Internet Key Exchange）
+				公钥加密
+				DH（Deffie-Hellman）
+					A：p, g
+					B：p, g
+					
+					A: x
+						--> p^x%g ==> B
+						
+						A: (p^y%g)^x=p^yx%g
+						
+					B: y
+						--> p^y%g ==> A
+						
+						B: (p^x%g)^y=p^xy%g
+						
+		PKI：Public Key Infrastructure
+			公钥基础设施：
+				签证机构：CA
+				注册机构：RA
+				证书吊销列表：CRL
+				证书存取库：
+				
+			X.509v3：定义了证书的结构以及认证协议标准
+				版本号
+				序列号
+				签名算法ID
+				发行者名称
+				有效期限
+				主体名称
+				主体公钥
+				发行者的惟一标识
+				主体的惟一标识
+				扩展
+				发行者的签名
+				
+		SSL：Secure sockets Layer
+			Netscape: 1994
+			V1.0, V2.0, V3.0
+		TLS: Transport Layer Security
+			IETF: 1999			
+			V1.0, V1.1, V1.2, V1.3
+			
+			分层设计：
+				1、最底层：基础算法原语的实现，aes, rsa, md5
+				2、向上一层：各种算法的实现； 
+				3、再向上一层：组合算法实现的半成品；
+				4、用各种组件拼装而成的各种成品密码学协议软件；
+				
+			协议的开源实现：OpenSSL
+				
+回顾：
+	
+	技术：加密和解密，服务
+	
+	加密算法和协议：
+		对称加密：数据加密（保密性），（3DES，AES）
+		公钥加密：身份认证、密钥交换、数据加密（不常用，比对称加密要慢3个数量级），（RSA，DSA）
+		单向加密：数据完整性，（MD5, SHA1, ...）
+		密钥交换：RSA，DH（迪菲-赫尔曼），ECDH（椭圆曲线DH），ECDHE（临时椭圆曲线DH）
+		
+	SSL/TLS
+		SSL: 安全套接字层（ssl 1.0, ssl 2.0, ssl 3.0）
+		TLS：传输层安全 （tls 1.0, tls 1.1, tls 1.2, tls 1.3）
+		
+		OpenSSL
+			libcrypto
+			libssl 
+			openssl
+			
+		SSL会话主要三步：
+			客户端向服务器端索要并验正证书；
+			双方协商生成“会话密钥”；
+			双方采用“会话密钥”进行加密通信；
+			
+			SSL Handshake Protocol：
+				第一阶段：ClientHello：
+					支持的协议版本，比如tls 1.2；
+					客户端生成一个随机数，稍后用户生成“会话密钥”
+					支持的加密算法，比如AES、3DES、RSA；
+					支持的压缩算法；
+					
+				第二阶段：ServerHello
+					确认使用的加密通信协议版本，比如tls 1.2；
+					服务器端生成一个随机数，稍后用于生成“会话密钥”
+					确认使用的加密方法；
+					服务器证书；
+					
+				第三阶段：
+					验正服务器证书，在确认无误后取出其公钥；（发证机构、证书完整性、证书持有者、证书有效期、吊销列表）				
+					发送以下信息给服务器端：
+						一个随机数；
+						编码变更通知，表示随后的信息都将用双方商定的加密方法和密钥发送；
+						客户端握手结束通知；
+						
+				第四阶段：
+					收到客户端发来的第三个随机数pre-master-key后，计算生成本次会话所有到的“会话密钥”；
+					向客户端发送如下信息：
+						编码变更通知，表示随后的信息都将用双方商定的加密方法和密钥发送；
+						服务端握手结束通知；
+				
+		PKI：公钥基础设施
+			签证机构：CA
+			注册机构：RA
+			证书吊销列表：CRL
+			证书存取库
+		
+OpenSSL(2)
+	
+	组件：
+		libcrypto, libssl主要由开发者使用；
+		openssl：多用途命令行工具；
+			
+	openssl:
+		从多子命令，分为三类：
+			标准命令
+			消息摘要命令（dgst子命令）
+			加密命令（enc子命令）
+			
+		标准命令： enc, ca, req, genrsa, ...
+		
+		对称加密：
+			工具：openssl  enc,  gpg
+			支持的算法：3des, aes, blowfish, towfish
+			
+			enc命令：
+				加密：~]# openssl  enc  -e  -des3  -a  -salt  -in fstab   -out fstab.ciphertext
+				解密：~]# openssl  enc  -d  -des3  -a  -salt  -out fstab   -in fstab.ciphertext
+		
+		单向加密：
+			工具：openssl dgst, md5sum, sha1sum, sha224sum, ...
+			
+			dgst命令：
+				~]# openssl  dgst  -md5  /PATH/TO/SOMEFILE
+				
+		生成用户密码：
+			工具：passwd, openssl  passwd
+			
+				openssl  passwd  -1  -salt  SALT
+				
+		生成随机数：
+			工具：openssl  rand
+			
+			~]# openssl  rand  -hex  NUM
+			~]# openssl  rand  -base  NUM
+			
+		公钥加密：
+			加密解密：
+				算法：RSA，ELGamal
+				工具：openssl  rsautl, gpg
+			数字签名：
+				算法：RSA， DSA， ELGamal
+				工具：
+			密钥交换：
+				算法：DH
+				
+			生成密钥：
+				生成私钥： ~]# (umask 077;  openssl  genrsa  -out  /PATH/TO/PRIVATE_KEY_FILE  NUM_BITS)
+				提出公钥： ~]#  openssl  rsa  -in  /PATH/FROM/PRIVATE_KEY_FILE  -pubout
+				
+	Linux系统上的随机数生成器：
+		/dev/random：仅从熵池返回随机数；随机数用尽，阻塞；
+		/dev/urandom：从熵池返回随机数；随机数用尽，会利用软件生成伪随机数，非阻塞；
+			伪随机数不安全；
+			
+			熵池中随机数的来源：
+				硬盘IO中断时间间隔；
+				键盘IO中断时间间隔；
+				
+	CA：
+		公共信任的CA，私有CA；
+		
+		建立私有CA：
+			openssl
+			OpenCA
+			
+		openssl命令：
+			配置文件：/etc/pki/tls/openssl.cnf
+			
+			构建私有CA:
+				在确定配置为CA的服务上生成一个自签证书，并为CA提供所需要的目录及文件即可；
+				
+				步骤：
+					(1) 生成私钥；
+						~]# (umask 077; openssl genrsa -out /etc/pki/CA/private/cakey.pem 4096)
+					(2) 生成自签证书；
+						~]# openssl req -new -x509 -key /etc/pki/CA/private/cakey.pem -out /etc/pki/CA/cacert.pem -days 3655
+							-new：生成新证书签署请求；
+							-x509：生成自签格式证书，专用于创建私有CA时；
+							-key：生成请求时用到的私有文件路径；
+							-out：生成的请求文件路径；如果自签操作将直接生成签署过的证书；
+							-days：证书的有效时长，单位是day；
+					(3) 为CA提供所需的目录及文件；
+						~]# mkdir  -pv  /etc/pki/CA/{certs,crl,newcerts}
+						~]# touch  /etc/pki/CA/{serial,index.txt}
+						~]# echo  01 > /etc/pki/CA/serial
+						
+			要用到证书进行安全通信的服务器，需要向CA请求签署证书：
+				
+				步骤：（以httpd为例）
+					(1) 用到证书的主机生成私钥；
+						~]# mkdir  /etc/httpd/ssl 
+						~]# cd  /etc/httpd/ssl
+						~]# (umask  077; openssl  genrsa -out  /etc/httpd/ssl/httpd.key  2048)
+					(2) 生成证书签署请求
+						~]# openssl  req  -new  -key  /etc/httpd/ssl/httpd.key  -out /etc/httpd/ssl/httpd.csr  -days  365
+					(3) 将请求通过可靠方式发送给CA主机；
+					
+					(4) 在CA主机上签署证书；
+						~]# openssl ca  -in  /tmp/httpd.csr  -out  /etc/pki/CA/certs/httpd.crt  -days  365
+						
+						查看证书中的信息：
+							~]# openssl  x509  -in /etc/pki/CA/certs/httpd.crt  -noout  -serial  -subject
+							
+			吊销证书：
+				步骤：
+					(1) 客户端获取要吊销的证书的serial（在使用证书的主机执行）：
+						~]# openssl  x509  -in /etc/pki/CA/certs/httpd.crt  -noout  -serial  -subject
+					(2) CA主机吊销证书
+						先根据客户提交的serial和subject信息，对比其与本机数据库index.txt中存储的是否一致；
+						
+						吊销：
+							# openssl  ca  -revoke  /etc/pki/CA/newcerts/SERIAL.pem
+							
+								其中的SERIAL要换成证书真正的序列号；
+								
+					(3) 生成吊销证书的吊销编号（第一次吊销证书时执行）
+						# echo  01  > /etc/pki/CA/crlnumber
+					
+					(4) 更新证书吊销列表
+						# openssl  ca  -gencrl  -out  thisca.crl 
+						
+						查看crl文件：
+							# openssl  crl  -in  /PATH/FROM/CRL_FILE.crl  -noout  -text
+							
+	博客作业：加密解密技术基础、PKI及创建私有私有CA；
+		
+DNS and Bind
+
+	Sockets：
+		C/S：
+			Client：发起应用请求的程序；
+			Server：响应请求（提供服务）的程序；
+				LISTEN： Socket
+				
+		传输层协议： TCP， UDP， SCTP
+			TCP: Transmission Control Protocol
+				面向连接的协议：双方通信之前需要事先建立虚连接；
+			UDP：User Datagram Protocol
+				无连接的协议：双方无须通信之前需要事先建立虚连接；
+				
+	DNS： Domain Name Service， 应用层协议
+		C/S
+			53/udp, 53/tcp
+			
+		www.magedu.com：FQDN（Full Qualified Domain Name）
+		
+		tld：Top Level Domain
+			组织域：.com, .net, .org, .gov, .edu, .mil
+			国家域：.iq, .tw, .hk, .jp, .cn, ...
+			
+		DNS查询类型：
+			递归查询：
+			迭代查询：
+			
+		DNS名称解析方式：
+			名称 --> IP：正向解析
+			IP --> 名称：反向解析
+			
+			注意：二者的名称空间，非为同一个空间，即非为同一棵树；因此，也不是同一个解析库；
+			
+		域：magedu.com.
+			www.magedu.com. 1.1.1.1
+			ftp.magedu.com.     2.2.2.2
+			bbs.magedu.com.   3.3.3.3
+			cloud.magedu.com. 4.4.4.4
+			
+		DNS服务器类型：
+			负责解析至少一个域：
+				主名称服务器；
+				辅助名称服务器；
+			不负责哉解析：
+				缓存名称服务器；
+				
+		一次完整的查询请求经过的流程：
+			Client --> hosts文件 --> DNS Local Cache --> DNS  Server (recursion) --> 
+				自己负责解析的域：直接查询数据库并返回答案；
+				不是自己负责解析域：Server Cache --> iteration(迭代)
+				
+			解析答案：
+				肯定答案：
+				否定答案：不存在查询的键，因此，不存在与其查询键对应的值；
+				
+				权威答案：由直接负责的DNS服务器返回的答案；
+				非权威答案：
+				
+		主-辅DNS服务器：
+			主DNS服务器：维护所负责解析的域数据库的那台服务器；读写操作均可进行；
+			从DNS服务器：从主DNS服务器那里或其它的从DNS服务器那里“复制”一份解析库；但只能进行读操作；
+				“复制”操作的实施方式：
+					序列号：serial, 也即是数据库的版本号；主服务器数据库内容发生变化时，其版本号递增；
+					刷新时间间隔：refresh, 从服务器每多久到主服务器检查序列号更新状况；
+					重试时间间隔：retry, 从服务器从主服务器请求同步解析库失败时，再次发起尝试请求的时间间隔；
+					过期时长：expire，从服务器始终联系不到主服务器时，多久之后放弃从主服务器同步数据；停止提供服务；
+					否定答案的缓存时长：
+					
+				主服务器”通知“从服务器随时更新数据；
+				
+				区域传送：
+					全量传送：axfr, 传送整个数据库；
+					增量传送：ixfr, 仅传送变量的数据；
+					
+		区域(zone)和域(domain)：
+			magedu.com域：
+				FQDN --> IP
+					正向解析库；区域
+				IP --> FQDN
+					反向解析库；区域
+					
+		区域数据库文件：
+			资源记录：Resource Record, 简称rr；
+				记录有类型：A， AAAA， PTR， SOA， NS， CNAME， MX
+				
+			SOA：Start Of Authority，起始授权记录； 一个区域解析库有且只能有一个SOA记录，而且必须放在第一条；
+			NS：Name Service，域名服务记录；一个区域解析库可以有多个NS记录；其中一个为主的；
+			A： Address, 地址记录，FQDN --> IPv4；
+			AAAA：地址记录， FQDN --> IPv6；
+			CNAME：Canonical Name，别名记录；
+			PTR：Pointer，IP --> FQDN
+			MX：Mail eXchanger，邮件交换器；
+				优先级：0-99，数字越小优先级越高；
+				
+			资源记录的定义格式：
+				语法：	name  	[TTL] 	IN	RR_TYPE 		value
+			
+			SOA：
+				name: 当前区域的名字；例如”mageud.com.”，或者“2.3.4.in-addr.arpa.”；
+				value：有多部分组成
+					(1) 当前区域的区域名称（也可以使用主DNS服务器名称）；
+					(2) 当前区域管理员的邮箱地址；但地址中不能使用@符号，一般使用点号来替代；
+					(3) (主从服务协调属性的定义以及否定答案的TTL)
+						
+					例如：
+						magedu.com. 	86400 	IN 		SOA 	magedu.com. 	admin.magedu.com.  (
+									2017010801	; serial
+									2H 			; refresh
+									10M 		; retry
+									1W			; expire
+									1D			; negative answer ttl 
+						)	
+						
+			NS：
+				name: 当前区域的区域名称
+				value：当前区域的某DNS服务器的名字，例如ns.magedu.com.；
+					注意：一个区域可以有多个ns记录； 
+					
+				例如：
+					magedu.com. 	86400 	IN 	NS  	ns1.magedu.com.
+					magedu.com. 	86400 	IN 	NS  	ns2.magedu.com.
+					
+			MX：
+				name: 当前区域的区域名称
+				value：当前区域某邮件交换器的主机名；
+					注意：MX记录可以有多个；但每个记录的value之前应该有一个数字表示其优先级；
+					
+				例如：
+					magedu.com. 		IN 	MX 	10  	mx1.magedu.com.
+					magedu.com. 		IN 	MX 	20  	mx2.magedu.com.
+					
+			A：
+				name：某FQDN，例如www.magedu.com.
+				value：某IPv4地址；
+				
+				例如：
+					www.magedu.com.		IN 	A	1.1.1.1
+					www.magedu.com.		IN 	A	1.1.1.2
+					bbs.magedu.com.			IN 	A	1.1.1.1
+		
+			AAAA：
+				name：FQDN
+				value: IPv6
+			
+			PTR：
+				name：IP地址，有特定格式，IP反过来写，而且加特定后缀；例如1.2.3.4的记录应该写为4.3.2.1.in-addr.arpa.；
+				value：FQND
+				
+				例如：
+					4.3.2.1.in-addr.arpa.  	IN  PTR	www.magedu.com.
+					
+			CNAME：
+				name：FQDN格式的别名；
+				value：FQDN格式的正式名字；
+				
+				例如：
+					web.magedu.com.  	IN  	CNAME  www.magedu.com.
+					
+				
+		注意：
+			(1) TTL可以从全局继承；
+			(2) @表示当前区域的名称；
+			(3) 相邻的两条记录其name相同时，后面的可省略；
+			(4) 对于正向区域来说，各MX，NS等类型的记录的value为FQDN，此FQDN应该有一个A记录；
+			
+回顾：DNS
+	资源记录类型：SOA，NS，MX，A，AAAA，PTR，CNAME
+	区域传送：axfr, ixfr
+	资源记录定义的格式：
+		name  	[ttl] 		IN 	RR_TYPE 		value
+		
+	SOA：
+		序列号、刷新时长、重试时长、过期时长、否定答案的TTL；
+			M，H，D，W
+			
+	课外练习：注册一个域名，修改其域名解析服务器为dnspod.cn，dns.la；
+	
+DNS and Bind(2)
+
+	BIND的安装配置：
+		BIND： Berkeley Internet Name Domain,  ISC.org
+			dns: 协议
+			bind： dns协议的一种实现
+			named：bind程序的运行的进程名
+			
+		程序包：
+			bind-libs：被bind和bind-utils包中的程序共同用到的库文件；
+			bind-utils：bind客户端程序集，例如dig, host, nslookup等；
+			
+			bind：提供的dns server程序、以及几个常用的测试程序；
+			bind-chroot：选装，让named运行于jail模式下；
+			
+		bind：
+			主配置文件：/etc/named.conf 
+				或包含进来其它文件；
+					/etc/named.iscdlv.key
+					/etc/named.rfc1912.zones
+					/etc/named.root.key
+			解析库文件：
+				/var/named/目录下；
+					一般名字为：ZONE_NAME.zone
+					
+				注意：(1) 一台DNS服务器可同时为多个区域提供解析；
+					   (2) 必须要有根区域解析库文件： named.ca；
+					   (3) 还应该有两个区域解析库文件：localhost和127.0.0.1的正反向解析库；
+							正向：named.localhost
+							反向：named.loopback
+							
+			rndc：remote name domain contoller
+				953/tcp，但默认监听于127.0.0.1地址，因此仅允许本地使用；
+				
+			bind程序安装完成之后，默认即可做缓存名称服务器使用；如果没有专门负责解析的区域，直接即可启动服务；
+				CentOS 6: service  named  start
+				CentOS 7: systemctl  start  named.service
+				
+			主配置文件格式：
+				全局配置段：
+					options { ... }
+				日志配置段：
+					logging { ... }
+				区域配置段：
+					zone { ... }
+						那些由本机负责解析的区域，或转发的区域；
+						
+					注意：每个配置语句必须以分号结尾；
+						
+				缓存名称服务器的配置：
+					监听能与外部主机通信的地址；					
+						listen-on port 53;
+						listen-on port 53 { 172.16.100.67; };
+						
+					学习时，建议关闭dnssec
+						dnssec-enable no;
+						dnssec-validation no;
+						dnssec-lookaside no;	
+						
+					关闭仅允许本地查询：
+						//allow-query  { localhost; };
+			
+				检查配置文件语法错误：
+					named-checkconf   [/etc/named.conf]
+					
+				测试工具：
+					dig, host, nslookup等
+					
+					dig命令：
+						dig  [-t RR_TYPE]  name  [@SERVER]  [query options]
+						
+							用于测试dns系统，因此其不会查询hosts文件；
+							
+							查询选项：
+								+[no]trace：跟踪解析过程；
+								+[no]recurse：进行递归解析；
+								
+							注意：反向解析测试
+								dig  -x  IP
+								
+							模拟完全区域传送：
+								dig  -t  axfr  DOMAIN  [@server]
+								
+					host命令：
+						host  [-t  RR_TYPE]  name  SERVER_IP
+						
+					nslookup命令：
+						nslookup  [-options]  [name]  [server]
+						
+						交互式模式：
+							nslookup>
+								server  IP：以指定的IP为DNS服务器进行查询；
+								set  q=RR_TYPE：要查询的资源记录类型；
+								name：要查询的名称；
+								
+					rndc命令：named服务控制命令
+						rndc  status
+						rndc  flush
+						
+			配置解析一个正向区域：
+				
+				以magedu.com域为例：
+				
+				(1) 定义区域
+					在主配置文件中或主配置文件辅助配置文件中实现；
+						zone  "ZONE_NAME"  IN  {
+							type  {master|slave|hint|forward};
+							file  "ZONE_NAME.zone"; 
+						};	
+						
+						注意：区域名字即为域名；
+					
+				(2) 建立区域数据文件（主要记录为A或AAAA记录）
+					在/var/named目录下建立区域数据文件；
+						
+						文件为：/var/named/magedu.com.zone
+							$TTL 3600
+							$ORIGIN magedu.com.
+							@       IN      SOA     ns1.magedu.com.   dnsadmin.magedu.com. (
+									2017010801
+									1H
+									10M
+									3D
+									1D )
+								IN      NS      ns1
+								IN      MX   10 mx1
+								IN      MX   20 mx2
+							ns1     IN      A       172.16.100.67
+							mx1     IN      A       172.16.100.68
+							mx2     IN      A       172.16.100.69
+							www     IN      A       172.16.100.67
+							web     IN      CNAME   www
+							bbs     IN      A       172.16.100.70
+							bbs     IN      A       172.16.100.71
+						
+						权限及属组修改：
+							# chgrp  named  /var/named/magedu.com.zone
+							# chmod  o=  /var/named/magedu.com.zone
+							
+						检查语法错误：
+							# named-checkzone  ZONE_NAME   ZONE_FILE
+							# named-checkconf 
+							
+				(3) 让服务器重载配置文件和区域数据文件
+					# rndc  reload 或
+					# systemctl  reload  named.service
+					
+			配置解析一个反向区域
+				(1) 定义区域
+					在主配置文件中或主配置文件辅助配置文件中实现；
+						zone  "ZONE_NAME"  IN  {
+							type  {master|slave|hint|forward};
+							file  "ZONE_NAME.zone"; 
+						};	
+						
+						注意：反向区域的名字
+							反写的网段地址.in-addr.arpa 
+								100.16.172.in-addr.arpa
+								
+				(2) 定义区域解析库文件（主要记录为PTR）
+					
+					示例，区域名称为100.16.172.in-addr.arpa；
+					
+						$TTL 3600
+						$ORIGIN 100.16.172.in-addr.arpa.
+						@       IN      SOA     ns1.magedu.com.  nsadmin.magedu.com. (
+								2017010801
+								1H
+								10M
+								3D
+								12H )
+							IN      NS      ns1.magedu.com.
+						67      IN      PTR     ns1.magedu.com.
+						68      IN      PTR     mx1.magedu.com.
+						69      IN      PTR     mx2.magedu.com.
+						70      IN      PTR     bbs.magedu.com.
+						71      IN      PTR     bbs.magedu.com.
+						67      IN      PTR     www.magedu.com.					
+									
+						权限及属组修改：
+							# chgrp  named  /var/named/172.16.100.zone
+							# chmod  o=  /var/named/172.16.100.zone
+							
+						检查语法错误：
+							# named-checkzone  ZONE_NAME   ZONE_FILE
+							# named-checkconf 
+							
+				(3) 让服务器重载配置文件和区域数据文件
+					# rndc  reload 或
+					# systemctl  reload  named.service					
+															
+					
+	主从服务器：
+		注意：从服务器是区域级别的概念；
+		
+		配置一个从区域：
+			On Slave 
+				(1) 定义区域
+					定义一个从区域； 
+						zone "ZONE_NAME"  IN {
+							type  slave;
+							file  "slaves/ZONE_NAME.zone";
+							masters  { MASTER_IP; };
+						};
+						
+						配置文件语法检查：named-checkconf
+						
+				(2) 重载配置
+					rndc  reload
+					systemctl  reload  named.service
+				
+			On Master
+				(1) 确保区域数据文件中为每个从服务配置NS记录，并且在正向区域文件需要每个从服务器的NS记录的主机名配置一个A记录，且此A后面的地址为真正的从服务器的IP地址；
+				
+			注意：时间要同步；
+				ntpdate命令；
+				
+	子域授权：
+		
+		正向解析区域授权子域的方法：
+			ops.magedu.com. 		IN 	NS  	ns1.ops.magedu.com.
+			ops.magedu.com. 		IN 	NS  	ns2.ops.magedu.com.
+			ns1.ops.magedu.com. 	IN 	A 	IP.AD.DR.ESS
+			ns2.ops.magedu.com. 	IN 	A 	IP.AD.DR.ESS
+
+		定义转发：
+			注意：被转发的服务器必须允许为当前服务做递归；
+			
+			(1) 区域转发：仅转发对某特定区域的解析请求；
+				zone  "ZONE_NAME"  IN {
+					type  forward;
+					forward  {first|only};
+					forwarders  { SERVER_IP; };
+				};
+				
+				first：首先转发；转发器不响应时，自行去迭代查询；
+				only：只转发；
+				
+			(2) 全局转发：针对凡本地没有通过zone定义的区域查询请求，通通转给某转发器；
+				options {
+					... ...
+					forward  {only|first};
+					forwarders  { SERVER_IP; };
+					.. ...
+				};
+				
+	bind中的安全相关的配置：
+		acl：访问控制列表；把一个或多个地址归并一个命名的集合，随后通过此名称即可对此集全内的所有主机实现统一调用；
+		
+			acl  acl_name  {
+				ip;
+				net/prelen;
+			};
+				
+			示例：
+				acl  mynet {
+					172.16.0.0/16;
+					127.0.0.0/8;
+				};
+				
+			bind有四个内置的acl
+				none：没有一个主机；
+				any：任意主机；
+				local：本机；
+				localnet：本机所在的IP所属的网络；
+				
+		访问控制指令：
+			allow-query  {};  允许查询的主机；白名单；
+			allow-transfer {};  允许向哪些主机做区域传送；默认为向所有主机；应该配置仅允许从服务器；
+			allow-recursion {}; 允许哪此主机向当前DNS服务器发起递归查询请求； 
+			allow-update {}; DDNS，允许动态更新区域数据库文件中内容；
+			
+	bind view：
+		视图：
+			view  VIEW_NAME {
+				zone
+				zone
+				zone
+			}
+			
+			
+			view internal  {
+				match-clients { 172.16.0.0/8; };
+				zone "magedu.com"  IN {
+					type master;
+					file  "magedu.com/internal";
+				};
+			};
+			
+			view external {
+				match-clients { any; };
+				zone "magecdu.com" IN {
+					type master;
+					file magedu.com/external";
+				};
+			};
+			
+	课外作业：whois命令； 注册一个域名；
+	
+	博客作业：正向解析区域、反向解析区域；主/从；子域；基本安全控制； 
+	
+
+Web Service
+
+	应用层：http, https
+			实现某类具体应用：
+			
+		传输层协议：TCP， UDP， SCTP
+			
+		IANA：
+			0-1023：众所周知，永久地分配给固定的应用使用，特权端口；
+			1024-41951：亦为注册端口，但要求不是特别严格，分配给程序注册为某应用使用；3306/tcp, 11211/tcp；
+			41952+：客户端程序随机使用的端口，动态端口，或私有端口；其范围定义在/proc/sys/net/ipv4/ip_local_port_range；
+			
+		BSD Socket：IPC的一种实现，允许位于不同主机（也可以是同一主机）上的进程之间进行通信；
+			Socket API(封装了内核中的socket通信相关的系统调用)
+				SOCK_STREAM: tcp套接字
+				SOCK_DGRAM: UDP套接字
+				SOCK_RAW：raw套按字
+				
+			根据套按字所使用的地址格式，Socket Domain：
+				AF_INET：Address Family，IPv4
+				AF_INET6：ipv6
+				AF_UNIX：同一主机上的不同进程间基于socket套接字通信使用的一种地址；Unix_SOCK
+			
+		TCP FSM： CLOSED， LISTEN，SYN_SENT, SYN_RECV, ESTABLISHED, FIN_WAIT1, CLOSE_WAIT, FIN_WAIT2, LAST_ACK, TIMEWAIT,  CLOSED
+		
+		TCP协议的特性：
+			建立连接：三次握手；
+			将数据打包成段：校验和(CRC32)
+			确认、重传及超时；
+			排序：逻辑序号；
+			流量控制：滑动窗口算法；
+			拥塞控制：慢启动和拥塞避免算法；
+			
+	http：hyper text transfer protocol, 应用层协议， 80/tcp,  文本协议
+		html：hyper text mark language, 编程语言，超文本标记语言；
+		
+		<html>
+			<head>
+				<title>TITLE</title>
+			</head>
+			<body>
+				<h1></h1>
+					<p> blabla... <a href="http://www.magedu.com/download.html"> bla... </a> </p>
+				<h2> </h2>
+			</body>
+		</html>
+		
+		css: Cascading Style Sheet
+		js：JavaScript, 客户端脚本；
+		
+		协议版本：
+			http/0.9：原型版本，功能简陋
+			http/1.0: cache, MIME, method, 				
+				MIME：Multipurpose Internet Mail Extesion
+				method：GET， POST， HEAD，PUT， DELETE，TRACE， OPTIONS
+			http/1.1：增强了缓存功能；
+				spdy
+			http/2.0：
+				rfc 
+				
+		工作模式：
+			http请求报文：http request
+			http响应报文: http response
+				一次http事务：请求<-->响应
+				
+			web资源：web resource
+				静态资源（无须服务端做出额外处理）： .jpg, .png, .gif, .html, txt, .js, .css, .mp3, .avi					
+				动态资源（服务端需要通过执行程序做出处理，发送给客户端的是程序的运行结果）： .php, .jsp
+				
+				注意：一个页面中展示的资源可能有多个；每个资源都需要单独请求；
+				
+				资源的标识机制：URL
+					Uniform Resource Locator：用于描述服务器某特定资源的位置；
+						例如：  http://www.sina.com.cn/index.html
+							Scheme://Server[:Port][/PATH/TO/SOME_RESOURCE]
+							
+		一次完整的http请求处理过程：
+			(1) 建立或处理连接：接收请求或拒绝请求；
+			(2) 接收请求：接收来自于网络上的主机请求报文中对某特定资源的一次请求的过程；
+			(3) 处理请求：对请求报文进行解析，获取客户端请求的资源及请求方法等相关信息；
+			(4) 访问资源：获取请求报文中请求的资源；
+			(5) 构建响应报文：
+			(6) 发送响应报文：
+			(7) 记录日志：
+						
+			接收请求的模型：
+				并发访问响应模型：
+					单进程I/O模型：启动一个进程处理用户请求；这意味着，一次只能处理一个请求，多个请求被串行响应；
+					多进程I/O结构：并行启动多个进程，每个进程响应一个请求；
+					复用的I/O结构：一个进程响应n个请求；
+						多线程模式：一个进程生成n个线程，一个线程处理一个请求；
+						事件驱动(event-driven)：一个进程直接n个请求；
+					复用的多进程I/O结构：启动多个（m）个进程，每个进程生成（n）个线程；
+						响应的请求的数量：m*n
+						
+			处理请求：分析请求报文的http请求报文首部
+				http协议：
+					http请求报文首部 
+					http响应报文首部
+					
+				请求报文首部的格式：
+					<method> <URL> <VERSION>
+					HEADERS: (name: value)
+					<request body>
+					
+			访问资源：获取请求报文中请求的资源
+				
+				web服务器，即存放了web资源的主机，负责向请求者提供对方请求的静态资源，或动态资源运行生成的结果；这些资源通常应该放置于本地文件系统某路径下；此路径称为DocRoot；
+				
+					/var/www/html/：
+						images/logo.jgp
+						
+						http://www.magedu.com/images/logo.jpg
+						
+					web服务器的资源路径映射方式：
+						(a) docroot 
+						(b) alias
+						(c) 虚拟主机的docroot
+						(d) 用户家目录的docroot 
+						
+		http请求处理中的连接模式：
+			保持连接（长连接）：keep-alive
+				时间：
+				数量：
+			非保持连接（短连接）：
+			
+	http服务器程序：
+		httpd (apache)
+		nginx
+		lighttpd
+		
+		应用程序服务器：
+			IIS： .Net 
+			tomcat： .jsp
+		
+		www.netcraft.com 
+		
+		httpd的安装和使用：
+			ASF： apache software foundation
+				httpd：apache
+					a patchy server = apache
+						httpd
+						
+		httpd的特性：
+			高度模块化： core + modules
+			DSO：dynamic shared object
+			MPM：Multipath processing Modules (多路处理模块)
+				prefork：多进程模型，每个进程响应一个请求；
+					一个主进程：负责生成子进程及回收子进程；负责创建套接字；负责接收请求，并将其派发给某子进程进行处理；
+					n个子进程：每个子进程处理一个请求；
+					工作模型：会预先生成几个空闲进程，随时等待用于响应用户请求；最大空闲和最小空闲；
+				worker：多进程多线程模型，每线程处理一个用户请求；
+					一个主进程：负责生成子进程；负责创建套接字；负责接收请求，并将其派发给某子进程进行处理；
+					多个子进程：每个子进程负责生成多个线程；
+					每个线程：负责响应用户请求；
+					并发响应数量：m*n
+						m：子进程数量
+						n：每个子进程所能创建的最大线程数量；
+				event：事件驱动模型，多进程模型，每个进程响应多个请求；
+					一个主进程 ：负责生成子进程；负责创建套接字；负责接收请求，并将其派发给某子进程进行处理；
+					子进程：基于事件驱动机制直接响应多个请求；
+					
+					httpd-2.2: 仍为测试使用模型；
+					httpd-2.4：event可生产环境中使用；
+					
+		httpd的程序版本：
+			httpd 1.3：官方已经停止维护；
+			httpd 2.0：
+			httpd 2.2: 
+			httpd 2.4：目前最新稳定版；
+			
+		httpd的功能特性：
+			CGI：Common Gateway Interface
+			虚拟主机：IP，PORT， FQDN
+			反向代理
+			负载均衡
+			路径别名
+			丰富的用户认证机制
+				basic 
+				digest
+			支持第三方模块
+			......
+			
+		安装httpd：
+			rpm包：CentOS 发行版中直接提供；
+			编译安装：定制新功能，或其它原因；
+			
+		CentOS 6：httpd-2.2
+			程序环境：
+				配置文件：
+					/etc/httpd/conf/httpd.conf
+					/etc/httpd/conf.d/*.conf
+				服务脚本：
+					/etc/rc.d/init.d/httpd
+					脚本配置文件：/etc/sysconfig/httpd
+				主程序文件：
+					/usr/sbin/httpd
+					/usr/sbin/httpd.event
+					/usr/sbin/httpd.worker
+				日志文件：
+					/var/log/httpd:
+						access_log：访问日志
+						error_log：错误日志
+				站点文档：
+					/var/www/html
+				模块文件路径：
+					/usr/lib64/httpd/modules
+					
+				服务控制和启动：
+					chkconfig  httpd  on|off
+					service  {start|stop|restart|status|configtest|reload}  httpd
+				
+		CentOS 7：httpd-2.4
+			程序环境：
+				配置文件：
+					/etc/httpd/conf/httpd.conf
+					/etc/httpd/conf.d/*.conf
+					模块相关的配置文件：/etc/httpd/conf.modules.d/*.conf
+				systemd unit file：
+					/usr/lib/systemd/system/httpd.service
+				主程序文件：
+					/usr/sbin/httpd
+						httpd-2.4支持MPM的动态切换；
+				日志文件：
+					/var/log/httpd:
+						access_log：访问日志
+						error_log：错误日志
+				站点文档：
+					/var/www/html
+				模块文件路径：
+					/usr/lib64/httpd/modules	
+					
+				服务控制：
+					systemctl  enable|disable  httpd.service
+					systemctl  {start|stop|restart|status}  httpd.service
+
+回顾：
+	并发服务响应模型：
+		单进程模型；
+		多进程模型；
+		复用的I/O的模型；
+			多线程模式
+			事件驱动；
+		复用的多进程多线程模型
+		
+	MPM：
+		prefork：多进程模型，一个进程响应一个请求；
+		worker：多进程多线程模型，一个线程响应一个请求；
+		event：事件驱动模型，一个进程响应n个请求；
+					
+Web service(2)					
+					
+	httpd-2.2的常用配置
+	
+		主配置文件：/etc/httpd/conf/httpd.conf
+			### Section 1: Global Environment
+			### Section 2: 'Main' server configuration
+			### Section 3: Virtual Hosts
+			
+		配置格式：
+			directive  value
+				directive：不区分字符大小写；
+				value：为路径时，是否区分字符大小写，取决于文件系统； 
+				
+		常用配置：
+			1、修改监听的IP和PORT
+				Listen  [IP:]PORT
+				
+					(1) 省略IP表示为0.0.0.0；
+					(2) Listen指令可重复出现多次；
+						Listen  80
+						Listen  8080
+					(3) 修改监听socket，重启服务进程方可生效；
+					
+			2、持久连续
+				Persistent Connection：tcp连续建立后，每个资源获取完成后不全断开连接，而是继续等待其它资源请求的进行； 
+					如何断开？
+						数量限制
+						时间限制
+						
+						副作用：对并发访问量较大的服务器，长连接机制会使得后续某些请求无法得到正常 响应；
+						折衷：使用较短的持久连接时长，以及较少的请求数量；
+						
+					KeepAlive  On|Off
+					KeepAliveTimeout  15
+					MaxKeepAliveRequests  100
+					
+				测试：
+					telnet  WEB_SERVER_IP  PORT
+					GET  /URL  HTTP/1.1
+					Host: WEB_SERVER_IP
+					
+			3、MPM 
+				
+				httpd-2.2不支持同时编译多个MPM模块，所以只能编译选定要使用的那个；CentOS 6的rpm包为此专门提供了三个应用程序文件，httpd(prefork), httpd.worker, httpd.event，分别用于实现对不同的MPM机制的支持；确认现在使用的是哪下程序文件的方法：
+					ps  aux  | grep httpd
+					
+				默认使用的为/usr/sbin/httpd，其为prefork的MPM模块 ；
+					查看httpd程序的模块列表：
+						查看静态编译的模块：
+							# httpd  -l
+						查看静态编译及动态编译的模块：
+							# httpd  -M
+							
+				更换使用httpd程序，以支持其它MPM机制；
+					/etc/sysconfig/httpd
+						HTTPD=/usr/sbin/httpd.{worker,event}
+						
+				注意：重启服务进程方可生效
+				
+				MPM配置：
+					prefork的配置		
+						<IfModule prefork.c>
+						StartServers       8
+						MinSpareServers    5
+						MaxSpareServers   20
+						ServerLimit      256
+						MaxClients       256
+						MaxRequestsPerChild  4000
+						</IfModule>		
+				
+					worker的配置：
+						<IfModule worker.c>
+						StartServers         4
+						MaxClients         300
+						MinSpareThreads     25
+						MaxSpareThreads     75
+						ThreadsPerChild     25
+						MaxRequestsPerChild  0
+						</IfModule>						
+				
+				PV，UV
+					PV：Page View
+					UV: User View
+					
+			4、DSO
+				配置指定实现模块加载
+					LoadModule  <mod_name>  <mod_path>
+					
+					模块文件路径可使用相对路径：
+						相对于ServerRoot（默认/etc/httpd）
+						
+			5、定义'Main' server的文档页面路径
+				DocumentRoot  ""
+				
+				文档路径映射：
+					DoucmentRoot指向的路径为URL路径的起始位置
+						其相当于站点URL的根路径；
+						
+							(FileSystem) /web/host1/index.html  -->  (URL)  /index.html
+						
+			6、站点访问控制常见机制
+			
+				可基于两种机制指明对哪些资源进行何种访问控制
+				
+					文件系统路径：
+						<Directory  "">
+						...
+						</Directory>
+						
+						<File  "">
+						...
+						</File>
+						
+						<FileMatch  "PATTERN">
+						...
+						</FileMatch>
+					URL路径：
+						<Location  "">
+						...
+						</Location>
+						
+						<LocationMatch "">
+						...
+						</LocationMatch>
+						
+				<Directory>中“基于源地址”实现访问控制：
+					(1) Options
+						后跟1个或多个以空白字符分隔的“选项”列表；
+							Indexes：指明的URL路径下不存在与定义的主页面资源相符的资源文件时，返回索引列表给用户；
+							FollowSymLinks：允许跟踪符号链接文件所指向的源文件；
+							None：
+							All：
+							
+					(2)  AllowOverride
+						与访问控制相关的哪些指令可以放在.htaccess文件（每个目录下都可以有一个）中；
+							All: 
+							None：
+							
+					(3) order和allow、deny
+						order：定义生效次序；写在后面的表示默认法则；
+						
+						Allow from, Deny from
+							来源地址：
+								IP
+								NetAddr:
+									172.16
+									172.16.0.0
+									172.16.0.0/16
+									172.16.0.0/255.255.0.0
+							
+			7、定义站点主页面：
+				DirectoryIndex  index.html  index.html.var
+							
+			8、定义路径别名
+				格式：
+					Alias  /URL/  "/PATH/TO/SOMEDIR/"
+				
+				DocumentRoot "/www/htdocs"
+					http://www.magedu.com/download/bash-4.4.2-3.el6.x86_64.rpm 
+						/www/htdocs/download/bash-4.4.2-3.el6.x86_64.rpm 
+						
+				Alias  /download/  "/rpms/pub/"
+					http://www.magedu.com/download/bash-4.4.2-3.el6.x86_64.rpm 
+						/rpms/pub/bash-4.4.2-3.el6.x86_64.rpm
+						
+					http://www.magedu.com/images/logo.png
+						/www/htdocs/images/logo.png
+					
+			9、设定默认字符集
+				AddDefaultCharset  UTF-8
+				
+				中文字符集：GBK, GB2312, GB18030
+				
+			10、日志设定
+				日志类型：访问日志 和 错误日志
+				
+				错误日志：
+					ErrorLog  logs/error_log
+					LogLevel  warn
+						Possible values include: debug, info, notice, warn, error, crit, alert, emerg.
+						
+				访问日志：
+					LogFormat "%h %l %u %t \"%r\" %>s %b \"%{Referer}i\" \"%{User-Agent}i\"" combined
+					CustomLog  logs/access_log  combined
+					
+					LogFormat format strings:
+						http://httpd.apache.org/docs/2.2/mod/mod_log_config.html#formats
+					
+						%h：客户端IP地址；
+						%l：Remote User, 通常为一个减号（“-”）；
+						%u：Remote user (from auth; may be bogus if return status (%s) is 401)；非为登录访问时，其为一个减号；
+						%t：服务器收到请求时的时间；
+						%r：First line of request，即表示请求报文的首行；记录了此次请求的“方法”，“URL”以及协议版本；
+						%>s：响应状态码；
+						%b：响应报文的大小，单位是字节；不包括响应报文的http首部；
+						%{Referer}i：请求报文中首部“referer”的值；即从哪个页面中的超链接跳转至当前页面的；
+						%{User-Agent}i：请求报文中首部“User-Agent”的值；即发出请求的应用程序；
+																			
+			11、基于用户的访问控制
+				
+				认证质询：
+					WWW-Authenticate：响应码为401，拒绝客户端请求，并说明要求客户端提供账号和密码；
+				
+				认证：
+					Authorization：客户端用户填入账号和密码后再次发送请求报文；认证通过时，则服务器发送响应的资源；
+					
+					认证方式有两种：
+						basic：明文 
+						digest：消息摘要认证
+				
+				安全域：需要用户认证后方能访问的路径；应该通过名称对其进行标识，以便于告知用户认证的原因；
+				
+				用户的账号和密码存放于何处？
+					虚拟账号：仅用于访问某服务时用到的认证标识
+					
+					存储：
+						文本文件；
+						SQL数据库；
+						ldap目录存储；
+				
+				basic认证配置示例：
+					(1) 定义安全域
+						<Directory "">
+							Options None
+							AllowOverride None
+							AuthType Basic
+							AuthName "String“
+							AuthUserFile  "/PATH/TO/HTTPD_USER_PASSWD_FILE"
+							Require  user  username1  username2 ...
+						</Directory>
+						
+						允许账号文件中的所有用户登录访问：
+							Require  valid-user
+						
+					(2) 提供账号和密码存储（文本文件）
+						使用专用命令完成此类文件的创建及用户管理
+							htpasswd  [options]   /PATH/TO/HTTPD_PASSWD_FILE  username 
+								-c：自动创建此处指定的文件，因此，仅应该在此文件不存在时使用；
+								-m：md5格式加密
+								-s: sha格式加密
+								-D：删除指定用户
+								
+					另外：基于组账号进行认证；
+						(1) 定义安全域
+							<Directory "">
+								Options None
+								AllowOverride None
+								AuthType Basic
+								AuthName "String“
+								AuthUserFile  "/PATH/TO/HTTPD_USER_PASSWD_FILE"
+								AuthGroupFile "/PATH/TO/HTTPD_GROUP_FILE"
+								Require  group  grpname1  grpname2 ...
+							</Directory>
+							
+						(2) 创建用户账号和组账号文件；
+							
+							组文件：每一行定义一个组
+								GRP_NAME: username1  username2  ...
+											
+			12、虚拟主机
+			
+				站点标识： socket
+					IP相同，但端口不同；
+					IP不同，但端口均为默认端口；
+					FQDN不同；
+						请求报文中首部
+						Host: www.magedu.com 
+						
+				有三种实现方案：
+					基于ip：
+						为每个虚拟主机准备至少一个ip地址；
+					基于port：
+						为每个虚拟主机使用至少一个独立的port；
+					基于FQDN:
+						为每个虚拟主机使用至少一个FQDN；
+			
+				注意：一般虚拟机不要与中心主机混用；因此，要使用虚拟主机，得先禁用'main'主机；
+					禁用方法：注释中心主机的DocumentRoot指令即可；
+					
+				虚拟主机的配置方法：
+					<VirtualHost  IP:PORT>
+						ServerName FQDN
+						DocumentRoot  ""
+					</VirtualHost>
+					
+					其它可用指令：
+						ServerAlias：虚拟主机的别名；可多次使用；
+						ErrorLog：
+						CustomLog：
+						<Directory "">
+						...
+						</Directory>
+						Alias
+						...
+						
+					基于IP的虚拟主机示例：
+					<VirtualHost 172.16.100.6:80>
+						ServerName www.a.com
+						DocumentRoot "/www/a.com/htdocs"
+					</VirtualHost>
+
+					<VirtualHost 172.16.100.7:80>
+						ServerName www.b.net
+						DocumentRoot "/www/b.net/htdocs"
+					</VirtualHost>
+
+					<VirtualHost 172.16.100.8:80>
+						ServerName www.c.org
+						DocumentRoot "/www/c.org/htdocs"
+					</VirtualHost>
+					
+					基于端口的虚拟主机：
+					<VirtualHost 172.16.100.6:80>
+						ServerName www.a.com
+						DocumentRoot "/www/a.com/htdocs"
+					</VirtualHost>
+
+					<VirtualHost 172.16.100.6:808>
+						ServerName www.b.net
+						DocumentRoot "/www/b.net/htdocs"
+					</VirtualHost>
+
+					<VirtualHost 172.16.100.6:8080>
+						ServerName www.c.org
+						DocumentRoot "/www/c.org/htdocs"
+					</VirtualHost>
+					
+					基于FQDN的虚拟主机：
+					NameVirtualHost 172.16.100.6:80
+
+					<VirtualHost 172.16.100.6:80>
+						ServerName www.a.com
+						DocumentRoot "/www/a.com/htdocs"
+					</VirtualHost>
+
+					<VirtualHost 172.16.100.6:80>
+						ServerName www.b.net
+						DocumentRoot "/www/b.net/htdocs"
+					</VirtualHost>
+
+					<VirtualHost 172.16.100.6:80>
+						ServerName www.c.org
+						DocumentRoot "/www/c.org/htdocs"
+					</VirtualHost>											
+									
+			13、status页面
+				LoadModule  status_module  modules/mod_status.so
+				
+				<Location /server-status>
+					SetHandler server-status
+					Order allow,deny
+					Allow from 172.16
+				</Location>
+				
+
+
+
+			
+回顾："
+	httpd的配置：
+		Listen [IP:]PORT
+		KeepAlived {ON|Off}
+		MPM:
+			prefork, worker, event
+		DSO:
+			LoadModule
+			httpd -M
+		DocumentRoot
+		<Directory>
+			Options Indexes FollowSymLinks
+			Order 
+			Allow from
+			Deny from
+		</Directory>
+		<Location>
+
+		DirectoryIndex
+		ErrorLog
+		CustomLog
+		LogFormat
+			%{Referer}i: 引用Referer首部的值；
+		Alias /URL/ "/path/to/somedir/"
+		基于用户访问控制：
+			认证方式：basic, digest
+				AuthType Basic
+				AuthName ""
+				AuthUserFile 
+				AuthGroupFile
+				Require user
+				Require group
+				Require valid-user
+
+			.htpasswd:
+				htpasswd
+		虚拟主机：IP, Port, FQDN
+
+http协议和httpd的配置
+	
+	URL：Unifrom Resource Locator
+		URL方案：scheme
+		服务器地址：ip:port
+		资源路径：
+
+		http://www.magedu.com:80/bbs/index.php, 
+		https://
+
+		基本语法：
+			<scheme>://<user>:<password>@<host>:<port>/<path>;<params>?<query>#<frag>
+				params: 参数
+					http://www.magedu.com/bbs/hello;gender=f
+				query：
+					http://www.magedu.com/bbs/item.php?username=tom&title=abc
+				frag：
+					https://access.redhat.com/documentation/en-US/Red_Hat_Enterprise_Linux/6/html-single/Installation_Guide/index.html#ch-Boot-x86
+
+		相对URL
+		绝对URL
+
+	http协议：
+		http/0.9, http/1.0, http/1.1, http/2.0
+
+		http协议：stateless
+			服务器无法持续追踪访问者来源
+				cookie, session
+
+		http事务：
+			请求：request 
+			响应：response
+
+			报文语法格式：
+				request报文
+					<method> <request-URL> <version>
+					<headers>
+
+					<entity-body>
+
+				response报文
+					<version> <status> <reason-phrase>
+					<headers>
+
+					<entity-body>
+
+				method: 请求方法，标明客户端希望服务器对资源执行的动作
+					GET、HEAD、POST
+				version:
+					HTTP/<major>.<minor>
+				status:
+					三位数字，如200，301, 302, 404, 502; 标记请求处理过程中发生的情况；
+				reason-phrase：
+					状态码所标记的状态的简要描述；
+				headers：
+					每个请求或响应报文可包含任意个首部；每个首部都有首部名称，后面跟一个冒号，而后跟上一个可选空格，接着是一个值；
+				entity-body：请求时附加的数据或响应时附加的数据；
+
+			method(方法)：
+				GET：从服务器获取一个资源；
+				HEAD：只从服务器获取文档的响应首部；
+				POST：向服务器发送要处理的数据；
+				PUT：将请求的主体部分存储在服务器上；
+				DELETE：请求删除服务器上指定的文档；
+				TRACE：追踪请求到达服务器中间经过的代理服务器；
+				OPTIONS：请求服务器返回对指定资源支持使用的请求方法；
+
+				协议查看或分析的工具：
+					tcpdump, tshark, wireshark
+
+			status(状态码)：
+				1xx：100-101, 信息提示；
+				2xx：200-206, 成功
+				3xx：300-305, 重定向
+				4xx：400-415, 错误类信息，客户端错误
+				5xx：500-505, 错误类信息，服务器端错误
+
+				常用的状态码：
+					200： 成功，请求的所有数据通过响应报文的entity-body部分发送；OK
+					301： 请求的URL指向的资源已经被删除；但在响应报文中通过首部Location指明了资源现在所处的新位置；Moved Permanently
+					302： 与301相似，但在响应报文中通过Location指明资源现在所处临时新位置; Found
+					304： 客户端发出了条件式请求，但服务器上的资源未曾发生改变，则通过响应此响应状态码通知客户端；Not Modified
+					401： 需要输入账号和密码认证方能访问资源；Unauthorized
+					403： 请求被禁止；Forbidden
+					404： 服务器无法找到客户端请求的资源；Not Found
+					500： 服务器内部错误；Internal Server Error
+					502： 代理服务器从后端服务器收到了一条伪响应；Bad Gateway
+
+			headers：
+				格式：
+					Name: Value
+
+					Cache-Control:public, max-age=600
+					Connection:keep-alive
+					Content-Type:image/png
+					Date:Tue, 28 Apr 2015 01:43:54 GMT
+					ETag:"5af34e-ce6-504ea605b2e40"
+					Last-Modified:Wed, 08 Oct 2014 14:46:09 GMT
+
+
+					Accept:image/webp,*/*;q=0.8
+					Accept-Encoding:gzip, deflate, sdch
+					Accept-Language:zh-CN,zh;q=0.8
+					Cache-Control:max-age=0
+					Connection:keep-alive
+					Host:access.redhat.com
+					If-Modified-Since:Wed, 08 Oct 2014 14:46:09 GMT
+					If-None-Match:"5af34e-ce6-504ea605b2e40"
+					Referer:https://access.redhat.com/documentation/en-US/Red_Hat_Enterprise_Linux/6/html-single/Installation_Guide/index.html
+					User-Agent:Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/41.0.2272.101 Safari/537.36
+
+				首部的分类：
+					通用首部
+					请求首部
+					响应首部
+					实体首部
+					扩展首部
+
+					通用首部：
+						Date: 报文的创建时间
+						Connection：连接状态，如keep-alive, close
+						Via：显示报文经过的中间节点
+						Cache-Control：控制缓存
+						Pragma：
+
+					请求首部：
+						Accept：通过服务器自己可接受的媒体类型；
+						Accept-Charset：
+						Accept-Encoding：接受编码格式，如gzip
+						Accept-Language：接受的语言
+
+						Client-IP: 
+						Host: 请求的服务器名称和端口号
+						Referer：包含当前正在请求的资源的上一级资源；
+						User-Agent：客户端代理
+
+						条件式请求首部：
+							Expect：
+							If-Modified-Since：自从指定的时间之后，请求的资源是否发生过修改；
+							If-Unmodified-Since：
+							If-None-Match：本地缓存中存储的文档的ETag标签是否与服务器文档的Etag不匹配；
+							If-Match：
+
+						安全请求首部：
+							Authorization：向服务器发送认证信息，如账号和密码；
+							Cookie: 客户端向服务器发送cookie
+							Cookie2：
+
+						代理请求首部：
+							Proxy-Authorization: 向代理服务器认证
+
+					响应首部：
+						信息性：
+							Age：响应持续时长
+							Server：服务器程序软件名称和版本
+
+						协商首部：某资源有多种表示方法时使用
+							Accept-Ranges：服务器可接受的请求范围类型
+							Vary：服务器查看的其它首部列表；
+
+						安全响应首部：
+							Set-Cookie：向客户端设置cookie；
+							Set-Cookie2: 
+							WWW-Authenticate：来自服务器的对客户端的质询认证表单
+
+					实体首部：
+						Allow: 列出对此实体可使用的请求方法
+						Location：告诉客户端真正的实体位于何处
+
+						Content-Encoding:
+						Content-Language:
+						Content-Length: 主体的长度
+						Content-Location: 实体真正所处位置；
+						Content-Type：主体的对象类型
+
+						缓存相关：
+							ETag：实体的扩展标签；
+							Expires：实体的过期时间；
+							Last-Modified：最后一次修改的时间
+
+	httpd-2.2的常见配置(2)
+		
+		14、curl命令
+
+			curl是基于URL语法在命令行方式下工作的文件传输工具，它支持FTP, FTPS, HTTP, HTTPS, GOPHER, TELNET, DICT, FILE及LDAP等协议。curl支持HTTPS认证，并且支持HTTP的POST、PUT等方法， FTP上传， kerberos认证，HTTP上传，代理服务器， cookies， 用户名/密码认证， 下载文件断点续传，上载文件断点续传, http代理服务器管道（ proxy tunneling）， 甚至它还支持IPv6， socks5代理服务器,，通过http代理服务器上传文件到FTP服务器等等，功能十分强大。
+			
+			MIME： major/minor,  image/png, image/gif
+
+			curl  [options]  [URL...]
+
+			curl的常用选项：
+
+			    -A/--user-agent <string> 设置用户代理发送给服务器
+			    --basic 使用HTTP基本认证
+			    --tcp-nodelay 使用TCP_NODELAY选项
+			    -e/--referer <URL> 来源网址
+			    --cacert <file> CA证书 (SSL)
+			    --compressed 要求返回是压缩的格式
+			    -H/--header <line>自定义首部信息传递给服务器
+			    -I/--head 只显示响应报文首部信息
+			    --limit-rate <rate> 设置传输速度
+			    -u/--user <user[:password]>设置服务器的用户和密码
+			    -0/--http1.0 使用HTTP 1.0	
+
+			用法：curl [options] [URL...]
+
+			另一个工具：elinks
+				elinks  [OPTION]... [URL]...
+					-dump: 不进入交互式模式，而直接将URL的内容输出至标准输出； 
+
+		15、user/group
+			
+			指定以哪个用户的身份运行httpd服务进程；
+				User apache
+				Group apache
+			
+			SUexec
+					
+		16、使用mod_deflate模块压缩页面优化传输速度
+
+			适用场景：
+				(1) 节约带宽，额外消耗CPU；同时，可能有些较老浏览器不支持；
+				(2) 压缩适于压缩的资源，例如文件文件；
+
+			SetOutputFilter DEFLATE
+
+			# mod_deflate configuration
+		
+		 
+			# Restrict compression to these MIME types
+			AddOutputFilterByType DEFLATE text/plain 
+			AddOutputFilterByType DEFLATE text/html
+			AddOutputFilterByType DEFLATE application/xhtml+xml
+			AddOutputFilterByType DEFLATE text/xml
+			AddOutputFilterByType DEFLATE application/xml
+			AddOutputFilterByType DEFLATE application/x-javascript
+			AddOutputFilterByType DEFLATE text/javascript
+			AddOutputFilterByType DEFLATE text/css
+		 
+			# Level of compression (Highest 9 - Lowest 1)
+			DeflateCompressionLevel 9
+			 
+			# Netscape 4.x has some problems.
+			BrowserMatch ^Mozilla/4  gzip-only-text/html
+			 
+			# Netscape 4.06-4.08 have some more problems
+			BrowserMatch  ^Mozilla/4\.0[678]  no-gzip
+			 
+			# MSIE masquerades as Netscape, but it is fine
+			BrowserMatch \bMSI[E]  !no-gzip !gzip-only-text/html
+
+		17、https,  http over ssl 
+
+			SSL会话的简化过程
+				(1) 客户端发送可供选择的加密方式，并向服务器请求证书；
+				(2) 服务器端发送证书以及选定的加密方式给客户端；
+				(3) 客户端取得证书并进行证书验正：
+					如果信任给其发证书的CA：
+						(a) 验正证书来源的合法性；用CA的公钥解密证书上数字签名；
+						(b) 验正证书的内容的合法性：完整性验正
+						(c) 检查证书的有效期限；
+						(d) 检查证书是否被吊销；
+						(e) 证书中拥有者的名字，与访问的目标主机要一致；
+				(4) 客户端生成临时会话密钥（对称密钥），并使用服务器端的公钥加密此数据发送给服务器，完成密钥交换；
+				(5) 服务用此密钥加密用户请求的资源，响应给客户端；
+
+				注意：SSL会话是基于IP地址创建；所以单IP的主机上，仅可以使用一个https虚拟主机；
+
+			回顾几个术语：PKI，CA，CRL，X.509 (v1, v2, v3)
+
+			配置httpd支持https：
+				(1) 为服务器申请数字证书；
+					测试：通过私建CA发证书
+						(a) 创建私有CA
+						(b) 在服务器创建证书签署请求
+						(c) CA签证
+						
+				(2) 配置httpd支持使用ssl，及使用的证书；
+					# yum -y install mod_ssl
+
+					配置文件：/etc/httpd/conf.d/ssl.conf
+						DocumentRoot
+						ServerName
+						SSLCertificateFile
+						SSLCertificateKeyFile
+						
+				(3) 测试基于https访问相应的主机；
+					# openssl  s_client  [-connect host:port] [-cert filename] [-CApath directory] [-CAfile filename]
+					
+		18、httpd自带的工具程序
+			
+			htpasswd：basic认证基于文件实现时，用到的账号密码文件生成工具；
+			apachectl：httpd自带的服务控制脚本，支持start和stop；
+			apxs：由httpd-devel包提供，扩展httpd使用第三方模块的工具；
+			rotatelogs：日志滚动工具；
+				access.log -->
+					access.log, access.1.log  -->
+						access.log, acccess.1.log, access.2.log
+			suexec：访问某些有特殊权限配置的资源时，临时切换至指定用户身份运行；
+			ab： apache bench
+			
+		19、httpd的压力测试工具
+			
+			ab, webbench, http_load, seige
+			
+			jmeter, loadrunner
+			
+			tcpcopy：网易，复制生产环境中的真实请求，并将之保存下来；
+			
+			ab  [OPTIONS]  URL
+				-n：总请求数；
+				-c：模拟的并行数；
+				-k：以持久连接模式 测试；
+				
+
+回顾：http协议基础， httpd-2.2的基础配置
+
+	http协议： 请求<-->响应
+		request：
+			<method>  <URL>  <version>
+			<HEADERS>
+			
+			<entity>
+			
+		response
+			<version>  <status code>  <reason phrase>
+			<HEADERS>
+			
+			<entity>
+			
+		请求方法：GET, HEAD, POST, PUT, DELETE, OPTIONS, TRACE, ...
+		
+	httpd-2.2基本配置
+		mod_deflate
+		User/Group
+		https (443/tcp)
+		
+	命令工具：curl, ab
+	
+	课外作业：理解ab命令执行结果输出信息的意义；
+	
+httpd的基本应用(3)
+
+	httpd-2.4：
+		
+		新特性：
+			(1) MPM支持运行为DSO机制；以模块形式按需加载；
+			(2) event MPM生产环境可用；
+			(3) 异步读写机制；
+			(4) 支持每模块及每目录的单独日志级别定义；
+			(5) 每请求相关的专用配置；
+			(6) 增强版的表达式分析式；
+			(7) 毫秒级持久连接时长定义；
+			(8) 基于FQDN的虚拟主机也不再需要NameVirutalHost指令；
+			(9) 新指令，AllowOverrideList；
+			(10) 支持用户自定义变量；
+			(11) 更低的内存消耗；
+			
+		新模块：
+			(1) mod_proxy_fcgi
+			(2) mod_proxy_scgi
+			(3) mod_remoteip
+			
+		安装httpd-2.4
+		
+			依赖于apr-1.4+, apr-util-1.4+, [apr-iconv]
+				apr： apache portable runtime
+				
+			CentOS 6：
+				默认：apr-1.3.9, apr-util-1.3.9
+				
+				开发环境包组：Development Tools, Server Platform Development
+				开发程序包：pcre-devel 
+				
+				编译安装步骤：
+					(1) apr-1.4+
+						# ./configure  --prefix=/usr/local/apr
+						# make && make install
+						
+					(2) apr-util-1.4+
+						# ./configure  --prefix=/usr/local/apr-util  --with-apr=/usr/local/apr
+						# make && make install
+						
+					(3) httpd-2.4
+						# ./configure --prefix=/usr/local/apache24 --sysconfdir=/etc/httpd24  --enable-so --enable-ssl --enable-cgi --enable-rewrite --with-zlib --with-pcre --with-apr=/usr/local/apr --with-apr-util=/usr/local/apr-util --enable-modules=most --enable-mpms-shared=all --with-mpm=prefork
+						# make  && make install
+						
+						自带的服务控制脚本：apachectl
+						
+			CentOS 7：
+				# yum install  httpd
+				
+				配置文件：
+					/etc/httpd/conf/httpd.conf
+					/etc/httpd/conf.modules.d/*.conf
+					/etc/httpd/conf.d/*.conf
+					
+				配置应用：
+					(1) 切换使用的MPM
+						编辑配置文件/etc/httpd/conf.modules.d/00-mpm.conf，启用要启用的MPM相关的LoadModule指令即可。
+						
+					(2) 基于IP的访问控制
+						允许所有主机访问：Require  all  granted
+						拒绝所有主机访问：Require  all  deny
+						
+						控制特定的IP访问：
+							Require  ip  IPADDR：授权指定来源的IP访问；
+							Require  not  ip  IPADDR：拒绝
+							
+						控制特定的主机访问：
+							Require  host  HOSTNAME：授权指定来源的主机访问；
+							Require  not  host  HOSTNAME：拒绝
+							
+							HOSTNAME：
+								FQDN：特定主机
+								domin.tld：指定域名下的所有主机
+														
+						<RequireAll>
+							Require all granted
+							Require not ip 172.16.100.2
+						</RequireAll>						
+						
+					(3) 虚拟主机
+						基于FQDN的虚拟主机也不再需要NameVirutalHost指令；
+						
+						<VirtualHost *:80>
+							ServerName www.b.net
+							DocumentRoot "/apps/b.net/htdocs"
+							<Directory "/apps/b.net/htdocs">
+								Options None
+								AllowOverride None
+								Require all granted
+							</Directory>
+						</VirtualHost>	
+						
+						注意：任意目录下的页面只有显式授权才能被访问；
+						
+					(4) ssl
+					
+					(5)  KeepAliveTimeout  #ms
+						毫秒级持久连接时长定义；
+						
+	练习题：分别使用httpd-2.2和httpd-2.4实现；
+	
+		1、建立httpd服务，要求：
+			(1) 提供两个基于名称的虚拟主机：
+				www1.stuX.com，页面文件目录为/web/vhosts/www1；错误日志为/var/log/httpd/www1/error_log，访问日志为/var/log/httpd/www1/access_log；
+				www2.stuX.com，页面文件目录为/web/vhosts/www2；错误日志为/var/log/httpd/www2/error_log，访问日志为/var/log/httpd/www2/access_log；
+			(2) 通过www1.stuX.com/server-status输出其状态信息，且要求只允许提供账号的用户访问；
+			(3) www1不允许192.168.1.0/24网络中的主机访问；
+			
+		2、为上面的第2个虚拟主机提供https服务，使得用户可以通过https安全的访问此web站点；
+			(1) 要求使用证书认证，证书中要求使用国家（CN），州（Beijing），城市（Beijing），组织为(MageEdu)；
+			(2) 设置部门为Ops, 主机名为www2.stuX.com；
+			
+	
+	LAMP：
+		a: apache (httpd)
+		m: mysql, mariadb
+		p: php, perl, python
+		
+		WEB资源类型：
+			静态资源：原始形式与响应内容一致；
+			动态资源：原始形式通常为程序文件，需要在服务器端执行之后，将执行结果返回给客户端；
+			
+			客户端技术： javascript
+			服务器端技术：php, jsp
+			
+		CGI：Common Gateway Interface
+			可以让一个客户端，从网页浏览器向执行在网络服务器上的程序传输数据；CGI描述了客户端和服务器程序之间传输的一种标准；
+			
+			程序=指令+数据
+				数据模型：
+					层次模型
+					网状模型
+					关系模型：表（行+列）
+					
+				关系模型：IngreSQL, Oracle, Sybase, Infomix, DB2, SQL Server, MySQL, PostgreSQL, MariaDB
+				
+				指令：代码文件
+				数据：数据存储系统、文件
+				
+			请求流程：
+				Client -- (httpd) --> httpd -- (cgi) --> application server (program file) -- (mysql) --> mysql 
+				
+		php: 脚本编程语言、嵌入到html中的嵌入式web程序开发语言；
+			基于zend编译成opcode（二进制格式的字节码，重复运行，可省略编译环境）
+	
+		关于PHP
+
+			一、PHP简介
+				
+			PHP是通用服务器端脚本编程语言，其主要用于web开发以实现动态web页面，它也是最早实现将脚本嵌入HTML源码文档中的服务器端脚本语言之一。同时，php还提供了一个命令行接口，因此，其也可以在大多数系统上作为一个独立的shell来使用。
+
+			Rasmus Lerdorf于1994年开始开发PHP，它是初是一组被Rasmus Lerdorf称作“Personal Home Page Tool” 的Perl脚本， 这些脚本可以用于显示作者的简历并记录用户对其网站的访问。后来，Rasmus Lerdorf使用C语言将这些Perl脚本重写为CGI程序，还为其增加了运行Web forms的能力以及与数据库交互的特性，并将其重命名为“Personal Home Page/Forms Interpreter”或“PHP/FI”。此时，PHP/FI已经可以用于开发简单的动态web程序了，这即是PHP 1.0。1995年6月，Rasmus Lerdorf把它的PHP发布于comp.infosystems.www.authoring.cgi Usenet讨论组，从此PHP开始走进人们的视野。1997年，其2.0版本发布。
+
+			1997年，两名以色列程序员Zeev Suraski和Andi Gutmans重写的PHP的分析器(parser)成为PHP发展到3.0的基础，而且从此将PHP重命名为PHP: Hypertext Preprocessor。此后，这两名程序员开始重写整个PHP核心，并于1999年发布了Zend Engine 1.0，这也意味着PHP 4.0的诞生。2004年7月，Zend Engine 2.0发布，由此也将PHP带入了PHP 5时代。PHP5包含了许多重要的新特性，如增强的面向对象编程的支持、支持PDO(PHP Data Objects)扩展机制以及一系列对PHP性能的改进。
+
+			二、PHP Zend Engine
+
+			Zend Engine是开源的、PHP脚本语言的解释器，它最早是由以色列理工学院(Technion)的学生Andi Gutmans和Zeev Suraski所开发，Zend也正是此二人名字的合称。后来两人联合创立了Zend Technologies公司。
+
+			Zend Engine 1.0于1999年随PHP 4发布，由C语言开发且经过高度优化，并能够做为PHP的后端模块使用。Zend Engine为PHP提供了内存和资源管理的功能以及其它的一些标准服务，其高性能、可靠性和可扩展性在促进PHP成为一种流行的语言方面发挥了重要作用。
+
+			Zend Engine的出现将PHP代码的处理过程分成了两个阶段：首先是分析PHP代码并将其转换为称作Zend opcode的二进制格式(类似Java的字节码)，并将其存储于内存中；第二阶段是使用Zend Engine去执行这些转换后的Opcode。
+
+			三、PHP的Opcode
+
+			Opcode是一种PHP脚本编译后的中间语言，就像Java的ByteCode,或者.NET的MSL。PHP执行PHP脚本代码一般会经过如下4个步骤(确切的来说，应该是PHP的语言引擎Zend)：
+			1、Scanning(Lexing) —— 将PHP代码转换为语言片段(Tokens)
+			2、Parsing —— 将Tokens转换成简单而有意义的表达式
+			3、Compilation —— 将表达式编译成Opocdes
+			4、Execution —— 顺次执行Opcodes，每次一条，从而实现PHP脚本的功能
+
+				扫描-->分析-->编译-->执行
+
+			四、php的加速器
+
+			基于PHP的特殊扩展机制如opcode缓存扩展也可以将opcode缓存于php的共享内存中，从而可以让同一段代码的后续重复执行时跳过编译阶段以提高性能。由此也可以看出，这些加速器并非真正提高了opcode的运行速度，而仅是通过分析opcode后并将它们重新排列以达到快速执行的目的。
+
+			常见的php加速器有：
+
+			1、APC (Alternative PHP Cache)
+			遵循PHP License的开源框架，PHP opcode缓存加速器，目前的版本不适用于PHP 5.4。项目地址，http://pecl.php.net/package/APC。
+
+			2、eAccelerator
+			源于Turck MMCache，早期的版本包含了一个PHP encoder和PHP loader，目前encoder已经不在支持。项目地址， http://eaccelerator.net/。
+
+			3、XCache
+			快速而且稳定的PHP opcode缓存，经过严格测试且被大量用于生产环境。项目地址，http://xcache.lighttpd.net/
+
+			4、Zend Optimizer和Zend Guard Loader
+			Zend Optimizer并非一个opcode加速器，它是由Zend Technologies为PHP5.2及以前的版本提供的一个免费、闭源的PHP扩展，其能够运行由Zend Guard生成的加密的PHP代码或模糊代码。 而Zend Guard Loader则是专为PHP5.3提供的类似于Zend Optimizer功能的扩展。项目地址，http://www.zend.com/en/products/guard/runtime-decoders
+
+			5、NuSphere PhpExpress
+			NuSphere的一款开源PHP加速器，它支持装载通过NuSphere PHP Encoder编码的PHP程序文件，并能够实现对常规PHP文件的执行加速。项目地址，http://www.nusphere.com/products/phpexpress.htm
+
+			五、PHP源码目录结构
+
+			PHP的源码在结构上非常清晰。其代码根目录中主要包含了一些说明文件以及设计方案，并提供了如下子目录：
+
+			1、build —— 顾名思义，这里主要放置一些跟源码编译相关的文件，比如开始构建之前的buildconf脚本及一些检查环境的脚本等。
+			2、ext —— 官方的扩展目录，包括了绝大多数PHP的函数的定义和实现，如array系列，pdo系列，spl系列等函数的实现。 个人开发的扩展在测试时也可以放到这个目录，以方便测试等。
+			3、main —— 这里存放的就是PHP最为核心的文件了，是实现PHP的基础设施，这里和Zend引擎不一样，Zend引擎主要实现语言最核心的语言运行环境。
+			4、Zend —— Zend引擎的实现目录，比如脚本的词法语法解析，opcode的执行以及扩展机制的实现等等。
+			5、pear —— PHP 扩展与应用仓库，包含PEAR的核心文件。
+			6、sapi —— 包含了各种服务器抽象层的代码，例如apache的mod_php，cgi，fastcgi以及fpm等等接口。
+			7、TSRM —— PHP的线程安全是构建在TSRM库之上的，PHP实现中常见的*G宏通常是对TSRM的封装，TSRM(Thread Safe Resource Manager)线程安全资源管理器。
+			8、tests —— PHP的测试脚本集合，包含PHP各项功能的测试文件。
+			9、win32 —— 这个目录主要包括Windows平台相关的一些实现，比如sokcet的实现在Windows下和*Nix平台就不太一样，同时也包括了Windows下编译PHP相关的脚本。
+
+		LAMP：
+			httpd：接收用户的web请求；静态资源则直接响应；动态资源为php脚本，对此类资源的请求将交由php来运行；
+			php：运行php程序；
+			MariaDB：数据管理系统； 
+			
+			http与php结合的方式：
+				CGI 
+				FastCGI 
+				modules (把php编译成为httpd的模块)
+					MPM:
+						prefork: libphp5.so
+						event, worker: libphp5-zts.so
+						
+			安装lamp：
+				CentOS 6: httpd, php, mysql-server, php-mysql
+					# service httpd  start
+					# service  mysqld  start
+				CentOS 7: httpd, php, php-mysql, mariadb-server
+					# systemctl  start  httpd.service
+					# systemctl  start  mariadb.service
+					
+				MySQL的命令行客户端程序：mysql
+					-u 
+					-h
+					-p
+					
+					支持SQL语句对数据管理：
+						DDL，DML
+							DDL： CREATE， ALTER， DROP， SHOW
+							DML： INSERT， DELETE，SELECT， UPDATE
+							
+					授权能远程的连接用户：
+						mysql> GRANT  ALL  PRIVILEGES  ON  db_name.tbl_name TO  username@host  IDENTIFIED BY 'password'; 
+						
+				php测试代码
+					<php?
+						phpinfo();
+					?>
+				
+				php连接mysql的测试代码：
+					<?php
+						$conn = mysql_connect('172.16.100.67','testuser','testpass');
+						if ($conn) 
+							echo "OK";
+						else
+							echo "Failure";
+					?>	
+					
+		实践作业：部署lamp，以虚拟主机安装wordpress, phpwind, discuz; 
+		
+回顾： httpd, lamp
+	
+	httpd: mod_deflate, https, 
+	amp： 
+		静态资源：Client -- http --> httpd
+		动态资源：Client -- http --> httpd --> libphp5.so ()
+		动态资源：Client -- http --> httpd --> libphp5.so () -- mysql --> MySQL server
+		
+	httpd+php:
+		modules: 把php编译成为httpd的模块
+		cgi：
+		fastcgi：
+		
+	php：zend engine
+		编译：Opcode是一种PHP脚本编译后的中间语言
+		执行：
+		
+		Scanning --> Parsing --> Compilation --> Execution
+		
+		加速器：APC，eAccelerator, Xcache
+		
+LAMP(2) 
+	
+	快速部署amp：
+		CentOS 7:
+			Modules：程序包，httpd, php, php-mysql, mariadb-server
+			FastCGI：程序包，httpd, php-fpm, php-mysql, mariadb-server
+		CentOS 6：
+			httpd, php, php-mysql, mysql-server
+			
+	php：
+		脚本语言解释器
+			配置文件：/etc/php.ini,  /etc/php.d/*.ini 
+			
+			配置文件在php解释器启动时被读取，因此，对配置文件的修改如何生效？
+				Modules：重启httpd服务；
+				FastCGI：重启php-fpm服务；
+			
+			ini：
+				[foo]：Section Header
+				directive = value
+				
+				注释符：较新的版本中，已经完全使用;进行注释；
+				#：纯粹的注释信息
+				;：用于注释可启用的directive
+				
+				php.ini的核心配置选项文档：  http://php.net/manual/zh/ini.core.php
+				php.ini配置选项列表：http://php.net/manual/zh/ini.list.php
+				
+		<?php 
+			...php code...
+		?>
+		
+	mariadb(mysql)：
+		
+		数据模型：层次模型、网状模型、关系模型
+			
+			关系模型：
+				二维关系：
+					表：row, column
+					索引：index
+					视图：view
+					
+				SQL接口：Structured Query Language
+					类似于OS的shell接口；也提供编程功能；
+					
+					ANSI： SQL标准，SQL-86, SQL-89, SQL-92, SQL-99, SQL-03, ...
+						xml
+						
+					DDL：Data Defined Language
+						CREATE, ALTER, DROP
+					DML: Data Manapulating Language
+						INSERT, DELETE, UPDATE, SELECT
+						
+					编程接口：选择、循环；
+					
+					SQL代码：
+						存储过程：procedure
+						存储函数：function
+						触发器：trigger
+						事件调度器：event scheduler
+						
+						例程：routine
+						
+				用户和权限：
+					用户：用户名和密码；
+					权限：管理类、数据库、表、字段
+					
+			DBMS：DataBase Management System
+				RDBMS：Relational
+					
+				MySQL：单进程，多线程 
+					用户连接：通过线程来实现；
+						线程池：
+		
+		事务(Transaction)：组织多个操作为一个整体，要么全部都执行，要么全部都不执行；
+			“回滚”， rollback
+			
+			Bob:8000, 8000-2000
+			Alice:5000, 5000+2000
+			
+			一个存储系统是否支持事务，测试标准：
+				ACID：
+					A：原子性；
+					C：一致性；
+					I：隔离性；
+					D：持久性；
+			
+			SQL接口：分析器和优化器
+			存储引擎：
+			
+		
+		补充材料：RDMBS设计范式基础概念
+
+			设计关系数据库时，遵从不同的规范要求，设计出合理的关系型数据库，这些不同的规范要求被称为不同的范式，各种范式呈递次规范，越高的范式数据库冗余越小。
+
+			目前关系数据库有六种范式：第一范式（1NF）、第二范式（2NF）、第三范式（3NF）、巴德斯科范式（BCNF）、第四范式(4NF）和第五范式（5NF，又称完美范式）。满足最低要求的范式是第一范式（1NF）。在第一范式的基础上进一步满足更多规范要求的称为第二范式（2NF），其余范式以次类推。一般说来，数据库只需满足第三范式(3NF）就行了。
+
+			(1) 第一范式（1NF）
+
+			所谓第一范式（1NF）是指在关系模型中，对域添加的一个规范要求，所有的域都应该是原子性的，即数据库表的每一列都是不可分割的原子数据项，而不能是集合，数组，记录等非原子数据项。即实体中的某个属性有多个值时，必须拆分为不同的属性。在符合第一范式（1NF）表中的每个域值只能是实体的一个属性或一个属性的一部分。简而言之，第一范式就是无重复的域。
+
+			说明：在任何一个关系数据库中，第一范式（1NF）是对关系模式的设计基本要求，一般设计中都必须满足第一范式（1NF）。不过有些关系模型中突破了1NF的限制，这种称为非1NF的关系模型。换句话说，是否必须满足1NF的最低要求，主要依赖于所使用的关系模型。
+
+			(2) 第二范式(2NF)
+
+			第二范式（2NF）是在第一范式（1NF）的基础上建立起来的，即满足第二范式（2NF）必须先满足第一范式（1NF）。第二范式（2NF）要求数据库表中的每个实例或记录必须可以被唯一地区分。选取一个能区分每个实体的属性或属性组，作为实体的唯一标识。
+
+			第二范式（2NF）要求实体的属性完全依赖于主关键字。所谓完全依赖是指不能存在仅依赖主关键字一部分的属性，如果存在，那么这个属性和主关键字的这一部分应该分离出来形成一个新的实体，新实体与原实体之间是一对多的关系。为实现区分通常需要为表加上一个列，以存储各个实例的唯一标识。简而言之，第二范式就是在第一范式的基础上属性完全依赖于主键。
+
+			(3) 第三范式（3NF）
+
+			第三范式（3NF）是第二范式（2NF）的一个子集，即满足第三范式（3NF）必须满足第二范式（2NF）。简而言之，第三范式（3NF）要求一个关系中不能包含已在其它关系已包含的非主关键字信息。简而言之，第三范式就是属性不依赖于其它非主属性，也就是在满足2NF的基础上，任何非主属性不得传递依赖于主属性。
+		
+		数据库：数据集合
+			表：为了满足范式设计要求，将一个数据集分拆为多个；
+			
+			约束：constraint，向数据表插入的数据要遵守的限制规则；
+				主键：一个或多个字段的组合，填入主键中的数据，必须不同于已存在的数据；不能为空；
+				外键：一个表中某字段中能插入的数据，取决于另外一张表的主键中的数据；
+				惟一键：一个或多个字段的组合，填入惟一键中的数据，必须不同于已存在的数据；可以为空；
+				检查性约束：取决于表达式的要求；
+				
+			索引：将表中的某一个或某些字段抽取出来，单独将其组织一个独特的数据结构中；
+				常用的索引类型：
+					树型：
+					hash：
+					
+				注意：有助于读请求，但不利于写请求；
+				
+			关系运算：
+				选择：挑选出符合条件的行；
+				投影：挑选出符合需要的列；
+				连接：将多张表关联起来；
+					
+			数据抽象：
+				物理层：决定数据的存储格式，即如何将数据组织成为物理文件；
+				逻辑层：描述DB存储什么数据，以及数据间存在什么样的关系；
+				视图层：描述DB中的部分数据；
+				
+			关系模型的分类：
+				关系模型
+				实体-关系模型
+				基于对象的关系模型
+				半结构化关系模型
+				
+		MariaDB(mysql)：
+			
+			Unireg
+			
+			MySQL AB  --> MySQL
+				Solaris：二进制版本；
+				
+				www.mysql.com
+				
+			MariaDB: www.mariadb.org
+			
+			MariaDB的特性：
+				插件式存储引擎：存储管理器有多种实现版本，彼此间的功能和特性可能略有区别；用户可根据需要灵活选择； 
+				
+				存储引擎也称为“表类型”；
+				
+				(1) 更多的存储引擎；
+					MyISAM：不支持事务；
+					MyISAM --> Aria
+					InnoDB --> XtraDB 
+						：支持事务；
+				(2) 诸多扩展和新特性；
+				(3) 提供了较多的测试组件；
+				(4) truly open source；
+				
+			MySQL的发行机制：
+				Enterprise：提供了更丰富的功能；
+				Community：
+				
+			安装和使用MariaDB：
+				
+				安装方式：
+					(1) rpm包；
+						(a) 由OS的发行商提供；
+						(b) 程序官方提供；
+					(2) 源码包；
+					(3) 通用二进制格式的程序包；
+					
+				通用二进制格式安装MariaDB：
+					(1) 准备数据目录；
+						以/mydata/data目录为例；
+					(2) 安装配置mariadb						
+						# useradd  -r  mysql
+						# tar xf  mariadb-VERSION.tar.xz  -C  /usr/local
+						# cd /usr/local
+						# ln  -sv  mariadb-VERSION  mysql
+						# cd  /usr/local/mysql
+						# chown  -R  root:mysql  ./*
+						# scripts/mysql_install_db  --user=mysql  -datadir=/mydata/data
+						# cp  support-files/mysql.server   /etc/init.d/mysqld
+						# chkconfig   --add  mysqld
+					(3) 提供配置文件
+						ini格式的配置文件；各程序均可通过此配置文件获取配置信息；
+							[program_name]
+											
+						OS Vendor提供mariadb rpm包安装的服务的配置文件查找次序：
+							/etc/mysql/my.cnf  --> /etc/my.cnf  --> --default-extra-file=/PATH/TO/CONF_FILE  --> ~/.my.cnf
+							
+						通用二进制格式安装的服务程序其配置文件查找次序：
+							/etc/my.cnf  --> /etc/mysql/my.cnf  --> --default-extra-file=/PATH/TO/CONF_FILE  --> ~/.my.cnf
+							
+						获取其读取次序的方法：
+							mysqld  --verbose  --help
+							
+						# cp  support-files/my-large.cnf  /etc/my.cnf
+						
+						添加三个选项：
+							datadir = /mydata/data
+							innodb_file_per_table = ON
+							skip_name_resolve = ON
+							
+					(4) 启动服务
+						# service  mysqld  start
+						
+回顾：MariaDB的基础
+	关系：二维关系，表（行、列）
+	设计范式：
+		第一范式：字段是原子性的；
+		第二范式：存在可用主键；
+		第三范式：任何都不应该依赖于其它表的非主属性；
+	约束：主键、惟一键、外键、检查性约束；
+	MariaDB安装方式：
+		包管理器(rpm, deb)
+		通用二进制格式；
+		源码编译安装；
+	SQL：
+		数据库、表、索引、视图、存储过程、存储函数、触发器、事件调度器、用户和权限；
+		元数据数据库：mysql
+		
+		DDL, DML
+			DDL: CREATE, ALTER, DROP
+			DML:  INSERT, DELETE, UPDATE, SELECT
+			DCL: GRANT, REVOKE
+			
+MariaDB的基础(2)
+
+	MariaDB程序的组成：
+		C：Client
+			mysql：CLI交互式客户端程序；
+			mysqldump：备份工具；
+			mysqladmin：管理工具；
+			mysqlbinlog：
+			...
+		S：Server
+			mysqld
+			mysqld_safe：建议运行服务端程序；
+			mysqld_multi：多实例；
+			
+			三类套接字地址：
+				IPv4, 3306/tcp
+				Unix Sock：/var/lib/mysql/mysql.sock, /tmp/mysql.sock
+					C <--> S: localhost, 127.0.0.1
+					
+	命令行交互式客户端程序：mysql
+		mysql 
+			mysql [OPTIONS] [database]
+			
+			常用选项：
+				-uUSERNAME：用户名，默认为root；
+				-hHOST：远程主机（即mysql服务器）地址，默认为localhost; 
+				-p[PASSWORD]：USERNAME所表示的用户的密码； 默认为空；
+				
+				注意：mysql的用户账号由两部分组成：'USERNAME'@'HOST'; 其中HOST用于限制此用户可通过哪些远程主机连接当前的mysql服务；
+					HOST的表示方式，支持使用通配符：
+						%：匹配任意长度的任意字符；
+							172.16.%.%,  172.16.0.0/16
+						_：匹配任意单个字符；
+						
+				-Ddb_name：连接到服务器端之后，设定其处指明的数据库为默认数据库；
+				-e 'SQL COMMAND;'：连接至服务器并让其执行此命令后直接返回；
+				
+			命令：
+				客户端命令：本地执行
+					mysql> help
+						\u db_name：设定哪个库为默认数据库
+						\q：退出；
+						\d CHAR：设定新的语句结束符；
+						\g：语句结束标记；
+						\G：语句结束标记，结果竖排方式显式；
+						\s：
+				服务端命令：通过mysql连接发往服务器执行并取回结果；
+					DDL， DML， DCL 
+					
+					注意：每个语句必须有语句结束符，默认为分号(;)
+					
+			数据类型：
+				表：行和列
+					创建表：定义表中的字段；
+					
+				定义字段时，关键的一步即为确定其数据类型；
+					用于确定：数据存储格式、能参与运算种类、可表示的有效的数据范围；
+					
+				字符型：字符集 
+					码表：在字符和二进制数字之间建立映射关系；
+					
+				种类：
+					字符型：
+						定长字符型：
+							CHAR(#)：不区分字符大小写
+							BINARY(#)：区分字符大小写
+						变长字符型：
+							VARCHAR(#)
+							VARBINARY(#)
+						对象存储：
+							TEXT
+							BLOB
+						内置类型：
+							SET 
+							ENUM						
+					数值型：
+						精确数值型：
+							INT（TINYINT，SMALLINT，MEDIUMINT，INT，BIGINT） 
+						近似数值型：
+							FLOAT
+							DOBULE
+					日期时间型：
+						日期型：DATE
+						时间型：TIME
+						日期时间型：DATETIME
+						时间戳：TIMESTAMP
+						年份：YEAR(2), YEAR(4)
+						
+				数据类型有修饰符：
+					UNSIGNED：无符号；
+					NOT NULL：非空；
+					DEFAULT  value：默认值；
+					
+		服务器端命令：
+			DDL：数据定义语言，主要用于管理数据库组件，例如表、索引、视图、用户、存储过程
+				CREATE、ALTER、DROP
+			DML：数据操纵语言，主要用管理表中的数据，实现数据的增、删、改、查；
+				INSERT， DELETE， UPDATE， SELECT
+				
+			获取命令帮助：
+				mysql> help  KEYWORD
+				
+			数据库管理：
+				创建：
+					CREATE  {DATABASE | SCHEMA}  [IF NOT EXISTS]  db_name;
+						[DEFAULT]  CHARACTER SET [=] charset_name
+						[DEFAULT]  COLLATE [=] collation_name
+						
+					查看支持的所有字符集：SHOW CHARACTER SET 
+					查看支持的所有排序规则：SHOW  COLLATION
+					
+				修改：
+					ALTER {DATABASE | SCHEMA}  [db_name]
+						[DEFAULT]  CHARACTER SET [=] charset_name
+						[DEFAULT]  COLLATE [=] collation_name
+						
+				删除：
+					DROP {DATABASE | SCHEMA} [IF EXISTS] db_name
+					
+				查看：
+					SHOW DATABASES LIKE  ’‘;
+						
+			表管理：
+				创建：
+					CREATE TABLE  [IF NOT EXISTS]  tbl_name  (create_defination)  [table_options]
+					
+					create_defination:
+						字段：col_name  data_type
+						键：
+							PRIMARY KEY (col1, col2, ...)
+							UNIQUE KEY  (col1, col2,...)
+							FOREIGN KEY (column)
+						索引：
+							KEY|INDEX  [index_name]  (col1, col2,...)
+							
+					table_options：
+						ENGINE [=] engine_name
+						
+					查看数据库支持的所有存储引擎类型：
+						mysql> SHOW  ENGINES;
+						
+					查看某表的存储引擎类型：
+						mysql> SHOW  TABLES  STATUS  [LIKE  'tbl_name']
+					
+				修改：
+					ALTER [ONLINE | OFFLINE] [IGNORE] TABLE tbl_name  [alter_specification [, alter_specification] ...]
+					
+					alter_specification:
+						字段：
+							添加：ADD  [COLUMN]  col_name  data_type  [FIRST | AFTER col_name ]
+							删除：DROP  [COLUMN] col_name 
+							修改：
+								CHANGE [COLUMN] old_col_name new_col_name column_definition  [FIRST|AFTER col_name]	
+								MODIFY [COLUMN] col_name column_definition  [FIRST | AFTER col_name]
+						键：
+							添加：ADD  {PRIMARY|UNIQUE|FOREIGN}  KEY (col1, col2,...)
+							删除：
+								主键：DROP PRIMARY KEY
+								外键：DROP FOREIGN KEY fk_symbol
+						索引：
+							添加：ADD {INDEX|KEY} [index_name]  (col1, col2,...)
+							删除：DROP {INDEX|KEY}  index_name
+						表选项：
+							ENGINE [=] engine_name
+						
+					查看表上的索引的信息：
+						mysql> SHOW INDEXES FROM tbl_name;
+						
+				删除：
+					DROP  TABLE  [IF EXISTS]   tbl_name [, tbl_name] ...
+					
+				表的引用方式：
+					tbl_name
+					db_name.tbl_name
+			
+				第二种创建方式：
+					复制表结构；
+					
+				第三种创建方式：
+					复制表数据；
+			
+			索引管理：
+				索引是特殊的数据结构；
+				
+				索引：要有索引名称；
+				
+				创建：
+					CREATE  [UNIQUE|FULLTEXT|SPATIAL] INDEX  index_name  [BTREE|HASH]  ON tbl_name (col1, col2,,...)
+				
+				删除：
+					DROP  INDEX index_name ON tbl_name
+					
+			DML：INSERT， DELETE， UPDATE， SELECT
+				
+				INSERT INTO：
+					INSERT  [INTO]  tbl_name  [(col1,...)]  {VALUES|VALUE}  (val1, ...),(...),...
+					
+					注意：
+						字符型：引号；
+						数值型：不能用引号；
+						
+				SELECT：
+					(1) SELECT  *  FROM  tbl_name;
+					(2) SELECT  col1, col2, ...  FROM  tbl_name;
+						显示时，字段可以显示为别名；
+							col_name  AS  col_alias
+					(3)  SELECT  col1, ...  FROM tbl_name  WHERE clause; 
+						WHERE clause：用于指明挑选条件；
+							col_name 操作符 value：
+								age > 30; 
+								
+							操作符(1) ：
+								>, <, >=, <=, ==, !=
+								
+							组合条件：
+								and 
+								or
+								not
+								
+							操作符(2) ：
+								BETWEEN ...  AND ...
+								LIKE 'PATTERN'
+									通配符：
+										%：任意长度的任意字符；
+										_：任意单个字符；
+								RLIKE  'PATTERN'
+									正则表达式对字符串做模式匹配；
+								IS NULL
+								IS NOT NULL
+					(4) SELECT col1, ... FROM tbl_name  [WHERE clause]  ORDER BY  col_name, col_name2, ...  [ASC|DESC];
+						ASC: 升序；
+						DESC： 降序；
+						
+				DELETE：
+					DELETE   FROM  tbl_name  [WHERE where_condition]  [ORDER BY ...]  [LIMIT row_count]
+					
+					(1) DELETE  FROM  tbl_name  WHERE where_condition 
+					(2) DELETE  FROM  tbl_name  [ORDER BY ...]  [LIMIT row_count]
+					
+				UPDATE：
+					UPDATE [LOW_PRIORITY] [IGNORE] table_reference  SET col_name1=value1 [, col_name2=value2] ... [WHERE where_condition]  [ORDER BY ...] [LIMIT row_count]
+					
+			用户账号及权限管理：
+				
+				用户账号：'username'@'host'
+					host：此用户访问当前mysql服务器时，允许其通过哪些主机远程创建连接；
+						表示方式：IP，网络地址、主机名、通配符(%和_)；
+						
+					禁止检查主机名：my.cnf
+						[mysqld]
+						skip_name_resolve = ON
+						
+				创建用户账号：
+					CREATE  USER   'username'@'host'  [IDENTIFIED BY  'password'];
+					
+				删除用户账号：
+					DROP USER  ’user'@'host’ [, user@host] ...
+
+				授权：
+					权限级别：管理权限、数据库、表、字段、存储例程；
+					
+					GRANT  priv_type,...  ON  [object_type]  db_name.tbl_name  TO  'user'@'host'  [IDENTIFIED BY  'password'];
+						
+						priv_type： ALL  [PRIVILEGES]
+						db_name.tbl_name：
+							*.*：所有库的所有表；
+							db_name.*：指定库的所有表；
+							db_name.tbl_name：指定库的特定表；
+							db_name.routine_name：指定库上的存储过程或存储函数；
+						
+						[object_type]
+							TABLE
+							FUNCTION
+							PROCEDURE
+						
+					查看指定用户所获得的授权：
+						SHOW GRANTS FOR  'user'@'host'
+						
+						SHOW GRANTS FOR CURRENT_USER;
+						
+					回收权限：
+						REVOKE  priv_type, ...  ON  db_name.tbl_name  FROM  'user'@'host';
+						
+					注意：MariaDB服务进程启动时，会读取mysql库的所有授权表至内存中；
+						(1) GRANT或REVOKE命令等执行的权限操作会保存于表中，MariaDB此时一般会自动重读授权表，权限修改会立即生效；
+						(2) 其它方式实现的权限修改，要想生效，必须手动运行FLUSH PRIVILEGES命令方可；
+						
+			加固mysql服务器，在安装完成后，运行mysql_secure_installation命令；
+				
+			图形管理组件：
+				phpMyAdmin
+					运行于lamp；
+				Navicat
+				Mysql-Front
+				ToadForMySQL
+				SQLyog
+				
+回顾：MySQL基础应用
+
+	安装方式、SQL（DDL，DML）
+		安装方式：
+			rpm包
+			通用二进制格式
+			源代码编译
+		SQL：
+			mysql/mysqld
+				mysqld：
+					3306/tcp 
+				mysql：
+					客户端命令：\c, \g, \G, \s, \u, \q
+					服务端命令：SQL
+						命令结束符
+						
+						DML: INSERT, DELETE, UPDATE, SELECT
+						DDL: CREATE DATABASE, ALTER DATABASE, DROP DATABASE, CREATE TABLE, ALTER TABLE, DROP TABLE, CREATE INDEX, DROP INDEX, CREATE USER, DROP USER, SELECT
+						DCL：GRANT， REVOKE
+						
+				数据类型：
+					字符型：
+						定长字符型：CHAR， BINARY
+						变长字符型：VARCHAR， VARBINARY
+						TEXT， BLOB
+						SET， ENUM
+					数值型：
+						精确数值型：INT 
+						近似数值型：FLOAT， DOUBLE
+					日期时间型：
+						DATE，TIME，DATETIME，TIMESTAMP
+						
+LAMP(3)：
+	
+	httpd+php结合的方式：
+		module: php
+		cgi 
+		fastcgi : php-fpm 
+	
+	php-fpm：
+		CentOS 6：
+			PHP-5.3.2-：默认不支持fpm机制；需要自行打补丁并编译安装；
+			httpd-2.2：默认不支持fcgi协议，需要自行编译此模块；
+			
+			解决方案：编译安装httpd-2.4, php-5.3.3+；
+		
+		CentOS 7：
+			httpd-2.4：rpm包默认编译支持了fcgi模块；
+			php-fpm包：专用于将php运行于fpm模式；
+			
+			配置文件：
+				服务配置文件：/etc/php-fpm.conf,  /etc/php-fpm.d/*.conf
+				php环境配置文件：/etc/php.ini, /etc/php.d/*.ini 
+				
+				连接池：
+					pm = static|dynamic
+						static：固定数量的子进程；pm.max_children；
+						dynamic：子进程数据以动态模式管理；
+							pm.start_servers
+							pm.min_spare_servers
+							pm.max_spare_servers
+							;pm.max_requests = 500
+							
+				创建session目录，并确保运行php-fpm进程的用户对此目录有读写权限；
+					# mkdir  /var/lib/php/session
+					# chown apache.apache /var/lib/php/session							
+							
+				(1) 配置httpd，添加/etc/httpd/conf.d/fcgi.conf配置文件，内容类似：
+				
+					DirectoryIndex index.php
+					ProxyRequests Off
+					ProxyPassMatch ^/(.*\.php)$  fcgi://127.0.0.1:9000/var/www/html/$1				
+				
+				(2) 虚拟主机配置
+					DirectoryIndex index.php
+
+					<VirtualHost *:80>
+						ServerName www.b.net
+						DocumentRoot /apps/vhosts/b.net
+						ProxyRequests Off
+						ProxyPassMatch ^/(.*\.php)$  fcgi://127.0.0.1:9000/apps/vhosts/b.net/$1
+
+						<Directory "/apps/vhosts/b.net">
+							Options None
+							AllowOverride None
+							Require all granted
+						</Directory>
+					</VirtualHost>				
+
+	编译安装lamp：
+		httpd：编译安装，httpd-2.4
+		php5：编译安装，php-5.4
+		mairadb：通用二进制格式，mariadb-5.5
+		
+		注意：任何一个程序包被编译操作依赖到时，需要安装此程序包的“开发”组件，其包名一般类似于name-devel-VERSION；
+		
+		CentOS 7：
+			httpd-2.4：
+				# yum  install  pcre-devel  apr-devel  apr-util-devel  openssl-devel
+				# ./configure --prefix=/usr/local/apache24 --sysconfdir=/etc/httpd24 --enable-so --enable-ssl --enable-rewrite --with-zlib --with-pcre --with-apr=/usr --with-apr-util=/usr --enable-modules=most --enable-mpms-shared=all --with-mpm=prefork
+				# make -j 4 && make install
+			
+			php-5.4:
+				# yum  install  libxml2-devel  libmcrypt-devel  
+				# ./configure --prefix=/usr/local/php --with-mysql=/usr/local/mysql --with-openssl --with-mysqli=/usr/local/mysql/bin/mysql_config --enable-mbstring --with-png-dir --with-jpeg-dir --with-freetype-dir --with-zlib --with-libxml-dir=/usr --enable-xml --enable-sockets --with-apxs2=/usr/local/apache24/bin/apxs --with-mcrypt --with-config-file-path=/etc --with-config-file-scan-dir=/etc/php.d --with-bz2
+				# make -j 4 && make install
+			
+	xcache：
+	
+		epel源中			
+			程序包：php-xcache
+			
+		编译安装xache的方法：
+			# yum install php-devel
+			# cd  xcache-3.2.0
+			# phpize
+			# ./configure --enable-xcache  --with-php-config=/usr/bin/php-config
+			# make && make install
+			# cp  xcache.ini  /etc/php.d/
+										
+			博客作业一：CentOS 7, lamp (module)；
+				要求：(1) 三者分离于两台主机；
+				            (2) 一个虚拟主机用于提供phpMyAdmin；另一个虚拟主机用于提供wordpress；
+				            (3) xcache
+				            (4) 为phpMyAdmin提供https虚拟主机；
+				            
+			博客作业二：CentOS 7, lamp (php-fpm)；
+				要求：(1) 三者分离于三台主机；
+				            (2) 一个虚拟主机用于提供phpMyAdmin；另一个虚拟主机用于提供wordpress；
+				            (3) xcache
+				            
+			博客作业三：CentOS 6, lamp (编译安装，模块或php-fpm)；
+				要求：(1) 三者分离于两台或三台主机；
+				            (2) 一个虚拟主机用于提供phpMyAdmin；另一个虚拟主机用于提供wordpress；
+				            (3) xcache
+				            (4) 尝试mpm为非prefork机制；
+				            
+OpenSSH：
+
+	telnet：C/S，23/tcp 
+		CentOS 6：
+			Server: telnet-server				
+			Client: telnet
+		
+			服务进程有两种类型：
+				独立守护进程：自我管理；
+				超级守护进程：xinetd，服务器托管者，用于托管其它瞬时守护进程；自己是独立守护进程；
+					瞬时守护进程：非自我管理，而是由“超级守护进程”代为管理；
+					
+					xinetd：
+						配置文件：/etc/xinetd.conf, /etc/xinetd.d/*
+				
+		
+		CentOS 7：
+			Server: telnet-server
+			Client: telnet			
+
+	ssh：Secure SHell，
+		C/S： 22/tcp，安全地远程登录
+			Server：OpenSSH(sshd)
+			Client：OpenSSH(ssh, scp), 
+				Windows： xshell, securecrt, sshseclureshellclient, putty；
+				
+		ssh protocol version:
+			V1：不安全
+			V2： 
+			
+		主机认证：需要用到主机认证密钥；由服务器端维护和提供；
+		用户登录：
+			用户认证：
+				基于口令的认证；
+				基于密钥的认证；
+					用户提供一对儿密钥，私钥保留在客户端，公钥保留于远程服务器端的用户家目录下；
+					
+	OpenSSH：
+		sshd：配置文件 /etc/ssh/sshd_config
+		ssh: 配置文件 /etc/ssh/ssh_config
+		
+		客户端程序：
+			ssh  [options]  [user@]host  [COMMAND]
+			ssh  [-l  user]  [options] host  [COMMAND]
+			
+			省略用户名：
+				使用本地用户名作为远程登录的用户名；
+			
+			常用选项：
+				-l user：以指定的用户登录远程主机；
+				-p port：用于指明远程服务器的端口； 
+				-X：支持X11转发；
+				-Y：支持信任的X11转发；
+					X：协议； x-window, C/S
+					X11转发的作用：在本地显示远程主机上的图形窗口；
+						前提：本地是X图形界面，或者提供了x service；
+				-o StrictHostKeyChecking=no 					
+						
+			接收的所有认可的服务器列表：
+				~/.ssh/known_hosts
+				
+			ssh远程连接服务器时的配置选项，定义在/etc/ssh/ssh_config配置文件中；
+				HOST  patttern 
+					OPTION1 VALUE
+					OPTION2 VALUE
+					...
+					
+			ssh支持的用户认证方式：
+				基于口令的认证；
+				基于密钥的认证；
+					(1) 在本地主机生成一对儿密钥：
+						ssh-keygen  [-q]  [-b bits]  [-t type]  [-f output_keyfile] [-P passphrase] 
+							-t  {rsa|ecdsa|dsa}：公钥加密算法类型；
+							-b bits：指明密钥长度；
+							-P passphrase：私钥加密密码；
+							-f output_keyfile：生成密钥的保存位置；
+							
+					(2) 在本地主机上，将公钥复制到要登录的远程主机的某用户的家目录下的特定文件中(~/.ssh/authorized_keys)
+						 ssh-copy-id  [-i [identity_file]]  [-p port]  [-o ssh_option]  [user@]hostname
+					
+					(3) 测试
+						ssh  user@host
+						
+			scp命令： 基于ssh连接完成复制
+			
+				scp  [options]  SRC...  DEST/
+				scp  [options]  SRC  DEST
+				
+				存在两种使用情形：
+					PULL：  scp  [options]  [user@]host:/PATH/TO/SOMEFILE   /PATH/TO/SOMEFILE
+					PUSH:    scp  [options]  /PATH/TO/SOMEFILE   [user@]host:/PATH/TO/SOMEFILE
+					
+						常用选项：
+							-r：递归复制；
+							-p：保持原文件的权限信息；
+							-q：静默模式；
+							-P PORT：指明远程主机ssh协议监听的端口；
+							
+			sftp命令：
+				ftp：file transfer protocol，明文；
+				安全的文件传输机制：
+					ftps: ftp over ssl 
+					sftp: ftp over ssh 
+					
+				sftp：
+					C/S架构
+						S：由sshd服务进程管理，是sshd的一个子系统，在centos系统上的openssh上，默认为启动状态； /usr/libexec/openssh/sftp-server
+						C：即sftp; 
+						
+					连接至远程主机： sftp  user@host
+						sftp> help
+						
+		sshd（服务器端）：
+			配置文件：/etc/ssh/sshd_config
+				
+				格式：配置指令  值
+					常用指令：
+						Port  22						
+						ListenAddress  0.0.0.0
+						Protocol  2						
+						PermitRootLogin  yes
+						UseDNS  no
+						
+				手册页：
+					man  sshd_config
+					man  sshd
+					
+					man  ssh_config
+					man  ssh
+						
+				限制可登录的用户（配置文件）：
+					AllowUsers  user1  user2  user3 ...
+					AllowGroups  grp1 grp2  ...
+					
+					DenyUsers  user1  user2  ...
+					DenyGroups  grp1  grp2  ...
+					
+			CentOS 6：
+				服务脚本：/etc/rc.d/init.d/sshd
+			CentOS 7：
+				Systemd Unit File：/usr/lib/systemd/system/sshd.service 
+			
+		ssh服务的最佳实践：
+			1、不要使用默认端口；
+			2、禁止使用protocol version 1；
+			3、限制可登录的用户；
+			4、设定空闲会话超时时长；
+			5、利用防火墙设置ssh访问策略；
+			6、仅监听特定的IP地址；
+			7、基于口令认证时，使用强密码策略；
+				# tr -dc A-Za-z0-9_ < /dev/urandom | head -c 30 | xargs
+			8、使用基于密钥的认证；
+			9、禁止使用空密码；
+			10、禁止root用户直接登录；
+			11、限制ssh的访问频度和并发在线数；
+			12、做好日志，经常分析； 
+			
+			/var/log/secure
+			
+	ssh协议的另一个实现：dropbear
+		轻量化的实现方案，多用于嵌入式环境中；
+		
+		常用工具：
+			dbclient：ssh协议客户端程序
+				dbclient [options] [user@]host[/port][,[user@]host/port],...] [command]
+			
+			dropbearkey：主机密钥生成工具
+				dropbearkey  -t <type>  -f <filename>  [-s bits]
+					/etc/dropbear/
+					
+		服务端程序：
+			dropbear 
+				-p  [IP:]PORT
+				-F: 前台
+				-E：将日志发往错误输出
+				
+rsyslog：
+	
+	日志：历史事件日志
+		历史事件：
+			时间，事件
+			事件级别（日志级别）：事件的关键性程度；
+			
+	事件：系统引导启动、应用程序启动、应用程序尤其是服务类应用程序运行过程中的一些事件；
+		系统日志服务：
+			syslog：
+				syslogd： system
+				klogd：kernel
+				
+			事件格式较为简单时，可统一由syslog进行记录：
+				事件产生的日期时间 	主机 	进程[pid] ：事件内容
+				
+			支持C/S架构：可通过UDP或TCP协议提供日志记录服务；
+			
+			rsyslog：
+				rsyslogd
+				
+				
+				特性：
+					多线程；
+					UDP，TCP，SSL，TLS，RELP；
+					存储日志信息于MySQL、PGSQL、Oracle等数据管理系统；
+					强大的过滤器，实现过滤日志信息中任何部分的内容；
+					自定义输出格式；
+					
+			elk stack：elasticsearch, logstash, kibana
+			
+	rsyslog日志收集器重要术语：
+		facility：设施，从功能或程序上对日志收集进行分类；
+			auth, authpriv, cron, daemon, kern, lpr, mail, mark, news, security, user, uucp, local0-local7, syslog
+		priority：优先级，日志级别
+			debug, info, notice, warn(warning), err(error), crit(critical), alert, emerg(panic)
+			
+			指定级别：
+				*：所有级别；
+				none：没有级别； 
+				priority：此级别以高于此级别的所有级别；
+				=priorty：仅此级别；
+				……
+				
+		程序环境：
+			主程序：rsyslogd
+			主配置文件：/etc/rsyslog.conf，/etc/rsyslog.d/*.conf
+			服务脚本(centos6)：/etc/rc.d/init.d/rsyslog
+			Unit File(CentOS 7)：/usr/lib/systemd/system/rsyslog.service 
+			
+		配置文件格式rsyslog.conf
+			主要由三部分组成：
+				MODULES
+				GLOBAL DRICTIVES
+				RULES
+				
+			RULES:
+				facilty.priority 	target
+				
+				target：
+					文件：记录日志事件于指定的文件中；通常应该位于/var/log目录下；文件路径之前的"-"表示异步写入；
+					用户：将日志事件通知给指定的用户；是通过将信息发送给登录到系统上的用户的终端进行的；
+					日志服务器：@host，把日志送往指定的服务器主机；
+						host：即日志服务器地址，监听在tcp或udp协议的514端口以提供服务；
+					管道： | COMMAND
+					
+			其它日志文件：
+				/var/log/wtmp：当前系统成功登录系统的日志；
+					需要使用last命令查看
+				/var/log/btmp：当前系统尝试登录系统失败相关的日志；
+					需要使用lastb命令查看
+					
+					lastlog：显示当前系统上的所有用户最近一次登录系统的时间；
+				
+				/var/log/dmesg：系统引导过程中的日志信息；
+					也可以使用dmesg命令进行查看；
+				
+		rsyslog服务器：
+			# Provides UDP syslog reception
+			$ModLoad imudp
+			$UDPServerRun 514
+
+			# Provides TCP syslog reception
+			$ModLoad imtcp
+			$InputTCPServerRun 514
+			
+		记录日志于mysql中：
+			(1) 于MySQL服务器：准备好MySQL服务器，创建用户，授权对Syslog数据库拥有全部访问权限；
+			(2) 于rsyslog主机：安装rsyslog-mysql程序包；
+			(3) 于rsyslog主机：通过导入createDB.sql脚本创建依赖到的数据库及表；
+				mysql    -uUSER  -hHOST  -pPASSWORD  < /usr/share/doc/rsyslog-mysql-VERSION/createDB.sql 
+			(4) 配置rsyslog使用ommysql模块
+				### MODULES ####
+				$ModLoad  ommysql
+				
+				#### RULES ####
+				facility.priority 		:ommysql:DBHOST,DB,DBUSER,DBUSERPASS
+				
+				注意：重启rsyslog服务；
+			(5) web展示接口：loganalyzer
+				(a) 配置lamp组合
+					httpd, php, php-mysql, php-gd
+				(b) 安装loganalyzer
+					# tar  xf  loganalyzer-3.6.5.tar.gz
+					# cp  -r  loganalyzer-3.6.5/src  /var/www/html/loganalyzer
+					# cp  -r loganalyzer-3.6.5/contrib/*.sh  /var/www/html/loganalyzer/
+					# cd /var/www/html/loganalyzer/
+					# chmod  +x  *.sh
+					# ./configure.sh
+					# ./secure.sh
+					# chmod 666 config.php 
+					
+				通过URL访问
+					http://HOST/loganalyzer
+		
+nsswitch and pam：
+	
+	nsswitch：name service switch
+		通用框架，与各种类型存储进行交互的公共实现；
+		
+		实现：/usr/lib64/libnss*, /lib64/libnss*
+			框架：libnss
+			驱动：libnss_files-
+			
+		为每一种用到解析库的应用通过配置定义其位置：
+			/etc/nsswitch.conf 
+				db:  store1  store2  ...
+				
+				例如：
+				passwd: files
+				hosts: files  dns 
+					
+			解析库：
+				文件、关系型数据管理系统(MySQL)、NIS、LDAP、DNS 
+				
+			每种存储中的查找结果状态：
+				STATSU => success | notfound | unavail | tryagain
+			对应于每种状态结果的行为（action）：
+				return | continue 
+				
+			例子：
+				hosts: files  nis [NOTFOUND=return]  dns 
+				
+			getent命令：
+				getent  DATABASE  [key]
+			
+	pam：pluggable  authentication module
+		
+		认证库：存储
+			多种类型的存储：文件、关系型数据管理系统、LDAP、NIS
+			
+			pam：通用框架，提供了与各种类型存储进行交互的公共实现、以及多种辅助类的功能：
+				/lib64/security/*
+				
+			配置文件：为各种调用了pam的应用提供其专用配置；
+				通用配置文件：/etc/pam.conf，可为每一种调用pam完成认证功能的应用程序提供配置；
+				专用配置文件：/etc/pam.d/*，通常专用于为某种特定的应用程序提供配置；
+				
+				通常每个应用会使用一个单独的配置文件；
+				
+			配置文件格式：
+				通用配置文件：
+					application  	type		control 		module-path 		module-arguments
+				专用配置文件：	
+					type		control 		module-path 		module-arguments
+					
+				type：检查的功能类别
+					auth：账号的认证和授权；
+					account：与账号管理相关的非认证类的功能；
+					password：用户修改密码时密码复杂度检查机制；
+					session：用户获取到服务之前或使用服务完成之后需要进行一些附加性操作；
+					
+				control：同一种功能的多个检查之间如何进行组合；
+					两种实现机制：
+						(1) 简单实现：使用一个关键词来定义
+						(2) 详细实现：使用一个或多个“status=action”
+						
+					简单实现：
+						required：必须通过检查；否则，即为失败；无论成功还是失败，都需继续由后续同种功能的其它模块进行检查；
+						requisite：一票否决；检测失败就直接返回失败；检测成功，则由由后续同种功能的其它模块进行检查；
+						sufficient：一票通过，检测成功就直接返回成功；检测失败，则由由后续同种功能的其它模块进行检查；
+						optional：可选的，参考性控制机制；
+						include：调用其它配置文件中的同种功能的检测机制；
+						
+					详细实现：
+						[status1=action1, status2=action2, ...]
+							status：返回状态
+							action：采取的行为，比如ok, done, die, bad, ignore, ...
+							
+				module-path：模块文件路径；
+					相对路径：相对于/lib64/security/目录而言；
+					绝对路径：可位于任何可访问路径；
+					
+				module-arguments：模块的专用参数；
+					
+					
+			模块示例：
+				pam_limits.so：资源限制
+					在用户级别实现对其可使用的资源的限制，例如可打开的文件数量，可运行的进程数量，可用内存空间；
+					
+					修改限制的实现方式：
+						(1) ulimit命令
+						(2) 配置文件：/etc/security/limits.conf, /etc/security/limits.d/*.conf
+						
+					配置文件：每行一个定义；
+						<domain>        <type>  <item>  <value>
+						
+							<domain>：应用于哪些对象
+								username
+								@group
+								*：所有用户
+								
+							<type>：限制的类型
+								soft：软限制，普通用户自己可以修改；
+								hard：硬限制，由root用户设定，且通过kernel强制生效；
+								-：软硬使用相同限制；
+								
+							<item>：限制的资源类型
+								nofile：所能够同时打开的最大文件数量；默认为1024；
+								nproc：所能够同时运行的进程的最大数量；默认为1024；
+								
+					ulimit命令：用于调整软限制；
+						-n        最多的打开的文件描述符个数
+						-u        最大用户进程数
+						-S        使用 `soft'（软）资源限制
+						-H        使用 `hard'（硬）资源限制
+						
+			课外作业：分开实现；
+				(1) 限制centos用户只能够在worktime通过ssh远程连接本机；
+				(2) 限制只有distro组内的用户可通过ssh连接到本机；
+						
+					
+iptables： 包过滤型的防火墙
+
+	Firewall：防火墙，隔离工具；工作于主机或网络边缘，对于进出本主机或本网络的报文根据事先定义的检查规则作匹配检测，对于能够被规则匹配到的报文作出相应处理的组件；
+		主机防火墙 
+		网络防火墙 
+		
+		软件防火墙（软件逻辑）
+		硬件防火墙（硬件和软件逻辑）
+		
+	ipfw (firewall framework)
+	ipchains (firewall framework)
+	
+	iptables(netfilter)
+		netfilter：kernel
+		iptables：rules until
+		
+		hook function：
+			input 
+			output 
+			forward 
+			prerouting
+			postrouting
+			
+	链（内置）：
+		PREROUTING
+		INPUT
+		FORWARD
+		OUTPUT
+		POSTROUTING
+		
+	功能：
+		filter：过滤，防火墙；
+		nat：network address translation；用于修改源IP或目标IP，也可以改端口；
+		mangle：拆解报文，做出修改，并重新封装起来；
+		raw：关闭nat表上启用的连接追踪机制；
+		
+	功能<--链：
+		raw：PREROUTING， OUTPUT
+		mangle：PREROUTING，INPUT，FORWARD，OUTPUT，POSTROUTING
+		nat：PREROUTING，[INPUT，]OUTPUT，POSTROUTING
+		filter：INPUT，FORWARD，OUTPUT
+		
+	报文流向：
+		流入本机：PREROUTING --> INPUT
+		由本机流出：OUTPUT --> POSTROUTING
+		转发：PREROUTING --> FORWARD --> POSTROUTING
+		
+	路由功能发生的时刻：
+		报文进入本机后：
+			判断目标主机是？
+		报文离开本机之前：
+			判断经由哪个接口送往下一站？
+			
+	iptables/netfilter
+		
+		规则：
+			组成部分：根据规则匹配条件来尝试匹配报文，一旦匹配成功，就由规则定义的处理动作作出处理；
+				匹配条件：
+					基本匹配条件
+					扩展匹配条件
+				处理动作：
+					基本处理动作
+					扩展处理动作
+					自定义处理机制
+					
+			iptables的链：内置链和自定义链
+				内置链：对应于hook function
+				自定义链接：用于内置链的扩展和补充，可实现更灵活的规则管理机制；
+				
+		添加规则时的考量点：
+			(1) 要实现哪种功能：判断添加到哪个表上；
+			(2) 报文流经的路径：判断添加到哪个链上；
+			
+			链：链上的规则次序，即为检查的次序；因此，隐含一定的应用法则：
+				(1) 同类规则（访问同一应用），匹配范围小的放上面；
+				(2) 不同类的规则（访问不同应用），匹配到报文频率较大的放在上面；
+				(3) 将那些可由一条规则描述的多个规则合并起来；
+				(4) 设置默认策略；
+				
+		iptables命令：
+			
+			iptables [-t table] {-A|-C|-D} chain rule-specification
+
+			iptables [-t table] -I chain [rulenum] rule-specification
+
+			iptables [-t table] -R chain rulenum rule-specification
+
+			iptables [-t table] -D chain rulenum
+
+			iptables [-t table] -S [chain [rulenum]]
+
+			iptables [-t table] {-F|-L|-Z} [chain [rulenum]] [options...]
+
+			iptables [-t table] -N chain
+
+			iptables [-t table] -X  [chain]
+
+			iptables [-t table] -P chain target
+
+			iptables [-t table] -E old-chain-name new-chain-name
+			
+			rule-specification = [matches...]  [target]
+
+			match = -m matchname [per-match-options]
+
+			target = -j targetname [per-target-options]
+			
+			规则格式：iptables   [-t table]   COMMAND   chain   [-m matchname [per-match-options]]   -j targetname [per-target-options]
+			
+				-t table：
+					raw, mangle, nat, [filter]
+					
+				COMMAND：
+					链管理：
+						-N：new, 自定义一条新的规则链；
+						-X： delete，删除自定义的规则链；
+						-P：Policy，设置默认策略；对filter表中的链而言，其默认策略有：
+							ACCEPT：接受
+							DROP：丢弃
+							REJECT：拒绝
+						-E：重命名自定义链；引用计数不为0的自定义链不能够被重命名，也不能被删除；
+					规则管理：
+						-A：append，追加；
+						-I：insert, 插入，要指明位置，省略时表示第一条；
+						-D：delete，删除；
+							(1) 指明规则序号；
+							(2) 指明规则本身；
+						-R：replace，替换指定链上的指定规则；
+						
+						-F：flush，清空指定的规则链；
+						-Z：zero，置零；
+							iptables的每条规则都有两个计数器：
+								(1) 匹配到的报文的个数；
+								(2) 匹配到的所有报文的大小之和；						
+					查看：
+						-L：list, 列出指定鏈上的所有规则；
+							-n：numberic，以数字格式显示地址和端口号；
+							-v：verbose，详细信息；
+								-vv, -vvv
+							-x：exactly，显示计数器结果的精确值； 
+							--line-numbers：显示规则的序号；
+					
+				chain：
+					PREROUTING，INPUT，FORWARD，OUTPUT，POSTROUTING
+					
+				匹配条件：
+					基本匹配条件：无需加载任何模块，由iptables/netfilter自行提供；
+						[!] -s, --source  address[/mask][,...]：检查报文中的源IP地址是否符合此处指定的地址或范围；
+						[!] -d, --destination address[/mask][,...]：检查报文中的目标IP地址是否符合此处指定的地址或范围；
+						[!] -p, --protocol protocol
+							protocol: tcp, udp, udplite, icmp, icmpv6,esp, ah, sctp, mh or  "all"
+								{tcp|udp|icmp}
+						[!] -i, --in-interface name：数据报文流入的接口；只能应用于数据报文流入的环节，只能应用于PREROUTING，INPUT和FORWARD链；
+						[!] -o, --out-interface name：数据报文流出的接口；只能应用于数据报文流出的环节，只能应用于FORWARD、OUTPUT和POSTROUTING链；											
+					扩展匹配条件： 需要加载扩展模块，方可生效；
+						隐式扩展：不需要手动加载扩展模块；因为它们是对协议的扩展，所以，但凡使用-p指明了协议，就表示已经指明了要扩展的模块；
+							tcp：
+								[!] --source-port, --sport port[:port]：匹配报文的源端口；可以是端口范围；
+								[!] --destination-port,--dport port[:port]：匹配报文的目标端口；可以是端口范围；
+								[!] --tcp-flags  mask  comp
+									mask is the flags which we should examine,  written as a comma-separated list，例如 SYN,ACK,FIN,RST
+									comp is a comma-separated list  of  flags  which must be set，例如SYN
+									例如：“--tcp-flags  SYN,ACK,FIN,RST  SYN”表示，要检查的标志位为SYN,ACK,FIN,RST四个，其中SYN必须为1，余下的必须为0；
+								[!] --syn：用于匹配第一次握手，相当于”--tcp-flags  SYN,ACK,FIN,RST  SYN“；								
+							udp 
+								[!] --source-port, --sport port[:port]：匹配报文的源端口；可以是端口范围；
+								[!] --destination-port,--dport port[:port]：匹配报文的目标端口；可以是端口范围；
+								
+							icmp 
+								[!] --icmp-type {type[/code]|typename}
+									echo-request：8
+									echo-reply：0
+								
+						显式扩展：必须要手动加载扩展模块， [-m matchname [per-match-options]]； 						
+				
+				处理动作：
+					-j targetname [per-target-options]
+						ACCEPT
+						DROP
+						REJECT
+						RETURN：返回调用链；
+						REDIRECT：端口重定向；
+						LOG：记录日志；
+						MARK：做防火墙标记；
+						DNAT：目标地址转换；
+						SNAT：源地址转换；
+						MASQUERADE：地址伪装；
+						...
+						自定义链：
+				
+			防火墙（服务）：
+				CentOS 6：
+					service  iptables  {start|stop|restart|status}
+						start：读取事先保存的规则，并应用到netfilter上；
+						stop：清空netfilter上的规则，以及还原默认策略等；
+						status：显示生效的规则；
+						restart：清空netfilter上的规则，再读取事先保存的规则，并应用到netfilter上；
+						
+						默认的规则文件：/etc/sysconfig/iptables
+						
+				CentOS 7：
+					systemctl  start|stop|restart|status  firewalld.service
+					
+					systemctl  disable  firewalld.service
+					systemctl  stop  firewalld.service 					
+					
+		课后作业：开放本机web服务器给非192.168.0.0/24网络中的主机访问；
+				   禁止本机被非172.16.0.0/16网络中的主机进行ping请求；
+				   开放本机的dns服务给所有主机；
+				   
+		
+回顾：iptables/netfilter
+	netfilter: kernel framework
+	iptables：编写规则的CLI
+	
+	四表：filter, nat, mangle, raw 
+	五链：PREROUTING, INPUT, FORWARD, OUTPUT, POSTROUTING
+	
+	iptables [-t table]  SUBCOMMAND  [chain] [匹配条件]  [-j  TARGET]
+	
+		SUBCOMMAND：
+			链：-N，-X，-E，-P
+			规则：-A，-I，-D，-R, -F, -Z
+			查看：-L
+				-n, -v, -x, --line-numbers
+				
+		匹配条件：
+			基本匹配：-s, -d, -p, -i, -o
+			扩展匹配：
+				隐式扩展：[-m ]
+					tcp：--dport, --sport, --tcp-flags, --syn 
+					udp: --dport, --sport
+					icmp: --icmp-type
+						echo-request, 8
+						echo-reply, 0
+				显式扩展：-m
+	
+iptables(2)
+	
+	显式扩展：必须显式地指明使用的扩展模块进行的扩展；
+		
+		使用帮助：
+			CentOS 6: man iptables
+			CentOS 7: man iptables-extensions
+			
+		1、multiport扩展
+			以离散方式定义多端口匹配；最多指定15个端口；
+			
+			[!] --source-ports,--sports port[,port|,port:port]...：指定多个源端口；
+			[!] --destination-ports,--dports port[,port|,port:port]...：指定多个目标端口；
+			[!] --ports port[,port|,port:port]...：指明多个端口；
+			
+			~]# iptables -A INPUT -s 172.16.0.0/16 -d 172.16.100.67 -p tcp -m multiport --dports 22,80 -j ACCEPT
+			
+		2、iprange扩展
+			指明连续的（但一般不脑整个网络）ip地址范围；
+			
+			[!] --src-range from[-to]：源IP地址；
+			[!] --dst-range from[-to]：目标IP地址；
+			
+			~]# iptables -A INPUT -d 172.16.100.67 -p tcp --dport 80 -m iprange --src-range 172.16.100.5-172.16.100.10 -j DROP
+			
+		3、string扩展
+			对报文中的应用层数据做字符串模式匹配检测；
+			
+			--algo {bm|kmp}：字符串匹配检测算法；
+				bm：Boyer-Moore
+				kmp：Knuth-Pratt-Morris
+			[!] --string pattern：要检测的字符串模式；
+			[!] --hex-string pattern：要检测的字符串模式，16进制格式；
+			
+			~]# iptables -A OUTPUT -s 172.16.100.67 -d 172.16.0.0/16 -p tcp --sport 80 -m string --algo bm --string "gay" -j REJECT
+
+		4、time扩展
+			根据将报文到达的时间与指定的时间范围进行匹配；
+			
+			--datestart YYYY[-MM[-DD[Thh[:mm[:ss]]]]]
+			--datestop YYYY[-MM[-DD[Thh[:mm[:ss]]]]]
+			
+			--timestart hh:mm[:ss]
+			--timestop hh:mm[:ss]
+			
+			[!] --monthdays day[,day...]
+			[!] --weekdays day[,day...]
+			
+			--kerneltz：使用内核上的时区，而非默认的UTC；
+			
+			~]# iptables -A INPUT -s 172.16.0.0/16 -d 172.16.100.67 -p tcp --dport 80 -m time --timestart 14:30 --timestop 18:30 --weekdays Sat,Sun --kerneltz -j DROP
+			
+		5、connlimit扩展
+			根据每客户端IP做并发连接数数量匹配；
+			
+			--connlimit-upto n：连接的数量小于等于n时匹配；
+			--connlimit-above n：连接的数量大于n时匹配；
+			
+			~]# iptables -A INPUT -d 172.16.100.67 -p tcp --dport 21 -m connlimit --connlimit-above 2 -j REJECT
+			
+		6、limit扩展
+			基于收发报文的速率做匹配；
+			
+				令牌桶过滤器；
+				
+			--limit rate[/second|/minute|/hour|/day]
+			--limit-burst number	
+			
+			~]# iptables -I INPUT -d 172.16.100.67 -p icmp --icmp-type 8 -m limit --limit 3/minute --limit-burst 5 -j ACCEPT
+			~]# iptables -I INPUT 2 -p icmp -j REJECT
+			
+		7、state扩展
+			根据”连接追踪机制“去检查连接的状态；
+			
+			conntrack机制：追踪本机上的请求和响应之间的关系；状态有如下几种：
+				NEW：新发出请求；连接追踪模板中不存在此连接的相关信息条目，因此，将其识别为第一次发出的请求；
+				ESTABLISHED：NEW状态之后，连接追踪模板中为其建立的条目失效之前期间内所进行的通信状态；
+				RELATED：相关联的连接；如ftp协议中的数据连接与命令连接之间的关系；
+				INVALID：无效的连接；
+				UNTRACKED：未进行追踪的连接；
+				
+			[!] --state state
+			
+			~]#  iptables -A INPUT -d 172.16.100.67 -p tcp -m multiport --dports 22,80 -m state --state NEW,ESTABLISHED -j ACCEPT
+			~]# iptables -A OUTPUT -s 172.16.100.67 -p tcp -m multiport --sports 22,80 -m state --state ESTABLISHED -j ACCEPT
+			
+			调整连接追踪功能所能够容纳的最大连接数量：
+				/proc/sys/net/nf_contrack_max
+				
+			已经追踪到到的并记录下来的连接：
+				/proc/net/nf_conntrack
+				
+			不同的协议的连接追踪时长：
+				/proc/sys/net/netfilter/
+									
+			iptables的链接跟踪表最大容量为/proc/sys/net/ipv4/ip_conntrack_max，链接碰到各种状态的超时后就会从表中删除；当模板满载时，后续的连接可能会超时
+
+			解決方法一般有两个：
+				(1) 加大nf_conntrack_max 值
+				vi /etc/sysctl.conf
+				net.ipv4.nf_conntrack_max = 393216
+				net.ipv4.netfilter.nf_conntrack_max = 393216
+				
+				(2)  降低 nf_conntrack timeout时间
+				vi /etc/sysctl.conf
+				net.ipv4.netfilter.nf_conntrack_tcp_timeout_established = 300
+				net.ipv4.netfilter.nf_conntrack_tcp_timeout_time_wait = 120
+				net.ipv4.netfilter.nf_conntrack_tcp_timeout_close_wait = 60
+				net.ipv4.netfilter.nf_conntrack_tcp_timeout_fin_wait = 120
+
+				iptables -t nat -L -n
+
+			如何开放被动模式的ftp服务？
+				(1) 装载ftp连接追踪的专用模块：
+					~]# modproble  nf_conntrack_ftp
+					
+				(2) 放行命令连接(假设Server地址为172.16.100.67)：
+					~]# iptables -A INPUT -d 172.16.100.67 -p tcp --dport 21 -m state --state NEW,ESTABLISHED -j ACCEPT
+					~]# iptables -A OUTPUT -s 172.16.100.67 -p tcp --sport 21 -m state --state ESTABLISHED -j ACCEPT
+					
+				(3) 放行数据连接(假设Server地址为172.16.100.67)：
+					~]# iptables -A INPUT -d 172.16.100.67 -p tcp -m state --state RELATED,ESTABLISHED -j ACCEPT
+					~]# iptables -I OUTPUT -s 172.16.100.67 -m state --state ESTABLISHED -j ACCEPT
+	
+	规则优化：
+		服务器端规则设定：任何不允许的访问，应该在请求到达时给予拒绝；
+		(1) 可安全放行所有入站的状态为ESTABLISHED状态的连接；
+		(2) 可安全放行所有出站的状态为ESTABLISHED状态的连接；
+		(3) 谨慎放行入站的新请求
+		(4) 有特殊目的限制访问功能，要于放行规则之前加以拒绝；
+				
+	如何使用自定义链：
+		自定义链：需要被调用才能生效；自定义链最后需要定义返回规则；
+				
+		返回规则使用的target叫做RETURN；
+				
+	规则的用效期限：
+		使用iptables命令定义的规则，手动删除之前，其生效期限为kernel存活期限；
+		
+		保存规则：
+			保存规则至指定的文件：
+				CentOS 6：
+					～]# service  iptables  save   
+					将规则保存至/etc/sysconfig/iptables文件中；
+					
+					~]# iptables-save  >  /PATH/TO/SOME_RULES_FILE
+					
+				CentOS 7:
+					~]# iptables-save  >  /PATH/TO/SOME_RULES_FILE
+					
+			重新载入预存规则文件中规则：			
+				~]# iptables-restore <  /PATH/FROM/SOME_RULES_FILE
+				
+				CentOS 6：
+					~]# service  iptables  restart
+					
+		自动生效规则文件中的规则：
+			(1) 用脚本保存各iptables命令；让此脚本开机后自动运行；
+				/etc/rc.d/rc.local文件中添加脚本路径；
+					/PATH/TO/SOME_SCRIPT_FILE
+				
+			(2) 用规则文件保存各规则，开机时自动载入此规则文件中的规则；
+				/etc/rc.d/rc.local文件添加：
+					iptables-restore < /PATH/FROM/IPTABLES_RULES_FILE
+					
+		CentOS 7：
+			引入了新的iptables前端管理工具firewalld，其管理工个有：firewalld-cmd,  firewalld-config
+			
+	Target：
+		ACCEPT， DROP， REJECT， RETURN
+		LOG， SNAT， DNAT， REDIRECT， MASQUERADE，...
+		
+		LOG:
+			--log-level level
+			--log-prefix prefix
+							
+	练习：INPUT和OUTPUT默认策略为DROP；
+
+		1、限制本地主机的web服务器在周一不允许访问；新请求的速率不能超过100个每秒；web服务器包含了admin字符串的页面不允许访问；web服务器仅允许响应报文离开本机；
+		2、在工作时间，即周一到周五的8:30-18:00，开放本机的ftp服务给172.16.0.0网络中的主机访问；数据下载请求的次数每分钟不得超过5个；
+		3、开放本机的ssh服务给172.16.x.1-172.16.x.100中的主机，x为你的学号，新请求建立的速率一分钟不得超过2个；仅允许响应报文通过其服务端口离开本机；
+		4、拒绝TCP标志位全部为1及全部为0的报文访问本机；
+		5、允许本机ping别的主机；但不开放别的主机ping本机；
+
+
+	练习：判断下述规则的意义：
+		# iptables -N clean_in
+		# iptables -A clean_in -d 255.255.255.255 -p icmp -j DROP
+		# iptables -A clean_in -d 172.16.255.255 -p icmp -j DROP
+
+		# iptables -A clean_in -p tcp ! --syn -m state --state NEW -j DROP
+		# iptables -A clean_in -p tcp --tcp-flags ALL ALL -j DROP
+		# iptables -A clean_in -p tcp --tcp-flags ALL NONE -j DROP
+		# iptables -A clean_in -d 172.16.100.7 -j RETURN 
+
+
+		# iptables -A INPUT -d 172.16.100.7 -j clean_in
+
+		# iptables -A INPUT  -i lo -j ACCEPT
+		# iptables -A OUTPUT -o lo -j ACCEPT
+
+
+		# iptables -A INPUT  -i eth0 -m multiport -p tcp --dports 53,113,135,137,139,445 -j DROP
+		# iptables -A INPUT  -i eth0 -m multiport -p udp --dports 53,113,135,137,139,445 -j DROP
+		# iptables -A INPUT  -i eth0 -p udp --dport 1026 -j DROP
+		# iptables -A INPUT  -i eth0 -m multiport -p tcp --dports 1433,4899 -j DROP
+
+		# iptables -A INPUT  -p icmp -m limit --limit 10/second -j ACCEPT
+
+
+回顾：iptables/netfilter
+	显式扩展、保存恢复规则
+	显式扩展：
+		multiport, iprange, string, time, connlimit, limit, state
+
+		state：conntrack
+			/proc/net/nf_conntrack
+			/proc/sys/net/nf_conntrack_max
+
+			NEW, ESTABLISHED, RELATED(nf_conntrack_ftp), INVALID, UNTRACKED
+
+	保存恢复规则：
+		iptables-save
+		iptables-restore
+
+
+iptables(3) 
+
+	netfilter: nat table
+		nat: network address translation
+			snat: source nat
+			dnat: destination nat
+			pnat: port nat
+
+		snat：POSTROUTING, OUTPUT
+			让本地网络中的主机通过某一特定地址访问外部网络时；
+		dnat：PREROUTING
+			把本地网络中的某一主机上的某服务开放给外部网络中的用户访问时；
+
+		nat表的target：
+			SNAT
+				--to-source [ipaddr[-ipaddr]][:port[-port]]
+				--random
+			DNAT
+				--to-destination [ipaddr[-ipaddr]][:port[-port]]
+
+			MASQUERADE
+				--to-ports port[-port]
+				--random
+
+		SNAT示例：
+			~]# iptables -t nat -A POSTROUTING -s 192.168.12.0/24 -j SNAT --to-source 172.16.100.67	
+
+		MASQUERADE示例：
+			源地址转换：当源地址为动态获取的地址时，MASQUERADE可自行判断要转换为的地址；
+
+			~]# iptables -t nat -A POSTROUTING -s 192.168.12.0/24 -j MASQUERADE
+
+		DNAT示例：
+			~]# iptables -t nat -A PREROUTING -d 172.16.100.67 -p tcp --dport 80 -j DNAT --to-destination 192.168.12.77
+
+			~]# iptables -t nat -A PREROUTING -d 172.16.100.67 -p tcp --dport 80 -j DNAT --to-destination 192.168.12.77:8080
+			~]# iptables -t nat -A PREROUTING -d 172.16.100.67 -p tcp --dport 22012 -j DNAT --to-destination 192.168.12.78:22
+
+	REDIRECT：端口重定向；
+		web: 8080
+		80 --> 8080
+
+	补充：利用iptables的recent模块来抵御DOS攻击: 22，建立一个列表，保存有所有访问过指定的服务的客户端IP
+
+
+		ssh: 远程连接，
+
+		iptables -I INPUT -p tcp --dport 22 -m connlimit --connlimit-above 3 -j DROP
+
+
+		iptables -I INPUT  -p tcp --dport 22 -m state --state NEW -m recent --set --name SSH
+		iptables -I INPUT  -p tcp --dport 22 -m state --state NEW -m recent --update --seconds 300 --hitcount 3 --name SSH -j LOG --log-prefix "SSH Attach: "
+		iptables -I INPUT  -p tcp --dport 22 -m state --state NEW -m recent --update --seconds 300 --hitcount 3 --name SSH -j DROP
+
+		1.利用connlimit模块将单IP的并发设置为3；会误杀使用NAT上网的用户，可以根据实际情况增大该值；
+
+		2.利用recent和state模块限制单IP在300s内只能与本机建立2个新连接。被限制五分钟后即可恢复访问。
+
+		下面对最后两句做一个说明：
+
+		1.第二句是记录访问tcp 22端口的新连接，记录名称为SSH
+		--set 记录数据包的来源IP，如果IP已经存在将更新已经存在的条目
+
+		2.第三句是指SSH记录中的IP，300s内发起超过3次连接则拒绝此IP的连接。
+		--update 是指每次建立连接都更新列表；
+		--seconds必须与--rcheck或者--update同时使用
+		--hitcount必须与--rcheck或者--update同时使用
+
+		3.iptables的记录：/proc/net/xt_recent/SSH
+
+
+		也可以使用下面的这句记录日志：
+		iptables -A INPUT -p tcp --dport 22 -m state --state NEW -m recent --update --name SSH --second 300 --hitcount 3 -j LOG --log-prefix "SSH Attack"
+
+
+	CentOS 6：
+
+		http://ftp.redhat.com/redhat/linux/enterprise/6Server/en/os/SRPMS/
+		
+		layer7：第三方扩展；
+
+		iptables实现七层访问过滤：
+
+			模块：layer7
+				识别应用层协议
+
+			iptables/netfilter
+				iptables -m state, 
+				netfilter state
+
+			对内核中的netfilter，打补丁layer7，重新编译内核
+			对iptables打补丁，补上layer7模块，重新iptables
+
+
+		diff/patch：文本操作工具
+
+
+			diff是Unix系统的一个很重要的工具程序。它用来比较两个文本文件的差异，是代码版本管理的核心工具之一。其用法非常简单：
+			　　# diff <变动前的文件> <变动后的文件>
+
+			由于历史原因，diff有三种格式：
+			　　* 正常格式（normal diff）
+			　　* 上下文格式（context diff）
+			　　* 合并格式（unified diff）
+
+			1、正常格式的diff
+				例如，对file1（变动前的文件）和file2（变动后的文件）进行比较可使用如下命令：
+			　　 	# diff file1 file2
+				显示结果中，第一行是一个提示，用来说明变动位置。它分成三个部分：前面的数字，表示file1的第n行有变化；中间的"c"表示变动的模式是内容改变（change），其他模式还有"增加"（a，代表addition）和"删除"（d，代表deletion）；
+
+			2、上下文格式的diff
+				上个世纪80年代初，加州大学伯克利分校推出BSD版本的Unix时，觉得diff的显示结果太简单，最好加入上下文，便于了解发生的变动。因此，推出了上下文格式的diff。它的使用方法是加入-c选项（即context）。
+			　　 	# diff -c f1 f2
+				结果分成四个部分。第一部分的两行，显示两个文件的基本情况：文件名和时间信息，"***"表示变动前的文件，"---"表示变动后的文件。第二部分是15个星号，将文件的基本情况与变动内容分割开。第三部分显示变动前的文件，即file1。
+				另外，文件内容的每一行最前面，还有一个标记位。如果为空，表示该行无变化；如果是感叹号（!），表示该行有改动；如果是减号（-），表示该行被删除；如果是加号（+），表示该行为新增。
+				第四部分显示变动后的文件，即file2。
+
+			3、合并格式的diff
+				如果两个文件相似度很高，那么上下文格式的diff，将显示大量重复的内容，很浪费空间。1990年，GNU diff率先推出了"合并格式"的diff，将f1和f2的上下文合并在一起显示。
+				它的使用方法是加入u参数（代表unified）。
+			　　# diff -u f1 f2
+				其结果的第一部分，也是文件的基本信息。"---"表示变动前的文件，"+++"表示变动后的文件。第二部分，变动的位置用两个@作为起首和结束。第三部分是变动的具体内容。
+				除了有变动的那些行以外，也是上下文各显示3行。它将两个文件的上下文，合并显示在一起，所以叫做"合并格式"。每一行最前面的标志位，空表示无变动，减号表示第一个文件删除的行，加号表示第二个文件新增的行。
+
+			diff 
+				-u
+
+			patch
+
+			尽管并没有指定patch和diff的关系，但通常patch都使用diff的结果来完成打补丁的工作，这和patch本身支持多种diff输出文件格式有很大关系。patch通过读入patch命令文件（可以从标准输入），对目标文件进行修改。通常先用diff命令比较新老版本，patch命令文件则采用diff的输出文件，从而保持原版本与新版本一致。
+
+			patch的标准格式为
+				patch [options] [originalfile] [patchfile]
+
+			如果patchfile为空则从标准输入读取patchfile内容；如果originalfile也为空，则从patchfile（肯定来自标准输入）中读取需要打补丁的文件名。因此，如果需要修改的是目录，一般都必须在patchfile中记录目录下的各个文件名。绝大多数情况下，patch都用以下这种简单的方式使用：
+			
+
+			patch命令可以忽略文件中的冗余信息，从中取出diff的格式以及所需要patch的文件名，文件名按照diff参数中的"源文件"、"目标文件"以及冗余信息中的"Index："行中所指定的文件的顺序来决定。
+
+			-p参数决定了是否使用读出的源文件名的前缀目录信息，不提供-p参数，则忽略所有目录信息，-p0（或者-p 0）表示使用全部的路径信息，-p1将忽略第一个"/"以前的目录，依此类推。如/usr/src/linux-2.4.15/Makefile这样的文件名，在提供-p3参数时将使用linux-2.4.15/Makefile作为所要patch的文件。
+
+				patch
+					-p
+					-R
+
+		mockbuild
+
+			总结：操作步骤
+
+			1、获取并编译内核
+
+			# useradd mockbuild
+			# rpm -ivh kernel-2.6.32-431.5.1.x86_64.el6.src.rpm
+			# cd rpmbuild/SOURCES
+			# tar linux-2.6.32-*.tar.gz -C /usr/src
+			# cd /usr/src
+			# ln -sv 
+
+			2、给内核打补丁
+			# tar xf netfilter-layer7-v2.23.tar.bz2
+			# cd /usr/src/linux
+			# patch -p1 < /root/netfilter-layer7-v2.23/kernel-2.6.32-layer7-2.23.patch
+			# cp /boot/config-*  .config
+			# make menuconfig
+
+		按如下步骤启用layer7模块		
+			Networking support → Networking Options →Network packet filtering framework → Core Netfilter Configuration
+			<M>  “layer7” match support
+
+			3、编译并安装内核
+			# make
+			# make modules_install
+			# make install
+
+			4、重启系统，启用新内核
+
+			5、编译iptables
+
+			# tar xf iptables-1.4.20.tar.gz
+			# cp /root/netfilter-layer7-v2.23/iptables-1.4.3forward-for-kernel-2.6.20forward/* /root/iptables-1.4.20/extensions/
+			# cp /etc/rc.d/init.d/iptales /root
+			# cp /etc/sysconfig/iptables-config /root
+			# rpm -e iptables iptables-ipv6 --nodeps
+			# ./configure  --prefix=/usr  --with-ksource=/usr/src/linux
+			# make && make install
+
+			# cp /root/iptables /etc/rc.d/init.d
+			# cp /root/iptables-config /etc/sysconfig
+
+			6、为layer7模块提供其所识别的协议的特征码
+
+			# tar zxvf l7-protocols-2009-05-28.tar.gz
+			# cd l7-protocols-2009-05-28
+			# make install		
+
+			7、如何使用layer7模块
+
+			ACCT的功能已经可以在内核参数中按需启用或禁用。此参数需要装载nf_conntrack模块后方能生效。
+			net.netfilter.nf_conntrack_acct = 1
+
+
+
+			l7-filter uses the standard iptables extension syntax 
+			# iptables [specify table & chain] -m layer7 --l7proto [protocol name] -j [action] 
+
+
+			# iptables -A FORWARD -m layer7 --l7proto qq -j REJECT
+
+
+
+			编译内核：
+			make menuconfig
+			make -j #
+			make modules_install
+			make install
+
+			清理内核源码树：
+
+			提示：xt_layer7.ko依赖于nf_conntrack.ko模块
+
+			博客：iptables所有应用，包括layer7的实现；
+
+
+		课外扩展：recent模块，layer7模块；
+
+	博客作业：iptables所有功能；
+					
+回顾： iptables/netfilter netfilter, nat
+	
+	防火墙：
+		主机防火墙：INPUT， OUTPUT
+		网络防火墙：FORWARD
+	nat服务器：
+		target
+			SNAT：--to-source 
+			DNAT：--to-destination
+			MASQUERADE
+			
+tcp_wrapper：tcp包装器
+
+	库文件：libwrap.so
+	
+	/etc/hosts.allow,  /etc/hosts.deny
+
+			
+	判断某服务是否能够由tcp_wrapper进行访问控制的方法：
+		(1) 动态编译：ldd命令；
+			ldd $(which COMMAND) | grep libwrap
+		(2) 静态编译：strings命令查看应用程序文件，其结果中是否出现了hosts.allow和hosts.deny文件；
+		
+	服务基于libwrap完成访问控制的流程：
+		首先检查/etc/hosts.allow文件中有没有显式授权当前请求者访问：
+			是：直接授权客户端访问；
+			否：接着去检查/etc/hosts.deny文件中有没有显式拒绝当前请求者访问：
+				是：直接拒绝当前请求者的访问；
+				否：允许请求者访问；
+	
+	配置文件语法：
+		daemon_list： client_list [:options]	
+		
+		daemon_list：
+			(1) 单个应用程序的文件名称，而非服务名；
+			(2) 以逗号分隔的应用程序文件名列表；
+				例如：sshd, vsftpd
+			(3) ALL：所有接受tcp_wrapper控制的程序；
+			
+		client_list：
+			IP地址；
+			主机名；
+			网络地址：必须使用完整格式的掩码，不能使用前缀格式掩码；
+			简短格式的网络地址：例如172.16. 表示172.16.0.0/255.255.0.0；
+			ALL：所有主机；
+			KNOWN：
+			UNKNOWN：
+			PARANOID：
+			
+		EXCEPT：除了 
+		
+		:options
+			deny：拒绝，主要用于hosts.allow文件；
+			allow：允许，主要用于hosts.deny文件；
+			spawn：启动指定的应用程序；
+				vsftpd: ALL :spawn /bin/echo $(date) login attempt from %c to %s, %d >> /var/log/vsftpd.deny.log
+					%c： client ip
+					%s:  daemon@serve_ ip
+					%d: daemon name		
+			
+		例如：vsftpd仅开放给172.16.0.0/255.255.0.0中的主机访问；
+			   sshd仅开放给172.16.0.0/255.255.0.0中的主机访问，但是不包含172.16.100.6；
+				/etc/hosts.allow: 
+					sshd: 172.16.  EXCEPT  172.16.100.6
+				/etc/hosts.deny:
+					sshd: ALL 
+		
+		练习：CentOS 6主机上，控制telnet服务仅允许172.16.0.0/255.255.0.0网络中的主机访问，但不包含172.16.100.0/255.255.255.0子网中的主机；
+			对所有正常 登录的主机都记录于/var/log/telnet.allow.log中；对所有被拒绝访问的尝试都记录于/var/log/telnet.deny.log文件中；
+			
+			CentOS 6主机上的telnet服务托管于xinetd，后者接受libwrap控制； 
+			
+			CentOS 7主机上的telnet服务未托管于xinetd，而in.telnetd程序未链接至libwrap； 
+			
+	练习：尝试实现samba服务仅允许172.16.0.0/16网络中的主机访问； 但不包含172.16.100.0/24网络中的主机；
+		
+
+sudo：
+	
+	su：switch user
+		用户切换
+		
+		(1) su  -l  user  
+		(2) su  -l  user  -c   'COMMAND'
+		
+	sudo：
+		能够让获得授权的用户以另外一个用户的身份运行指定的命令；
+		
+		授权机制：授权文件 /etc/sudoers
+			root 	ALL=(ALL) 	ALL 
+			%wheel 	ALL=(ALL)  	ALL 
+			
+		编译此文件的专用命令：visudo
+		
+			授权项：
+				who  	where=(whom)  	commands
+				
+				users 	hosts=(runas)	 	commands
+					
+					users：
+						username
+						#uid
+						%groupname
+						%#gid
+						user_alias
+						
+						支持将多个用户定义为一组用户，称之为用户别名，即user_alias；
+
+					hosts:
+						ip
+						hostname
+						NetAddr
+						host_alias
+						
+					runas:
+						...
+						runas_alias
+						
+					commands:
+						command
+						directory
+						sudoedit：特殊权限，可用于向其它用户授予sudo权限；
+						cmnd_alias
+						
+				定义别名的方法：
+					ALIAS_TYPE  NAME=item1, item2, item3, ...
+						NAME：别名名称，必须使用全大写字符；
+					ALIAS_TYPE:
+						User_Alias
+						Host_Alias
+						Runas_Alias
+						Cmnd_Alias
+						
+					例如：
+						User_Alias  NETADMIN=tom, jerry
+						Cmnd_Alias NETCMND=ip, ifconfig, route
+						
+						NETADMIN 	localhost=(root) 	NETCMND
+						
+					
+		sudo命令：
+			检票机制：能记录成功认证结果一段时间，默认为5分钟；
+			
+			以sudo的方式来运行指定的命令；
+				sudo  [options]  COMMAND
+				
+					-l[l]  command 列出用户能执行的命令
+					-k     清除此前缓存用户成功认证结果；
+					
+		/etc/sudoers应用示例：
+		
+			Cmnd_Alias USERADMINCMNDS = /usr/sbin/useradd, /usr/sbin/usermod, /usr/bin/passwd [a-z]*, !/usr/bin/passwd root
+
+			User_Alias USERADMIN = bob, alice
+
+			USERADMIN       ALL=(root)      USERADMINCMNDS
+			
+		常用标签：
+			NOPASSWD:
+			PASSWD:
+		
+		
+				
+		
+		
+		
+	
+				
+						
+					
+					
+						
+				
+						
+					
+		
+						
+			
+		
+		
+		
+		
+		
+		
+		
+		
+		
+		
+		
+		
+		
+		
+		
+		
+		
+		
+		
+		
+		
+		
+					
+				
+						
+						
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	

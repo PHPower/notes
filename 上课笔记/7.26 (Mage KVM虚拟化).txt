@@ -1,0 +1,928 @@
+7.26 (Mage KVM虚拟化)
+
+寄存器 --> 1级缓存 --> 2级缓存 --> 三级缓存
+RAM：随机访问存储器
+	最小存储单元：byte --> 8bits
+ROM：
+
+'总线类型：'
+	地址总线(寻址)、数据总线、控制总线
+
+计算机五大设备：
+	运算器、存储器、输入、输出设备、控制器
+
+
+CPU：根据时序复用，分成时间片，分给不同的程序
+	将有限的资源划分成多个资源
+
+
+'内存：'空间复用，将一个内存空间，切割成为多个小空间 --> 叶匡，4k大小
+	每个进程在运行时，就认为其拥有了整个内存 ，认为内存只有进程和内核在占用内存
+		使用线性地址进行映射到物理地址   --> taskstrick
+
+	查询物理地址中映射的结果时，如果存储过多，查询过大时：
+		'需要进行分割，分层'
+		CPU：MMU 内存管理单元 memmory manager unit
+			在硬件级完成映射关系的快速转换
+
+		page table：
+
+	虚拟内存：空间复用
+
+
+硬盘：
+
+网卡：时序复用
+	队列
+
+
+虚拟机： 
+	VMM --> vmware monitor
+		创建虚拟机：
+			VMware为虚拟机提供CPU、RAM、IO
+				通过映射功能
+
+				用软件为虚拟机模拟出CPU、RAM、IO
+
+		两级切割：
+			CPU：将时间片分给虚拟机
+			内存：
+				TLB --> 转换后援缓冲器；缓存结果，加速
+
+		加速：虚拟机进程 --> 映射 --> 物理内存
+			shadow MMU ，可以完成此功能，但性能比较低
+
+			使用 tagged TLB对进程进行区别
+			
+		硬件级实现：
+			Intel：EPT 
+			AMD：NPT 
+
+
+'CPU指令集：'
+	特权指令：管理员使用的
+	普通指令：任何人可以使用的
+
+		最外层的指令：环三，进程使用。只能使用普通的指令
+		中层：环一，环二
+		最内层的指令：内核使用环0
+		比环0少一环：环负一
+			虚拟机的宿主机运行在环负一上
+
+
+		查看用户的是否具有特权指令的权限
+
+		虚拟机的模拟CPU：模拟环0的功能
+			如果将环3都模拟了，则为模拟器
+
+
+		虚拟化 --> 虚拟出的机器必须与底层架构相同
+
+
+'硬盘虚拟化：'
+	模拟硬盘：可以与宿主机的硬盘类型不同
+
+
+'网卡虚拟化：'
+	网卡+网络虚拟化
+
+		通过在内部创建一个虚拟交换机，使虚拟机连接到虚拟交换机上即可
+			(1) 如果物理机也虚拟一个网卡，并连接到虚拟交换机上，则实现了   '仅主机模式'
+			(2) 如果在虚拟交换机直接连接到一个可以配置NAT规则的设备，并使其连接物理网卡，并配置 NAT规则，也就是SNAT规则，可以实现 'NAT'模型
+			(3) 在物理机上创建一个虚拟网卡并让其关联至物理网卡，实现让虚拟网卡成为'桥'，并使内部虚拟机直接连接到'桥'上即可。
+				所有通信都由 '物理网卡' 进行转发
+
+				如果想让其加速，则使用'半虚拟化'
+
+
+'半虚拟化：' 
+	使虚拟机自身知道其运行在虚拟环境中，而不用自己在虚拟磁盘，CPU等资源
+	直接让其访问物理硬盘，CPU，只需通过一个中间件将其传输至硬件设备
+
+
+
+
+'更为高效的虚拟化：'(主机虚拟化)
+	IO透传 --> 将真实的硬件设备 让虚拟机单独使用，禁止物理机使用
+
+	优点：
+		1、提高虚拟机性能
+
+	缺点：
+		1、不利于迁移(使用共享设备，可以解决此问题)
+
+
+
+
+
+
+
+
+'虚拟化技术：'
+
+	'虚拟化技术类型：'
+		主机虚拟化：xen, kvm, virtualbox, ...
+		容器（用户空间隔离）: lxc（LinuX Container）, openvz, ...
+		系统库虚拟化：wine, ...
+		应用程序级虚拟化：jvm, pvm,...
+
+
+
+	'主机虚拟化：'
+		CPU：
+			模拟：emulation, 虚拟机的arch与物理平台的arch可以不相同；qemu；
+			虚拟：virtualization
+				完全虚拟化（full-virt）
+					BT: 二进制转换 （软件）
+					HVM：硬件辅助的虚拟化（硬件）
+				半(准)虚拟化 (para-virt)
+					GuestOS得明确知道自己运行于虚拟化技术
+					
+		内存：
+			MMU virtualization：
+				Intel: EPT, Extended Page Table
+				AMD: NPT, Nested Page Table
+				
+			TLB virtualization：
+				tagged TLB
+				
+		IO：
+			Emulation 
+			Para-virtualization
+			IO-through：IO透传
+			
+
+
+
+
+	'主机虚拟化的类型：'
+		
+		'TYPE-I： 一型虚拟化'
+			于硬件级别直接运行hypervisor；
+			
+			xen, vmware ESX/ESXI
+				'xen：红帽之前使用的；直接装载在硬件之上'
+					但是自己并不驱动硬件设备，可以安装在Linux之上的用户空间
+					装好xen软件之后重启后，xen将取代Linux，而Linux内核则成为了特权虚拟机(第一个虚拟机)
+						Linux虚拟机则可以驱动任意硬件设备，除CPU和内存
+						
+						IO设备的管理：Linux虚拟机管理
+						CPU和内存：zen管理
+
+							可以实现半虚拟化 CPU 
+							也可以实现完全虚拟化 环负一
+
+						第一个虚拟机：Dom0   --> 特权虚拟机  linux 3.0 --> 收录
+						其他虚拟机：DomU --> unprivilege
+
+						后期被红帽肃清：全部代码从redhat清除
+
+
+			在硬件基础上，没有安装操作系统
+				是在硬件基础上，直接安装虚拟化操作系统 (hypervisor)
+				在此虚拟化平台上，创建虚拟机，管理虚拟机
+
+
+
+
+		'TYPE-II: 二型虚拟化'
+			于硬件级别运行一个OS（Host OS），而此OS上运行一个VMM；
+			
+			vmware workstation, virtualbox, kvm
+				kvm：本质上不能算是二型虚拟化
+					将内核直接变为hypervisor
+					虚拟机之间是相互隔离的，按需创建，按需删除，不影响其他宿主机，也不影响虚拟机
+
+					虚拟机目的：运行程序
+
+
+
+			在硬件基础上，安装一个宿主机(已安装OS的主机)
+				在宿主机上安装一个虚拟化程序
+
+	
+	'容器'： 虚拟用户空间，更为轻量化，接近底层；但是隔离性可能不是太高，但是性能更棒
+		openvz、kvm
+
+	wine：库空间虚拟化
+
+	java jvm：开发环境虚拟化(程序级虚拟化)
+	
+
+
+	
+
+	Linux目前流行的开源虚拟化技术解决方案：
+		主机虚拟化：xen, kvm, virtualbox
+		容器级：lxc, libcontainer(docker使用), runC(工业化虚拟化), openvz
+		模拟器：qemu --> 负责用户空间
+		
+
+	
+
+	'KVM组件：'
+		kvm.ko：内核空间的模块文件 --> 让内核腐化为  --> hypervisor
+			API
+		qemu-kvm：用户空间的工具程序 
+			--> 为虚拟机模拟 硬件设备
+
+		libvirt：C工具箱，用于与开源虚拟化进行交互  
+			C/S架构
+				C：
+					libvirt-client
+				S：
+					libvirt-daemon
+				图形化工具：(libvirtd的C端程序，依赖于libvirtd服务)
+					virt-manager
+
+
+				libvirt是库
+				libvirt-daemon：守护进程
+
+
+
+	'判断CPU是否支持硬件虚拟化：'
+		grep -i -E '(vmx|svm|lm)' /proc/cpuinfo
+			vmx：Intel VT-x
+			svm：AMD AMD-v
+
+
+
+
+	快速使用kvm技术：
+		
+		$ yum install libvirt-daemon-kvm qemu-kvm virt-manager
+		# 装载kvm块设备
+		$ modprobe kvm 
+		$ lsmod | grep kvm 
+		$ ls -lh /dev/kvm 
+		# 启动daemon程序
+		$ systemctl start libvirtd.service
+		# 创建网桥
+		$ virsh iface-bridge INTERFACE BRIDGE_NAME
+		# 启动图形化工具
+		$ virt-manager
+
+		qemu-kvm：最底层的管理程序
+		libvirt-daemon-kvm：
+		virt-manager：
+
+
+		
+'总结：'
+	'虚拟化技术的分类：'
+		(1) 模拟：Emulation
+			Qemu, PearPC, Bochs, ...
+		
+		(2) 完全虚拟化：Full Virtualization，Native Virtualization(环负一)
+			BT/hvm
+			VMWare Workstation, VirtualBox, VMWare Server, Parallels Desktop, KVM(hvm), XEN(hvm)
+		
+		(3) 半虚拟化：Para-Virutalization
+			特点：GuestOS明确知道自己运行虚拟机之上；
+			xen, UML(user-mode linux)
+		
+		(4) 容器级虚拟化：
+			LXC, OpenVZ, libcontainer, runC, rkt, Linux V Servers, Virtuozzo, ...
+		
+		(5) 库级别虚拟化：
+			wine
+		
+		(6) 程序级虚拟化
+			jvm, pvm, ...
+			
+	
+	'主机虚拟化：'Emulation, Full Virtualization, Para-Virutalization
+	
+		Type-I：Hypervisor直接运行于硬件；
+		Type-II：Hypervisor运行主机OS之上；
+	
+	
+	'云栈的类别：'
+		IaaS, PaaS, SaaS, FWaaS, DBaaS, LBaaS, ...
+
+		IaaS：提供主机
+
+		PassS：提供主机+应用程序
+
+		SaaS：提供主机+服务(应用程序)
+
+		DBaaS：数据库即服务
+
+		LBaaS：负载均衡即服务
+
+		公有云、私有云、混合云
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+KVM(02)
+
+	'kvm: Kernel-based Virtual Machine'
+			Qumranet公司 --> RedHat
+			(1) X86_64
+			(2) HVM: 
+				Intel VT-x
+				AMD AMD-v
+				
+		'KVM的组件：'
+			两类组件：
+				/dev/kvm：工作为hypervisor，在用户空间可通过系统调用ioctl()与内核中的kvm模块交互，从而完成虚拟机的创建、启动、停止、删除等各种管理功能；
+				qemu-kvm进程：工作于用户空间，用于实现IO设备模拟；用于实现一个虚拟机进程；
+				
+		KVM模块load进内存之后，系统的运行模式：
+			内核模式：GuestOS执行IO类的操作时，或其它的特殊指令操作时的模式；它也被称为“Guest-Kernel”模式；
+			用户模式：Host OS的用户空间，用于代为GuestOS发出IO请求；
+			来宾模式：GuestOS的用户模式；所有的非IO类请求；
+			
+
+		'virtio半虚拟化：'
+			KSM：kvm share memmory共享内存
+				扫描物理内存，如果多个虚拟机共享一个内存，将其合二为一
+				会导致'锁'
+
+			virtio-ballon：内存优化
+
+
+		'SUSE的官方文档'、'archlinux的官方文档'
+			https://www.suse.com/documentation/
+			https://www.google.com/url?sa=t&rct=j&q=&esrc=s&source=web&cd=8&cad=rja&uact=8&ved=0ahUKEwiI-M_jq6bVAhUBQJQKHRMtBYMQFgg-MAc&url=https%3A%2F%2Fdoc.opensuse.org%2F&usg=AFQjCNGxRKo_l8jAlwB99NPNCV7lNOrJRQ
+			https://wiki.archlinux.org/index.php/Arch_Linux_(%E7%AE%80%E4%BD%93%E4%B8%AD%E6%96%87)
+
+		
+
+		'qemu组件：'--> 最底层
+			qemu-kvm：管理kvm
+			qemu-img：创建img文件
+			qemu-io：
+
+
+		'libvirt工具：'
+			libvirt：操作和管理KVM虚机的虚拟化 API，使用 C 语言编写，可以由 Python,Ruby, Perl, PHP, Java 等语言调用。可以操作包括 KVM，vmware，XEN，Hyper-v, LXC 等 Hypervisor。
+			Virsh：基于 libvirt 的 命令行工具 （CLI）
+			Virt-Manager：基于 libvirt 的 GUI 工具
+			virt-v2v：虚机格式迁移工具
+			virt-* 工具：包括 Virt-install （创建KVM虚机的命令行工具）， Virt-viewer （连接到虚机屏幕的工具），Virt-clone（虚机克隆工具），virt-top 等
+			sVirt：安全工具
+
+		
+
+
+		
+		'安装使用KVM:'
+			判断CPU是否支持硬件虚拟化：
+				grep -i -E '(vmx|svm|lm)' /proc/cpuinfo
+					vmx：Intel VT-x
+					svm：AMD AMD-v
+					
+			运行中的一个kvm虚拟机就是一个qemu-kvm进程，运行qemu-kvm程序并传递给它合适的选项及参数即能完成虚拟机启动，终止此进程即能关闭虚拟机；
+					
+			kvm工具栈：
+				qemu：
+					qemu-kvm 
+					qemu-img
+				libvirt：
+					GUI：virt-manager, virt-viewer
+					CLI: virsh, virt-install 
+					
+					C/S：
+						libvirtd
+					
+			安装：
+				(1) 装载内核模块
+					kvm：核心模块
+					kvm-intel|kvm-amd
+					
+
+	使用virt-manager管理KVM
+		# yum install qemu-kvm libvirt-daemon-kvm  virt-manager
+		# modprobe kvm 
+		
+		# systemctl start libvirtd.service 
+		
+		# virt-manager &
+		
+	网络虚拟化：
+		二层的虚拟网络设备：
+			kernel net bridge/brctl
+			openvswitch
+			
+		CentOS 7创建物理桥，使用内核自带的桥接模块实现：
+			桥接口配置文件保留地址信息；
+				TYPE=Bridge
+				Device=BRIDGE_NAME
+				
+			物理网卡配置文件：
+				删除地址、掩码和网关等相关的配置，添加
+				BRIDGE=BRIDGE_NAME
+				
+			重启网络服务即可：
+				
+	
+
+	'kvm的管理工具栈：'
+
+		如果想使用'qemu-kvm'命令，则需使用：
+			$ ln -sv /usr/libexec/qemu-kvm /usr/sbin/
+
+		
+		
+
+		qemu：
+			qemu-kvm
+			qemu-img 
+		libvirt：
+			GUI：virt-manager
+			CLI：virsh, virt-install
+			
+		'使用qemu-kvm管理vms：'
+			
+			Qemu：
+				处理器模拟器
+				仿真各种IO设备
+				将仿真设备连接至主机的物理设备
+				提供用户接口
+				
+			'qemu-kvm命令语法：'
+				qemu-kvm [options] [disk_image]
+				
+				选项有很多类别：
+					标准选项、块设备相关选项、显示选项、网络选项、...
+					
+					
+
+				'创建一个虚拟机所需组件：'
+					1、磁盘文件
+					2、网卡设备
+					3、CPU
+					4、
+
+
+					'标准选项：'
+						-machine [type=]name：-machine help来获取列表，用于指定模拟的主机类型； 
+						-cpu cpu：-cpu help来获取列表；用于指定要模拟的CPU型号；
+						-smp n[,maxcpus=cpus][,cores=cores][,threads=threads][,sockets=sockets]：指明虚拟机上vcpu的数量及拓扑；
+							cores=cores ：核心数
+							threads=threads：线程数
+
+							对称处理器
+
+						-boot [order=drives][,once=drives][,menu=on|off] [,splash=sp_name][,splash-time=sp_time][,reboot-timeout=rb_time][,strict=on|off]
+							order：各设备的引导次序：c表示第一块硬盘，d表示第一个光驱设备；
+							-boot order=dc,once=d： 
+								order：各设备的引导次序：c表示第一块硬盘，d表示第一个光驱设备
+								once：光驱只在第一次有效，之后自动弹出
+							
+						-m megs：虚拟机的内存大小；
+						-name NAME：当前虚拟机的名称，要惟一；
+						
+					
+
+					'块设备相关的选项：'
+						-hda/-hdb file：指明IDE总线类型的磁盘映射文件路径；第0和第1个；
+						-hdc/-hdd file：第2和第3个；
+						
+						-cdrom file：指定要使用光盘映像文件； 
+						
+						-drive [file=file][,if=type][,media=d][,index=i] [,cache=writethrough|writeback|none|directsync|unsafe][,format=f]：
+							file=/PATH/TO/SOME_IMAGE_FILE：映像文件路径；
+							if=TYPE：块设备总线类型，ide, scsi, sd, floppy, virtio,...
+							media=TYPE：介质类型，cdrom和disk；
+							index=i：设定同一类型设备多个设备的编号；
+							cache=writethrough|writeback|none|directsync|unsafe：缓存方式；
+								writethrough:通写，进程发出写请求时，写入缓存，然后写入磁盘，再通知用户写入完毕
+								writeback:：直接写入磁盘
+								none:回写。写入缓冲区，直接通知用户写入完毕，一会再写入磁盘
+								unsafe：非安全，性能更好，但是更为不安全
+
+							format=f：磁盘映像文件的格式；
+							
+					
+
+					'显示选项：'
+						-display type：显示的类型，sdl, curses, none和vnc；
+						-nographic：不使用图形接口； 
+						-vga [std|cirrus|vmware|qxl|xenfb|none]：模拟出的显卡的型号；
+						-vnc display[,option[,option[,...]]]]：启动一个vnc server来显示虚拟机接口； 让qemu进程监听一个vnc接口； 
+							使vnc监听的本地所有地址： 
+								-vnc :::5900
+
+							display：
+								(1) HOST:N
+									在HOST主机的第N个桌面号输出vnc；
+										5900+N
+								(2) unix:/PATH/TO/SOCK_FILE
+								(3) none
+								
+							options：
+								password：连接此服务所需要的密码；
+						
+						-monitor stdio：在标准输出上显示monitor界面；
+							Ctrl-a, c：在console和monitor之间切换；
+							Ctrl-a, h
+						
+						
+					
+
+					'网络选项：'
+						-net nic[,vlan=n][,macaddr=mac][,model=type][,name=str][,addr=str][,vectors=v]
+							为虚拟机创建一个网络接口，并将其添加至指定的VLAN；
+							model=type：指明模拟出的网卡的型号，ne2k_pci,i82551,i82557b,i82559er,rtl8139,e1000,pcnet,virtio；
+								-net nic,model=?
+							macaddr=mac：指明mac地址；
+								52:54:00 ：默认kvm mac开头
+							
+						-net tap[,vlan=n][,name=str][,fd=h][,fds=x:y:...:z][,ifname=name][,script=file][,downscript=dfile]:
+							通过物理的TAP网络接口连接至vlan n；
+							script=file：启动虚拟机时要执行的脚本，默认为/etc/qemu-ifup
+								将设备的一半关联至哪个虚拟交换机上
+
+							downscript=dfile：关闭虚拟机时要执行的脚本，/etc/qemu-ifdown
+							ifname=NAME：自定义接口名称；
+							
+							
+							/etc/qemu-ifup
+							
+								#!/bin/bash
+								#
+								bridge=br0
+
+								if [ -n "$1" ];then
+									ip link set $1 up
+									sleep 1
+									brctl addif $bridge $1
+									[ $? -eq 0 ] && exit 0 || exit 1
+								else
+									echo "Error: no interface specified."
+									exit 1
+								fi	
+								
+						
+						'其它选项：'
+							-daemonize：以守护进程运行；
+							
+							
+					
+
+					'实例'：创建一个cirros
+						1、创建磁盘文件
+							$ qemu-img create -f qcow2 -o preallocation=metadata,size=80G /vms/centos.img
+							$ qemu-img info centos.img
+							image: centos.img
+							file format: qcow2
+							virtual size: 80G (85899345920 bytes)
+							disk size: 13M
+							cluster_size: 65536
+							Format specific information:
+							    compat: 1.1
+							    lazy refcounts: false
+
+						2、创建虚拟机(不开启图形化界面)
+							$ qemu-kvm -name centos7 -m 512 -cpu host -smp 2,cores=2,sockets=1 -drive file=/vms/centos7.img,if=virtio,media=disk,cache=writeback,format=qcow2 -nographic
+
+						3、使用vnc显示并创建;监听在5900端口
+							需要安装 vncviewer
+							$ qemu-kvm -name centos7 -m 512 -cpu host -smp 2,cores=2,sockets=1 -drive file=/vms/centos7.img,if=virtio,media=disk,cache=writeback,format=qcow2 -vnc :0 
+
+							但是现在还是没有系统的磁盘，所以会提示无boot
+							使用镜像文件继续创建
+						
+						4、创建带系统的虚拟机
+							$ qemu-kvm -name centos7 -m 512 -cpu host -smp 2,cores=2,sockets=1 -drive file=/vms/centos7.img,if=virtio,media=disk,cache=writeback,format=qcow2 -drive file=/vms/centos7.iso,media=cdrom -boot order=dc,once=d -vnc :0 
+							或者
+							$ qemu-kvm -name centos7 -m 512 -cpu host -smp 2,cores=2,sockets=1 -drive file=/vms/centos7.img,if=virtio,media=disk,cache=writeback,format=qcow2 -drive file=/root/archlinux-2015.12.01-dual.iso,media=cdrom -boot order=dc,once=d -vnc :::5900
+
+
+
+					'示例：使用网络选项，创建虚拟机'
+						$ vim /etc/qemu-ifup
+						#!/bin/bash
+						#
+						bridge=br0
+
+						if [ -n "$1" ];then
+							ip link set $1 up
+							sleep 1
+							brctl addif $bridge $1
+							[ $? -eq 0 ] && exit 0 || exit 1
+						else
+							echo "Error: no interface specified."
+							exit 1
+						fi
+
+						$ qemu-kvm -name c1 -m 256m -smp 2 -drive file=/vms/cirros1.img,media=disk,if=virtio,format=qcow2  -net nic,model=virtio,macaddr=52:54:00:00:aa:11 -net tap,ifname=tap1,script=/etc/qemu-ifup -daemonize  -vnc :0
+
+						$ qemu-kvm -name c1 -m 256m -smp 2 -drive file=/vms/cirros2.img,media=disk,if=virtio,format=qcow2  -net nic,model=virtio,macaddr=52:54:00:00:aa:11 -net tap,ifname=tap1,script=/etc/qemu-ifup -daemonize  -vnc :1
+
+
+
+
+
+					示例1：
+						 ~]#  qemu-kvm -name c2 -smp 2,maxcpus=4,sockets=2,cores=2 -m 128 -drive file=/images/kvm/cos-i386.qcow2,if=virtio -vnc  :1 -daemonize -net nic,model=e1000,macaddr=52:54:00:00:00:11 -net tap,script=/etc/qemu-ifup 
+					示例2：	 
+						 ~]# qemu-kvm -name winxp -smp 1,maxcpus=2,sockets=1,cores=2 -m 1024 -drive file=/data/vms/winxp.qcow2,media=disk,cache=writeback,format=qcow2 file=/tmp/winxp.iso,media=cdrom -boot order=dc,once=d -vnc :1 -net nic,model=rtl8139,macaddr=52:54:00:00:aa:11 -net tap,ifname=tap1,script=/etc/qemu-ifup -daemonize
+						 
+				
+
+
+			'qemu-img命令'
+				-f：指明文件格式
+				-o：指明选项
+				info ：查看某个Img文件的详细信息
+
+
+
+
+				'半虚拟化：virtio'
+					建议：Network IO, Disk IO使用virtio，性能会有显著提升；
+					
+				
+
+				'dnsmasq：' DNS转发器，DHCP服务器
+					$ yum info dnsmasq
+
+
+						-i,--listen-address：监听地址
+						-F,--dhcp-range：指定IP地址范围
+						-O,--dhcp-option：指定网关和 ip地址，指定网关地址
+							默认为 --dhcp-option=3,10.0.0.254
+								10.0.0.254为网关地址
+
+
+
+					listen-address=192.168.1.132,127.0.0.1
+					dhcp-range=192.168.1.50,192.168.1.150,48h
+					dhcp-option=3,192.168.0.1
+					
+						 
+			
+
+
+
+
+
+
+
+			'virsh命令:' --> 两个创建虚拟机的命令： virt-manager 、 virt-install
+				虚拟机的生成需要依赖于预定义的xml格式的配置文件；其生成工具有两个：virt-manager, virt-install； 
+				
+				virsh [OPTION]... COMMAND [ARG]..
+
+					列出使用virt创建的虚拟机，使用此命令可以查看运行时的虚拟机
+						$ vish list 
+
+				
+				'子命令的分类：'
+					Domain Management (help keyword 'domain') ：虚拟机管理命令
+					Domain Monitoring (help keyword 'monitor')
+					Host and Hypervisor (help keyword 'host')
+					Interface (help keyword 'interface')
+					Networking (help keyword 'network')
+					Network Filter (help keyword 'filter')
+					Snapshot (help keyword 'snapshot')
+					Storage Pool (help keyword 'pool') ：存储池
+					Storage Volume (help keyword 'volume') ：存储卷、透传访问的。
+
+
+					
+				'Domain Management (help keyword domain)'
+					
+					'start <domain>'： 启动虚拟机
+
+					create：从xml格式的配置文件创建并启动虚拟机；  
+					'define'：从xml格式的配置文件创建虚拟机；(只创建不启动) ; $ virsh define /root/test.xml  ; $ vish list  ; $ ls /etc/libvirt/qemu (虚拟机配置文件地址)
+						ls /etc/libvirt/qemu (虚拟机配置文件地址)
+
+					net-list ：列出网络
+					
+					'destroy'：强行关机； $ vish destroy c1
+					'shutdown'：关机；   $ vish shutdown c1
+					reboot：重启；
+
+					'dumpxml <domain>'：导出虚拟机实例的配置文件   ; $ vish dumpxml c1 
+					
+					undefine：删除虚拟机；
+					
+					'suspend/resume：'暂停于内存中，或继续运行暂停状态的虚拟机；
+					
+					'save/restore'：保存虚拟机的当前状态至文件中，或从指定文件恢复虚拟机；
+						保存：$ virsh save c1 /tmp/c2.img 
+						恢复：$ virsh restore /tmp/c2.img 
+
+					'console'：连接至指定domain的控制台；
+
+
+					
+					
+
+					attach-disk/detach-disk：磁盘设备的热插拔； 需要实现创建空磁盘映像文件
+						$ qemu-img create -f qcow2 -o preallocation=metadata,size=10G /vms/cirros/c2_add1.qcow2
+						$ virsh attach-disk c2 /vms/cirros/c2_add1.qcow2 vdb
+
+						拆除之前，磁盘必须处于 umount未挂载状态
+						$ virsh domblklist
+						$ virsh detach-disk c2 vdb
+					
+					attach-interface/detach-interface：网络接口设备的热插拔；
+						type：bridge，一般都为桥类型
+						source：BRIDGE_NAME
+						
+
+																		# $ ip link add vethm.1 type veth peer name vethm.2
+																		# $ ifconfig vethm.1 up 
+																		# $ ifconfig vethm.2 up 
+																		# $ brctl addif br-int veth,/1
+																		# $ brctl show 
+						尽量不要使用物理网卡，如果使用网卡，则创建的是物理桥
+
+						$ virsh attach-interface c2 bridge  br0
+						$ virsh domiflist c2
+
+						# 在小系统上执行命令，获取IP地址
+						$ udhcpc -i eth1 
+
+
+						'拆除'： 指定网卡MAC地址
+						$ virsh detach-interface c2 bridge --mac 52:54:00:A7:23:EF
+						
+						注意 ：无须事先创建网络接口设备；
+						
+				
+
+				Domain Monitoring (help keyword 'monitor') ：监控
+					domiflist ：列出网卡接口
+					domblklist ： 列出磁盘
+					dominfo	： 查看某个domain的详细信息
+					domstate ：查看某个domain的运行状态
+					dom
+					...
+
+
+
+					脱离界面：
+						ctrl + ]
+
+					进入虚拟机控制台：
+						$ virsh list 
+						$ virsh console c1
+
+
+
+			'virt-install命令：'
+
+				-N name：指定虚拟机名
+
+
+					
+		'图形管理工具：'
+			kimchi：基于H5研发web GUI; 依赖于 --> virt-king；
+			OpenStack: IaaS
+				较吃内存，比较重量级
+
+			oVirt工具：在centos镜像路径下 --> virt/x86_64路径下
+		
+
+
+
+
+		'对于qemu-kvm、libvirt'：
+			1、了解相互之间的关系
+			2、了解哪个配置，更为优化，快捷，性能更快
+			3、主要是概念
+			4、虚拟路由器，网桥的关系，概念
+
+
+			通过这些知识，来选择  更好的性能的配置来启动虚拟机，使虚拟机的性能更优化，更高更快
+		
+				
+		
+
+'虚拟机网络：'
+
+	基于内核中的网络名称空间  创建多个网络空间 --> 实现多个用户空间隔离
+
+
+	ip link 命令： 可以手动创建虚拟交换机	
+
+		ip netns：网络名称空间
+
+
+		
+		示例： 创建一对儿网卡设备
+			$ ip link add vethx1 type veth peer name vethx2
+
+		示例： 创建一个模拟网络空间
+			$ ip netns add route1
+			$ ip netns list
+
+		示例： 将创建的一张网卡设备关联至网络空间
+			$ ip link set dev vethx1 netns route1
+			$ ip link show 
+
+			# 在创建的网络空间中执行命令
+			$ ip netns exec route1 ifconfig -a 
+			$ ip netns exec route1 ifconfig vethx2 10.0.0.1/24 up
+			$ $ ip netns exec route1 ifconfig
+
+			$ ifconfig vethx1 10.0.0.2/24 up
+
+			$ ping 10.0.0.1
+
+
+		示例：删除创建的网卡 
+
+
+
+
+
+
+
+	内核模块： bridge 
+		在内核级，模拟出一个虚拟交换机
+		使用系统调用
+
+		使用brctl命令
+
+			brctl命令：
+				show：查看连接到桥上的设备
+				addbr：创建桥
+				addif：在桥上添加一个网卡设备
+
+
+			示例：手动创建一个桥
+				$ brctl addr br-int
+				$ ifconfig br-int up 
+
+			示例：
+
+
+
+	云化 IDC 所需要的技术：
+		SDN、NFV、OVS(open V switch) --> 支持各种高级功能，vxlan，流控等技术
+
+
+
+
+
+
+
+
+'对于qemu-kvm、libvirt'：
+		1、了解相互之间的关系
+		2、了解哪个配置，更为优化，快捷，性能更快
+		3、主要是概念
+		4、虚拟路由器，网桥的关系，概念
+
+
+		通过这些知识，来选择  更好的性能的配置来启动虚拟机，使虚拟机的性能更优化，更高更快
+		
+		
+
+
+
+
+
+
+'课后作业：'
+	实现第四个视频中的所有功能
+
+						
+					 
+							
+		
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

@@ -1,0 +1,145 @@
+实验目标：
+(1) nfs server导出/data/application/web，在目录中提供wordpress; 
+(2) nfs client挂载nfs server导出的文件系统至/var/www/html；
+(3) 客户端（lamp）部署wordpress，并让其正常访问；要确保能正常发文章，上传图片；
+(4) 客户端2(lamp)，挂载nfs server导出的文件系统至/var/www/html；验正其wordpress是否可被访问； 要确保能正常发文章，上传图片；
+
+
+先创建一台LAMP和NFS Server
+
+LAMP:
+	IP:172.16.1.70
+
+NFS server :
+	IP:172.16.1.100
+
+
+
+1、安装LAMP：
+	(1)安装httpd并配置虚拟主机：(这里为了方便直接，编辑成了挂载nfs之后的配置文件；如需测试httpd服务，请看之前的博客文章)
+		$ yum install httpd php php-mysql php-mbstring
+		$ vim /etc/httpd/conf.d/lamp.conf
+		<VirtualHost *:80>
+		        ServerName 172.16.1.70
+		        DocumentRoot "/nfs/wordpress/"
+		        <Directory "/nfs/wordpress/">
+		                Options None
+		                AllowOverride None
+		                Require all granted
+		        </Directory>
+		        CustomLog "/nfs/wordpress/log/access_log" combined
+		        ErrorLog "/nfs/wordpress/log/error_log"
+		</VirtualHost>
+
+		$ mkdir -pv /nfs/wordpress/log 
+	
+2、配置nfs-server
+	(1)安装nfs以及开发包nfs-utils，还有php、php-mysql，php-mbstring
+		$ yum install nfs nfs-utils php php-mysql php-mbstring
+
+	(2)配置数据库文件：
+		$ vim /etc/my.cnf.d/server.conf
+		[mysqld]
+		skip_name_resolve=ON
+		innodb_file_per_table=ON 
+		log_bin=mysql-bin
+
+	(3)启动数据库
+		$ systemctl start mariadb.service
+
+	(4)编辑/etc/exports共享配置文件：
+		$ vim /etc/exports 
+		/data/mywp	172.16.1.70(rw,no_root_squash) 172.16.1.20(rw,no_root_squash)
+
+	(5)启动nfs服务：
+		$ systemctl start nfs.service 
+
+3、在LAMP上挂载NFS文件系统：
+	(1)挂载
+		$ mount -t nfs 172.16.1.100:/data/mywp /nfs/wordpress
+
+	(2)测试挂载点权限：
+		$ cd /nfs/wordpress
+		$ mkdir testdir
+		$ touch 1.txt 
+
+
+4、在NFS服务器上的共享目录解压wordpress并配置，为其创建数据库，以及远程连接的权限
+	(1)解压wordpress配置其配置文件：
+
+		这一步在Mac(也就是PC机操作)
+		$ scp wordpress-4.7.4-zh_CN.tar.gz root@172.16.1.100:/data
+
+		$ cd /root 
+		$ tar xf wordpress-4.7.4-zh_CN.tar.gz
+		$ mv wordpress /data/mywp/
+		$ cd /data/mywp/wordpress
+		$ mv config.sample.inc.php config.inc.php
+		$ vim config.inc.php
+			修改如下：
+			// ** MySQL 设置 - 具体信息来自您正在使用的主机 ** //
+			/** WordPress数据库的名称 */
+			define('DB_NAME', 'wordpress');
+
+			/** MySQL数据库用户名 */
+			define('DB_USER', 'wordpress');
+
+			/** MySQL数据库密码 */
+			define('DB_PASSWORD', 'root@123');
+
+			/** MySQL主机 */
+			define('DB_HOST', '172.16.1.100');
+
+			/** 创建数据表时默认的文字编码 */
+			define('DB_CHARSET', 'utf8');
+
+			/** 数据库整理类型。如不确定请勿更改 */
+			define('DB_COLLATE', '');
+
+	(2)创建数据库，并授权：
+		$ mysql 
+		> CREATE DATEBASE wordpress;
+		> GRANT ALL PRIVILEGES ON wordpress.* TO 'wordpress'@'172.16.1.100' IDENTIFIED BY 'root@123';
+		> GRANT ALL PRIVILEGES ON wordpress.* TO 'wordpress'@'172.16.1.70' IDENTIFIED BY 'root@123';
+		> GRANT ALL PRIVILEGES ON wordpress.* TO 'wordpress'@'172.16.1.20' IDENTIFIED BY 'root@123';
+		> FLUSH PRIVILEGES;
+	
+	(3)重启数据库服务
+		$ systemctl restart mariadb.service 
+
+
+5、在LAMP上：
+	重启httpd服务：
+		$ systemctl restart httpd
+
+	注意：这里要求能上传图片，但是在实验环境中是无法上传的，因为需要借助于网络，但是我们这里是没有Internet的
+
+
+
+6、创建另一台LAMP：
+	$ yum install httpd php php-mysql php-mbstring
+	$ vim /etc/httpd/conf.d/lamp.conf
+		<VirtualHost *:80>
+		        ServerName 172.16.1.20
+		        DocumentRoot "/nfs/wordpress/"
+		        <Directory "/nfs/wordpress/">
+		                Options None
+		                AllowOverride None
+		                Require all granted
+		        </Directory>
+		        CustomLog "/nfs/wordpress/log/access_log" combined
+		        ErrorLog "/nfs/wordpress/log/error_log"
+		</VirtualHost>
+
+	$ mkdir -pv /nfs/wordpress/log
+
+	$ mount -t nfs 172.16.1.100:/data/mywp /nfs/wordpress
+
+	$ systemctl start httpd
+
+
+
+
+
+
+

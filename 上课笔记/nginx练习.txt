@@ -1,0 +1,813 @@
+nginx练习：
+
+
+'实验1:安装Nginx，并配置一个虚拟主机'
+	
+	1、安装Nginx：
+		$ scp Downloads/nginx-1.10.2-1.el7.ngx.x86_64.rpm root@172.16.1.100:/root
+
+		$ yum install ./nginx-1.10.2-1.el7.ngx.x86_64.rpm
+		$ bash ngx-of-vim.sh
+		$ vim ngx-of-vim
+		#!/bin/bash
+
+		#create syntax dir
+		mkdir -p ~/.vim/syntax && cd ~/.vim/syntax
+
+		wget ftp://172.16.0.1/pub/Sources/sources/nginx/nginx.vim ./
+
+		#let filetype support nginx.vim
+		echo "au BufRead,BufNewFile /etc/nginx/nginx.conf set ft=nginx" > ~/.vim/filetype.vim
+
+	2、配置虚拟主机：
+		$ cd /etc/nginx 
+		$ vim conf.d/test.conf
+		server {
+			listen 8080;
+			root /data/www1;
+			server_name www1.maxie.com;
+		}
+
+		$ mkdir -p /data/www1/
+		$ vim /data/www1/index.html
+		<h1> hello </h1>
+
+		$ systemctl start nginx 
+
+	3、打开浏览器访问即可
+
+
+'实验2：设置keepalive为100秒和2个请求数，并对safari类的浏览器禁止使用keepalive'
+	$ vim conf.d/test.conf
+	server {
+	        listen 8080;
+	        server_name www1.maxie.com;
+	        error_page 404 http://www2.maxie.com:8088/m.jpg;
+	        keepalive_timeout 100s;			#100s后断开
+	        keepalive_requests 2;			#2个请求后断开
+	        keepalive_disable safari;		#禁止Safari浏览器使用长连接
+	        location / {
+	                root /data/www1/;
+	                index index.html index.htm;
+	        }
+	        #location ~* \.(jpg|jpeg|gif|png)$ {
+	        #       root /data/images/;
+	        #}
+	}
+
+	$ nginx -t 
+	$ nginx -s reload
+
+
+	在另一台机器上进行测试：
+	$ yum install telnet 
+	[root@test-1 ~]# telnet 172.16.1.70 8080
+	Trying 172.16.1.70...
+	Connected to 172.16.1.70.
+	Escape character is '^]'.
+	GET /inde.html HTTP/1.1
+	Host: 172.16.1.70
+
+	HTTP/1.1 302 Moved Temporarily
+	Server: nginx/1.10.2
+	Date: Tue, 13 Jun 2017 06:57:50 GMT
+	Content-Type: text/html
+	Content-Length: 161
+	Connection: keep-alive
+	Location: http://www2.maxie.com:8088/m.jpg
+
+	<html>
+	<head><title>302 Found</title></head>
+	<body bgcolor="white">
+	<center><h1>302 Found</h1></center>
+	<hr><center>nginx/1.10.2</center>
+	</body>
+	</html>
+	GET /inde.html HTTP/1.1
+	Host: 172.16.1.70
+
+	HTTP/1.1 302 Moved Temporarily
+	Server: nginx/1.10.2
+	Date: Tue, 13 Jun 2017 06:57:58 GMT
+	Content-Type: text/html
+	Content-Length: 161
+	Connection: close
+	Location: http://www2.maxie.com:8088/m.jpg
+
+	<html>
+	<head><title>302 Found</title></head>
+	<body bgcolor="white">
+	<center><h1>302 Found</h1></center>
+	<hr><center>nginx/1.10.2</center>
+	</body>
+	</html>
+	Connection closed by foreign host.
+
+
+
+
+'实验3：使用access_module禁止某个ip访问bbs/index.html，允许其他内网ip地址访问'
+	$ vim conf.d/test.conf 
+	server {
+	        listen 8080;
+	        server_name www1.maxie.com;
+	        error_page 404 http://www2.maxie.com:8088/m.jpg;
+	        keepalive_timeout 100s;
+	        keepalive_requests 2;
+	        keepalive_disable safari;
+	        location / {
+	                root /data/www1/;
+	                index index.html index.htm;
+	        }
+	        #location ~* \.(jpg|jpeg|gif|png)$ {
+	        #       root /data/images/;
+	        #}
+	        location /bbs {
+	                root /data/;
+	                deny 172.16.1.100;
+	                allow 172.16.0.0/16;
+	                deny all;
+	        }
+	}
+
+	$ mkdir -p /data/bbs 
+	$ vim /data/bbs/index.html
+	<h1> bbs Internal web server </h1>
+
+	$ nginx -t 
+	$ nginx -s reload
+
+	使用 1.100的客户端访问：
+	[root@test-1 ~]# curl http://172.16.1.70:8080/
+	<h1> hello </h1>
+	[root@test-1 ~]# curl http://172.16.1.70:8080/bbs/index.html
+	<html>
+	<head><title>403 Forbidden</title></head>
+	<body bgcolor="white">
+	<center><h1>403 Forbidden</h1></center>
+	<hr><center>nginx/1.10.2</center>
+	</body>
+	</html>
+
+	使用1.20的客户端访问：
+	[root@test-3 ~]# curl http://172.16.1.70:8080/bbs/index.html
+	internal bbs site
+
+
+
+
+
+'实验4：使用auth_basic模块进行认证'
+	
+	$ yum install -y httpd-tools
+	$ htpasswd -c -m /etc/nginx/.ngxpasswd tom
+	$ htpasswd -m /etc/nginx/.ngxpasswd jerry
+	$ vim conf.d/test.conf
+	location /bbs {
+                root /data/;
+                auth_basic "Internal BBS Site";
+                auth_basic_user_file /etc/nginx/.ngxpasswd;
+        }
+
+    $ nginx -t 
+    $ nginx -s reload
+
+
+'实验5：添加status状态信息查看'
+
+	$ vim conf.d/test.conf
+	添加如下信息：
+	location /ngx_status {
+		stub_status;
+	}
+
+	打开浏览器查看：
+	http://www1.maxie.com:8080/ngxstatus
+
+	'取出正在连接的连接数：'
+	curl -s http://172.16.1.70:8080/ngxstatus | awk '/^Active/{print $3}'
+
+	'取出已接收的、处理的，请求的数量：'
+	[root@test-1 ~]# curl -s http://172.16.1.70:8080/ngxstatus | awk '/^[[:space:]]*[[:digit:]]+/{print $0}'
+ 	93 93 168
+
+
+
+
+ngx_http_log_module
+
+
+'实验6：启用gzip压缩'
+	$ cp /var/log/nginx/access.log /data/www1/log.html
+	$ chmod a+r /data/www1/log.html
+	$ vim /etc/nginx/nginx.conf
+	在http {}中 添加： 
+	gzip on;
+	gzip_types  text/css text/plain;		#对什么格式的信息进行压缩
+    gzip_comp_level 6;
+    gzip_min_length 64;
+
+	$ nginx -t 
+	$ nginx -s reload 
+
+
+	测试：
+	[root@test-3 ~]# curl -I --compress http://172.16.1.70:8080/log.html
+	HTTP/1.1 200 OK
+	Server: nginx/1.10.2
+	Date: Tue, 13 Jun 2017 09:29:17 GMT
+	Content-Type: text/html
+	Last-Modified: Tue, 13 Jun 2017 09:20:50 GMT
+	Connection: keep-alive
+	ETag: W/"593fae72-32999cd"
+	Content-Encoding: gzip
+
+
+
+'实验7：配置nginx+SSL虚拟主机'
+
+	1、自建CA
+		$ cd /etc/pki/CA/
+		$ (umask 077;openssl genrsa -out /etc/pki/CA/private/cakey.pem 4096)
+		$ openssl req -new -x509 -key /etc/pki/CA/private/cakey.pem -out /etc/pki/CA/cacert.pem -days 3650
+		$ touch {serial,index.txt}
+		$ echo 01 > serial
+
+	2、生成ssl签署请求，并让CA签署
+		$ mkdir -pv /etc/nginx/ssl 
+		$ cd /etc/nginx/ssl 
+		$ (umask 077;openssl genrsa -out /etc/nginx/ssl/nginx.key 4096)
+		$ openssl req -new -key /etc/nginx/ssl/nginx.key -out /etc/nginx/ssl/nginx.csr -days 550
+		$ openssl ca -in /etc/nginx/ssl/nginx.csr -out /etc/nginx/ssl/nginx.crt
+
+	3、编辑虚拟主机配置文件：使其开启 SSL功能：
+
+		$ cd /etc/nginx 
+		$ vim conf.d/test.conf
+		server {
+		        listen 443;
+		        server_name www1.maxie.com;
+		        error_page 404 http://www2.maxie.com:8088/m.jpg;
+		        keepalive_timeout 100s;
+		        keepalive_requests 2;
+
+		        location / {
+		                root /data/www1/;
+		                index index.html index.htm;
+		        }
+
+		        ssl                     on;							#开启SSL
+		        ssl_certificate         /etc/nginx/ssl/nginx.crt;	#指定ssl的证书位置
+		        ssl_certificate_key     /etc/nginx/ssl/nginx.key;	#指定生成的私钥位置
+
+		        ssl_session_timeout     5m;							#SSL会话超时时长
+
+		        ssl_protocols   SSLv2 SSLv3 TLSv1;					#SSL协议
+		        ssl_ciphers     HIGH:!aNULL:!MD5;					#SSL加密
+		        ssl_prefer_server_ciphers       on;					#指定使用SSLv3和TLS协议时，服务器密码应优先于客户端密码
+
+		        ssl_session_cache shared:sslcache:20m;				#SSL会话缓存
+
+		        location /bbs {
+		                root /data/;
+		                auth_basic "Internal BBS Site";
+		                auth_basic_user_file /etc/nginx/.ngxpasswd;
+		        }
+		        location /ngxstatus {
+		                stub_status;
+		        }
+
+		}
+
+	4、重启Nginx，并导入CA的自签证书到浏览器：	
+		$ nginx -t 
+		$ nginx -s reload 
+		$ scp /etc/pki/CA/cacert.pem maxie@172.16.1.11:/Users/machiyuan/
+
+		导入浏览器
+		即可
+
+
+
+
+'awk实验：使用awk查看nginx访问日志前10的IP地址以及访问次数：'
+
+	$ cat /var/log/nginx/access.log | awk '{ip[$1]++}END{for(i in ip) {print i,ip[i]}}' | sort -k 2  -nr
+	114.249.233.111 107
+	89.64.17.42 3
+	122.10.64.141 3
+	120.132.3.151 3
+	111.196.11.182 3
+	207.46.13.87 2
+	177.33.124.230 2
+	78.10.48.194 1
+	66.249.69.139 1
+	66.249.69.137 1
+	66.249.69.135 1
+	220.181.108.163 1
+	220.181.108.159 1
+	180.76.15.149 1
+	139.162.88.63 1
+	123.125.71.76 1
+	123.125.71.34 1
+	123.125.71.102 1
+	123.125.67.162 1
+	120.24.251.13 1
+	118.190.79.161 1
+	111.206.221.79 1
+	111.206.221.77 1
+	111.206.221.47 1
+	111.206.221.28 1
+
+
+	查看当前通过tcp连接到本机的ip地址：
+
+	$ netstat -tan | awk '/^tcp\>/{split($5,ip,":") count[ip[1]]++}END{for(i in count) print i,count[i]}'
+
+
+
+ngx_http_rewrite_module模块
+
+	URL重定向
+
+
+'实验8：'
+
+
+
+0505 第二个视频  70：00
+
+
+
+
+
+?????????????????????????????????????
+16、client_body_buffer_size size;
+	用于接收客户端请求报文的'body部分的缓冲区大小'；默认为16k；超出此大小时，其将被暂存到磁盘上的由client_body_temp_path指令所定义的位置；
+		'如果是博客或者论坛站点,可以提高缓冲区大小;
+		如果是电商站点,则使用默认即可.'
+
+17、client_body_temp_path path [level1 [level2 [level3]]];
+	设定用于存储客户端请求报文的body部分的临时存储路径及子目录结构和数量；
+		'启用此项会影响性能'
+
+		16进制的数字；
+					
+?????????????????????????????????????
+
+	
+
+
+
+
+
+
+
+
+
+proxy_module代理模块：
+
+
+
+"实验9：三台主机之间，一台做代理，一台做HTTP，另一台做外网访问HTTP的客户端"
+
+	Nginx:
+		IP： 172.16.1.70/16	192.168.1.254/24
+
+	HTTP:
+		IP:	 192.168.1.10/24
+
+	Client:
+		IP:	 172.16.1.100/16
+
+
+
+
+	1、先在被代理的主机上安装http
+		$ yum install httpd httpd-tools
+		$ vim /var/www/html/index.html
+		<h1> Internal Web Server </h1>
+		<h2> IP: 172.16.1.20 </h2>
+		$ cd /var/www/html/
+		$ cp /usr/share/backgrounds/morning.jpg ./
+		$ cp /usr/share/backgrounds/night.jpg ./
+		$ systemctl start httpd
+		$ ss -tnl 查看80端口是否监听
+
+	2、配置nginx的代理设置
+		$ cd /etc/nginx
+		$ vim conf.d/maxie.conf
+		proxy_cache_path			/web/cache/www1	levels=2:1:1	keys_zone=my_cache:20m	max_size=1g;
+
+		server {
+			listen					80;
+			server_name				www1.maxie.com;
+			root					/web/www1;
+			index 					index.html index.htm;
+
+			location / {
+				access_log			/web/www1/access.log 	my_log 	flush=4m buffer=1m;
+			}	
+
+			location ~* \.(jpg|png|jpeg|gif) {
+				proxy_pass				http://172.16.1.20:80;
+				proxy_set_header		X-Real-IP	$remote_addr;
+				proxy_cache 			my_cache;
+				proxy_cache_key			$request_uri;
+				proxy_cache_valid		200 301 302 10m;
+				proxy_cache_valid		any	1m;
+				proxy_cache_methods		GET HEAD;
+				proxy_connect_timeout	10s;
+
+				proxy_hide_header		ETag;
+				proxy_hide_header		Last-Modified;
+			}
+
+			error_page					404	http://www1.maxie.com/404.html;
+
+			location = /404.html {
+			}
+		}
+
+		$ mkdir -pv /web/www1
+		$ mkdir -pv /web/cache/www1
+		$ vim /web/www1/index.html
+		<h1> Nginx Server </h1>
+		<h2> IP: 172.16.1.70 </h2>
+
+		$ vim /web/www1/404.html 
+		<h1>    Ooooops </h1>
+		<h2>    404     NOT     Found  =_=      </h2>
+
+		$ nginx -t 
+		$ systemctl start nginx
+
+	3、客户端测试
+		$ vim /etc/hosts
+		172.16.1.70	www1.maxie.com
+
+		打开浏览器查看：
+
+
+
+
+
+
+
+
+
+
+
+'实验10：搭建lnamp'
+	nginx作为 http 和 php-fpm 的代理
+
+
+	一、配置Nginx
+		1、安装Nginx
+			$ yum info nginx 
+			$ yum install nginx
+		2、修改配置文件，添加自定义日志格式
+			$ cd /etc/nginx 
+			$ vim nginx.conf
+			http {
+				log_format	my_log	'$remote_addr - - $remote_user [$time_local] "$request"'
+									'$status $body_bytes_sent "$http_referer"'
+									'$http_user_agent';
+			}
+		3、添加虚拟主机配置文件
+			$ vim conf.d/maxie.conf
+			fastcgi_cache 					/web/cache/fcgi levels=2:1:1 keys_zone=fcgi_cache:20m inactive=1m max_size=1g;
+			
+			server {
+				listen 						80;
+				server_name					www1.maxie.com;
+				root						/web/www1/;
+				index 						index.php index.html index.htm;
+				add_header					X-Via	$server_addr;
+				add_header					X-Accel	$server_name;
+
+				location / {
+					try_files				$uri $uri/ /index.html;
+					access_log				/web/www1/access.log my_log flush=4m buffer=1m;
+				}
+
+				location ~* \.php$ {
+					root					/web/www1/fcgi;
+					fastcgi_pass			172.16.1.120:9000;
+					fastcgi_index			index.php;
+					fastcgi_param 			SCRIPT_FILENAME /web/www1/fcgi$fastcgi_script_name;
+
+					fastcgi_cache 			fcgi_cache;
+					fastcgi_cache_key		$request_uri;
+					fastcgi_cache_methods	GET HEAD;
+					fastcgi_cache_min_uses	2;
+					fastcgi_cache_valid		200 301 302 10m;
+					fastcgi_cache_valid		any 1m;
+					fastcgi_keep_conn		on;
+
+					include					fastcgi_params;
+				}
+
+				location ~* ^/pm_(ping|status)$ {
+					include					fastcgi_params;
+					fastcgi_pass			172.16.1.120:9000;
+					fastcgi_param 			SCRIPT_FILENAME /web/www1/fcgi$fastcgi_script_name;
+
+				}
+
+				location ~* ^/pma$ {
+					include					fastcgi_params;
+					fastcgi_pass			172.16.1.120:9000;
+					fastcgi_param 			SCRIPT_FILENAME /web/www1/fcgi$fastcgi_script_name;
+
+					if ($request_filename ~ /pma ) {
+                        rewrite ^       	http://www1.maxie.com/pma/index.php permanent;
+                	}
+				}
+			}
+
+		4、创建配置文件中的目录：
+			$ mkdir -pv /web/www1/
+			$ mkdir -pv /web/cache/
+			$ vim /web/www1/index.html 
+			<h1> Nginx Server </h1>
+			<h2> =_= </h2>
+
+
+	二、配置php-fpm主机
+		1、安装php-fpm以及其他组件
+			$ yum -y install php-fpm php-mysql php-mbstring
+		2、编辑配置文件
+			$ vim /etc/php-fpm.d/www.conf
+			将如下选项修改默认值的为这里的值：
+			listen = 172.16.1.120:9000
+			listen.allowed_clients = 172.16.1.70
+			user = nginx
+			group = nginx
+			pm.status_path = /pm_status
+			ping.path = /pm_ping
+			ping.response = pong
+			并创建/var/lib/php/session目录 修改属主属组为nginx
+
+		3、创建用户以及所需目录
+			$ useradd -r nginx 
+			$ mkdir -pv /var/lib/php/session 
+			$ chown -R nginx.nginx /var/lib/php/session
+
+			$ mkdir -pv /web/www1/fcgi 
+			$ chown -R nginx.nginx /web/www1/fcgi
+
+			$ vim /web/www1/fcgi/index.php
+			<?php 
+				phpinfo();
+			?>
+
+		4、启动php-fpm
+			$ systemctl start php-fpm
+
+	三、配置mariadb
+		1、安装maridb
+			$ yum -y install mariadb-server
+
+		2、编辑配置文件
+			$ vim /etc/my.conf
+			[mysqld]
+			skil_name_resolve=ON
+			innodb_file_per_table=ON
+			log-bin=mysql_bin
+
+		3、启动mariadb
+			$ systemctl start mariadb.service
+
+		4、授权远程用户登陆数据库
+			$ mysql 
+			> GRANT ALL PRIVILEGES ON *.* TO 'root'@'172.16.1.120' IDENTIFIED BY 'root@123';
+			> GRANT ALL PRIVILEGES ON *.* TO 'root'@'172.16.1.70' IDENTIFIED BY 'root@123';
+			> FLUSH PRIVILEGES;
+
+	四、配置phpMyAdmin
+		1、拷贝
+			$ scp Downloads/LinuxPackages/phpMyAdmin-4.0.10.20-all-languages.zip root@172.16.1.120:/web/www1/fcgi/
+			
+		2、解压缩并修改配置文件
+			
+			'php主机操作：'
+			$ tar -xf /web/www1/fcgi/phpMyAdmin-4.0.10.20-all-languages.zip
+			$ cd /web/www1/fcgi/
+			$ ln -sv phpMyAdmin-4.0.10.20-all-languages pma
+			$ cd pma 
+			$ cp config.sample.inc.php config.inc.php
+			$ vim config.inc.php
+			修改下面一行中的localhost改为 mariadb主机的IP地址
+			$cfg['Servers'][$i]['host'] = '172.16.1.110';
+
+			$ vim libraries/config.default.php
+			修改下面一行中的localhost改为 mariadb主机的IP地址
+			$cfg['Servers'][$i]['host'] = '172.16.1.110';
+
+			$ chown -R nginx.nginx /web/www1/fcgi
+
+			'nginx主机操作：'
+			$ scp root@172.16.1.120:/web/www1/fcgi/phpMyAdmin-4.0.10.20-all-languages /web/www1/pma
+			$ chown -R nginx.nginx /web/www1/
+
+
+		3、开启nginx服务、打开网页进行测试即可，LEMP搭建完成
+			$ nginx -t
+			$ systemctl start nginx 
+
+			
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	配置文件：
+		[root@nginx-server nginx]# cat conf.d/maxie.conf
+		proxy_cache_path		/web/cache/	levels=2:1:1	keys_zone=my_cache:10m	max_size=1g;
+		fastcgi_cache_path		/web/cache/fcgi	levels=2:1:1	keys_zone=fcgi_cache:20m inactive=1m max_size=1g;
+
+		server {
+			listen 			80;
+			server_name		www1.maxie.com;
+			root			/web/www1;
+			index			index.php index.html index.htm;
+			add_header		X-Via	$server_addr;
+			add_header		X-Accel	$server_name;
+
+			location / {
+				access_log		/web/www1/access.log my_log flush=4m buffer=1m;
+			}
+
+			location ~* \.php$ {
+				root			/web/www1/fcgi;
+				fastcgi_pass		172.16.1.120:9000;
+				fastcgi_index		index.php;
+				fastcgi_param		SCRIPT_FILENAME	/web/www1/fcgi$fastcgi_script_name;
+				include			fastcgi_params;
+
+				fastcgi_cache		fcgi_cache;
+				fastcgi_cache_key	$request_uri;
+				fastcgi_cache_methods	GET HEAD;
+				fastcgi_cache_min_uses	2;
+				fastcgi_cache_valid	200 301 302 5m;
+				fastcgi_cache_valid	any 1m;
+				fastcgi_keep_conn	on;
+			}
+
+			location ~* ^/pm_(ping|status)$ {
+				include			fastcgi_params;
+				fastcgi_pass		172.16.1.120:9000;
+				fastcgi_param		SCRIPT_FILENAME	$fastcgi_script_name;
+			}
+
+			location ~* ^/pma$ {
+				root			/web/www1/;
+				include			fastcgi_params;
+				fastcgi_pass		172.16.1.120:9000;
+				fastcgi_param		SCRIPT_FILENAME	/web/www/fcgi$fastcgi_script_name;
+
+				#^表示从匹配的开始就替换为后面的URL
+				#if ($request_filename ~ /pma ) {
+				#	rewrite	^	http://www1.maxie.com/pma/index.php permanent;
+				#}
+			}
+
+
+			#location ~* \.(jpg|png|gif|jpeg)$ {
+			#	proxy_pass		http://172.16.1.20:80;
+			#	proxy_set_header	X-Real-IP	$remote_addr;
+			#	proxy_cache		my_cache;
+			#	proxy_cache_key		$request_uri;
+			#	proxy_cache_valid	200 301 302 10m;
+			#	proxy_cache_valid	any 1m;
+			#
+			#	proxy_cache_methods	GET HEAD;
+			#	proxy_connect_timeout	10s;
+			#
+			#	proxy_hide_header	ETag;
+			#	proxy_hide_header	Last-Modified;
+			#	proxy_hide_header	Content-Type;
+			#	proxy_hide_header	Server;
+		#	}
+
+			error_page			404	http://www1.maxie.com/404.html;
+
+			location = /404.html {
+			}
+		}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+'实验11：一台Nginx 2台HTTP 使用nginx做负载均衡'
+	#Load Balancing
+	upstream websrvs {
+		#ip_hash;
+		server 172.16.1.20 	weight=1 max_fails=2 fail_timeout=10;
+		server 172.16.1.130 	weight=1 max_fails=2 fail_timeout=10;
+		#server localhost:10080	weight=1 backup;
+	}
+
+	server {
+		listen				10080;
+		server_name			localhost;
+		root				/web/backup;
+	}
+
+	server {
+		listen				8080;
+		server_name			www.balancing.com;
+
+		location / {
+			proxy_pass		http://websrvs;
+			proxy_set_header	X-Real-IP $remote_addr;
+		}
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	

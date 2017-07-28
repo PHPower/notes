@@ -1,0 +1,151 @@
+6.21 (编译安装Nginx)
+
+编译安装：
+		前提：开发环境，包括nginx编译要启用的功能依赖到的开发库；
+			# yum groupinstall "Development Tools" "Server Platform Development"
+			# yum -y pcre-devel openssl-devel
+			
+		编译过程：
+			# ./configure --prefix=/usr/local/nginx --sbin-path=/usr/sbin/nginx --conf-path=/etc/nginx/nginx.conf --error-log-path=/var/log/nginx/error.log --http-log-path=/var/log/nginx/access.log --user=nginx --group=nginx --with-http_ssl_module  --with-http_stub_status_module --with-http_flv_module --with-http_mp4_module --with-threads --with-file-aio
+			# make && make install
+
+
+
+'使用src源码包编译生成rpm包：'
+
+	1、下载源码包并发送至虚拟机：
+
+		# maxie @ maxie in ~/Downloads [20:43:55] 
+		$ wget http://nginx.org/packages/centos/7/SRPMS/nginx-1.12.0-1.el7.ngx.src.rpm
+		--2017-06-24 21:14:08--  http://nginx.org/packages/centos/7/SRPMS/nginx-1.12.0-1.el7.ngx.src.rpm
+		Resolving nginx.org... 206.251.255.63, 95.211.80.227, 2606:7100:1:69::3f, ...
+		Connecting to nginx.org|206.251.255.63|:80... connected.
+		HTTP request sent, awaiting response... 200 OK
+		Length: 999123 (976K) [application/x-redhat-package-manager]
+		Saving to: ‘nginx-1.12.0-1.el7.ngx.src.rpm’
+
+		nginx-1.12.0-1.el7.ngx. 100%[==============================>] 975.71K   172KB/s    in 8.2s    
+
+		2017-06-24 21:14:17 (119 KB/s) - ‘nginx-1.12.0-1.el7.ngx.src.rpm’ saved [999123/999123]
+
+
+		# maxie @ maxie in ~/Downloads [21:14:17] 
+		$ scp nginx-1.12.0-1.el7.ngx.src.rpm root@172.16.3.60:/root
+		nginx-1.12.0-1.el7.ngx.src.rpm                               100%  976KB   3.0MB/s   00:00    
+
+	2、使用rpm -ivh 安装源码包
+		$ rpm -ivh nginx-1.12.0-1.el7.ngx.src.rpm
+
+	3、编辑rpmbuild/SPECS/nginx.spec文件
+		删除其中关于mail的模块，添加需要的模块
+		$ vim rpmbuild/SPECS/nginx.spec
+
+	4、生成rpm包：
+		$ rpmbuild -bb rpmbuild/SPECS/nginx.spec
+			-bb：只编译成二进制的
+			-ba：二进制以及src文件
+
+
+	5、查看编译好的文件：
+		$ tree rpmbuild/RPMS
+		[root@localhost ~]# tree rpmbuild/RPMS/
+		rpmbuild/RPMS/
+		└── x86_64
+		    ├── nginx-1.12.0-1.el7.centos.ngx.x86_64.rpm
+		    └── nginx-debuginfo-1.12.0-1.el7.centos.ngx.x86_64.rpm 	'debug文件，无需安装'
+
+		1 directory, 2 files
+
+	6、安装
+		[root@localhost ~]# yum install rpmbuild/RPMS/x86_64/nginx-
+		nginx-1.12.0-1.el7.centos.ngx.x86_64.rpm
+		nginx-debuginfo-1.12.0-1.el7.centos.ngx.x86_64.rpm
+		[root@localhost ~]# yum install rpmbuild/RPMS/x86_64/nginx-1.12.0-1.el7.centos.ngx.x86_64.rpm
+		Loaded plugins: fastestmirror, langpacks
+		Examining rpmbuild/RPMS/x86_64/nginx-1.12.0-1.el7.centos.ngx.x86_64.rpm: 1:nginx-1.12.0-1.el7.centos.ngx.x86_64
+		Marking rpmbuild/RPMS/x86_64/nginx-1.12.0-1.el7.centos.ngx.x86_64.rpm to be installed
+		Resolving Dependencies
+		--> Running transaction check
+		---> Package nginx.x86_64 1:1.12.0-1.el7.centos.ngx will be installed
+		--> Finished Dependency Resolution
+
+		Dependencies Resolved
+
+		======================================================================================
+		 Package
+		       Arch   Version                     Repository                             Size
+		======================================================================================
+		Installing:
+		 nginx x86_64 1:1.12.0-1.el7.centos.ngx   /nginx-1.12.0-1.el7.centos.ngx.x86_64 2.4 M
+
+		Transaction Summary
+		======================================================================================
+		Install  1 Package
+
+		Total size: 2.4 M
+		Installed size: 2.4 M
+		Is this ok [y/d/N]: y
+		Downloading packages:
+		Running transaction check
+		Running transaction test
+		Transaction test succeeded
+		Running transaction
+		  Installing : 1:nginx-1.12.0-1.el7.centos.ngx.x86_64                             1/1
+		----------------------------------------------------------------------
+
+		Thanks for using nginx!
+
+		Please find the official documentation for nginx here:
+		* http://nginx.org/en/docs/
+
+		Commercial subscriptions for nginx are available on:
+		* http://nginx.com/products/
+
+		----------------------------------------------------------------------
+		  Verifying  : 1:nginx-1.12.0-1.el7.centos.ngx.x86_64                             1/1
+
+		Installed:
+		  nginx.x86_64 1:1.12.0-1.el7.centos.ngx
+
+		Complete!
+		[root@localhost ~]# ll /etc/nginx/
+		total 40
+		drwxr-xr-x 2 root root 4096 Jun 23 19:20 conf.d
+		drwxr-xr-x 2 root root 4096 Oct 31  2016 default.d
+		-rw-r--r-- 1 root root 1007 Jun 23 19:19 fastcgi_params
+		-rw-r--r-- 1 root root 2837 Jun 23 19:19 koi-utf
+		-rw-r--r-- 1 root root 2223 Jun 23 19:19 koi-win
+		-rw-r--r-- 1 root root 3957 Jun 23 19:19 mime.types
+		lrwxrwxrwx 1 root root   29 Jun 23 19:20 modules -> ../../usr/lib64/nginx/modules
+		-rw-r--r-- 1 root root  643 Apr 12 23:21 nginx.conf
+		-rw-r--r-- 1 root root  636 Jun 23 19:19 scgi_params
+		-rw-r--r-- 1 root root  664 Jun 23 19:19 uwsgi_params
+		-rw-r--r-- 1 root root 3610 Jun 23 19:19 win-utf
+
+
+
+
+
+
+
+
+
+			
+	课程实践：
+		nginx--> AMPs（wordpress）
+		nginx--> FPMs（wordpress）
+		
+		nginx--> images servers ( imgs.magedu.com）
+					location ~* \.(jpg|png|gif|jpeg)$ {
+						...
+					}
+			       dynamic content servers (shop.magedu.com)
+					location ~* \.php$ {
+						...
+					}
+					
+					location / {
+						...
+					}
+					
+		自定义错误404和5xx错误页，文本静态内容传输压缩；

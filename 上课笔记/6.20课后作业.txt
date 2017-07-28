@@ -1,0 +1,806 @@
+6.20课后作业
+
+'练习：实现lnmp，提供多个虚拟主机；'
+		(1) http, 提供wordpress；
+		(2) https, 提供pma；
+
+
+一、lnamp + wordpress 
+
+	需要4台虚拟机：
+
+	nginx：172.16.1.100/16 
+	ap(httpd+php) : 172.16.1.70/16
+	mariadb: 172.16.1.20/16
+
+	1、nginx安装与配置
+		1)安装nginx:
+		$ yum install -y nginx 
+
+		2)修改配置文件：
+		$ vim /etc/nginx/nginx.conf
+		在server块中进行如下操作：
+		(1)修改root目录：
+			root /data/www1;
+		(2)添加location将php代理到ap上：
+			部分配置：
+				#添加缓存目录
+				proxy_cache_path        /web/cache/    levels=2:1:1    keys_zone=pcache:10m    max_size=1g;
+
+			    server {
+			        listen       80 default_server;
+			        listen       [::]:80 default_server;
+			        server_name  _;
+			        root         /data/www1/;
+
+			        # Load configuration files for the default server block.
+			        include /etc/nginx/default.d/*.conf;
+
+			        location / {
+			        }
+
+			        #添加如下location
+			        location ~* \.php$ {
+			                proxy_pass                      http://172.16.1.70:80;
+			                proxy_set_header                X-Real-IP       $remote_addr;
+			                proxy_cache                     pcache;
+			                proxy_cache_key                 $request_uri;
+			                proxy_cache_valid               200 301 302 10m;
+			                proxy_cache_valid               any 1m;
+
+			                proxy_cache_methods             GET HEAD;
+			                proxy_connect_timeout           10s;
+			        }
+		3)创建所需目录以及主站文件：
+			$ mkdir -pv /web/cache
+			$ mkdir -pv /data/www1
+			$ vim /data/www1/index.html
+			<h1> Nginx Server </h1>
+
+		4)启动服务，打开浏览器验证：
+			$ nginx -t
+			$ systemctl start nginx
+
+
+	2、配置ap：
+		1)安装httpd php php-mysql php-mbstring php-mcrypt
+			$ yum install -y httpd php php-mysql php-mbstring php-mcrypt
+		2)拷贝wordpress以及pma到http服务器的DocumentRoot目录下：
+			$ scp wordpress-4.7.4-zh_CN.tar.gz phpMyAdmin-4.0.10.20-all-languages.zip root@172.16.1.70:/var/www/html
+			wordpress-4.7.4-zh_CN.tar.gz                                 100% 8308KB   4.4MB/s   00:01
+			phpMyAdmin-4.0.10.20-all-languages.zip                       100% 7282KB   4.4MB/s   00:01
+		3)创建index.html和index.php
+			$ cd /var/www/html/
+			$ vim index.html
+				<h1>HTTP Server 172.16.1.70 </h1>
+
+				<h2> AP Server </h2>
+			$ vim index.php 
+			<?php 
+					phpinfo();
+			?>
+		4)解压缩wordpress以及pma：
+			$ tar -xf wordpress-4.7.4-zh_CN.tar.gz
+   			$ unzip phpMyAdmin-4.0.10.20-all-languages.zip
+   			$ ln -sv phpMyAdmin-4.0.10.20-all-languages pma
+   		5)启动http服务并测试页面：
+			$ systemctl start httpd
+
+			浏览器输入IP测试
+
+
+	3、配置mariadb
+		1)安装 
+		2)编辑配置文件：
+			$ vim /etc/my.cnf.d/server.conf
+			[mysqld]
+			skip_name_resolve=ON
+			innodb_file_per_table=ON
+			log-bin=mysql_bin
+
+		3)创建wordpress所需的数据库以及用户，并授权远程连接权限
+			[root@test-3 ~]# mysql
+			> CREATE DATABASE wordpress_db;
+			Query OK, 1 row affected (0.00 sec)
+
+			> GRANT ALL PRIVILEGES ON wordpress_db.* TO 'wordpress'@'172.16.1.70' IDENTIFIED BY 'root@123';
+			Query OK, 0 rows affected (0.00 sec)
+
+			> GRANT ALL PRIVILEGES ON *.* TO 'root'@'172.16.1.70' IDENTIFIED BY 'root@123';
+			Query OK, 0 rows affected (0.00 sec)
+
+			> FLUSH PRIVILEGES;
+			Query OK, 0 rows affected (0.00 sec)
+
+			> exit
+
+	4、在http上修改pma以及wordpress的数据库配置：
+		1)pma:
+			$ cp pma/config.sample.inc.php pma/config.inc.php
+			$ pwd
+			/var/www/html
+			$ vim pma/config.inc.php
+			修改其下信息：
+			$cfg['Servers'][$i]['host'] = '172.16.1.20';
+			
+			$ vim pma/libraries/config.default.php
+			修改其下信息：
+			$cfg['Servers'][$i]['host'] = '172.16.1.20';
+
+		2)wordpress
+			$ cp wordpress/wp-config-sample.php wordpress/wp-config.php
+			$ vim wordpress/wp-config.php
+			修改为如下信息：
+
+			// ** MySQL 设置 - 具体信息来自您正在使用的主机 ** //
+			/** WordPress数据库的名称 */
+			define('DB_NAME', 'wordpress_db');
+
+			/** MySQL数据库用户名 */
+			define('DB_USER', 'wordpress');
+
+			/** MySQL数据库密码 */
+			define('DB_PASSWORD', 'root@123');
+
+			/** MySQL主机 */
+			define('DB_HOST', '172.16.1.20');
+		
+	5、拷贝ap上pma和wordpress到nginx的网站root目录下：(静态资源需要在nginx上处理)	
+		ap操作：
+
+		$ scp -r phpMyAdmin-4.0.10.20-all-languages root@172.16.1.100:/data/www1/
+		$ scp -r  wordpress  root@172.16.1.100:/data/www1
+		$ chown -R apache.apache wordpress *
+		$ chmod +x wordpress/wp-content
+
+		nginx操作：
+		$ cd /data/www1/
+		$ chown -R nginx.nginx *
+		$ ln -sv phpMyAdmin-4.0.10.20-all-languages/ pma
+
+	6、打开网页测试即可
+
+
+
+
+二、lnamp + https + pma
+
+	1、在上面的基础上，在Nginx上自建CA并自签证书：
+		(1)自建CA
+		$ cd /etc/pki/CA/
+		$ (umask 077;openssl genrsa -out /etc/pki/CA/private/cakey.pem 4096)
+		$ openssl req -new -x509 -key /etc/pki/CA/private/cakey.pem -out /etc/pki/CA/cacert.pem -days 3650
+		$ touch {serial,index.txt}
+		$ echo 01 > serial
+
+		(2)生成ssl签署请求，并让CA签署
+			$ mkdir -pv /etc/nginx/ssl 
+			$ cd /etc/nginx/ssl 
+			$ (umask 077;openssl genrsa -out /etc/nginx/ssl/nginx.key 4096)
+			$ openssl req -new -key /etc/nginx/ssl/nginx.key -out /etc/nginx/ssl/nginx.csr -days 550
+			$ openssl ca -in /etc/nginx/ssl/nginx.csr -out /etc/nginx/ssl/nginx.crt
+
+	2、编辑虚拟主机配置文件：使其开启 SSL功能：
+		$ vim /etc/nginx/nginx.conf
+		添加一个server对80进行转发：
+		server {
+			listen 80;
+			server_name www1.maxie.com;
+			rewrite ^	https://$server_name$1 permanent;
+		}
+
+		修改默认server：
+		server {
+        listen       443 ssl;
+        server_name  www1.maxie.com;
+        root         /data/www1/;
+
+        # Load configuration files for the default server block.
+        include /etc/nginx/default.d/*.conf;
+
+        #SSL
+        ssl                                     on;
+        ssl_certificate                         /etc/nginx/ssl/nginx.crt;
+        ssl_certificate_key                     /etc/nginx/ssl/nginx.key;
+        ssl_session_timeout                     5m;
+        ssl_protocols                           SSLv2 TLSv1 SSLv3;
+        ssl_ciphers                             HIGH:!aNULL:!MD5;
+
+        ssl_session_cache                       shared:sslcache:20m;
+
+        其余配置不变
+
+        $ nginx -t 
+        $ nginx -s reload
+
+
+	3、拷贝CA公钥到客户端，验证https
+    	$ scp root@172.16.1.100:/etc/pki/CA/cacert.pem ./
+		cacert.pem                                                   100% 1992   422.8KB/s   00:00
+
+
+
+
+
+
+
+
+
+
+'LVS-DR类型：'
+	实践作业（博客）：负载均衡两个php应用（wordpress，discuzx）；
+		测试：(1) 是否需要会话保持；(2) 是否需要共享存储；
+
+	VS主机：vip:172.16.3.100  dip:172.16.3.10
+	RS1: 172.16.3.20 配置vip别名
+	RS2: 172.16.3.30 配置vip别名
+	mysql：172.16.3.40
+	nfs：172.16.3.50
+
+
+	1、配置网卡别名
+		vs主机： 
+			$ ifconfig eno16777736 172.16.3.100 netmask 255.255.255.255 broadcast 172.16.3.100 up
+		RS1:
+			$ ifconfig eno16777736 172.16.3.100 netmask 255.255.255.255 broadcast 172.16.3.100 up
+		RS2:
+			$ ifconfig eno16777736 172.16.3.100 netmask 255.255.255.255 broadcast 172.16.3.100 up
+
+	2、RS主机配置vip网卡别名不接受arp广播：
+		(1)编写脚本：
+		$ vim set-rs.sh
+		#!/bin/bash
+		#
+		vip=172.16.3.100
+		mask=255.255.255.255
+
+		case $1 in
+		start)
+		    echo 1 > /proc/sys/net/ipv4/conf/all/arp_ignore
+		    echo 1 > /proc/sys/net/ipv4/conf/lo/arp_ignore
+		    echo 2 > /proc/sys/net/ipv4/conf/all/arp_announce
+		    echo 2 > /proc/sys/net/ipv4/conf/lo/arp_announce
+
+		    ifconfig lo:0 $vip netmask $mask broadcast $vip up
+		    route add -host $vip dev lo:0
+		    ;;
+		stop)
+		    ifconfig lo:0 down
+
+		    echo 0 > /proc/sys/net/ipv4/conf/all/arp_ignore
+		    echo 0 > /proc/sys/net/ipv4/conf/lo/arp_ignore
+		    echo 0 > /proc/sys/net/ipv4/conf/all/arp_announce
+		    echo 0 > /proc/sys/net/ipv4/conf/lo/arp_announce
+
+		    ;;
+		*)
+		    echo "Usage $(basename $0) start|stop"
+		    exit 1
+		    ;;
+		esac
+
+		(2)执行脚本：(两台都执行)
+		$ bash -x set-rs.sh start 
+
+		(3)查看
+		[root@node2 ~]# ifconfig
+		eno16777736: flags=4163<UP,BROADCAST,RUNNING,MULTICAST>  mtu 1500
+		        inet 172.16.3.30  netmask 255.255.0.0  broadcast 172.16.255.255
+		        inet6 fe80::20c:29ff:fe7e:d37c  prefixlen 64  scopeid 0x20<link>
+		        ether 00:0c:29:7e:d3:7c  txqueuelen 1000  (Ethernet)
+		        RX packets 29398  bytes 28021610 (26.7 MiB)
+		        RX errors 0  dropped 10  overruns 0  frame 0
+		        TX packets 2935  bytes 270276 (263.9 KiB)
+		        TX errors 0  dropped 0 overruns 0  carrier 0  collisions 0
+
+		lo: flags=73<UP,LOOPBACK,RUNNING>  mtu 65536
+		        inet 127.0.0.1  netmask 255.0.0.0
+		        inet6 ::1  prefixlen 128  scopeid 0x10<host>
+		        loop  txqueuelen 0  (Local Loopback)
+		        RX packets 112  bytes 9744 (9.5 KiB)
+		        RX errors 0  dropped 0  overruns 0  frame 0
+		        TX packets 112  bytes 9744 (9.5 KiB)
+		        TX errors 0  dropped 0 overruns 0  carrier 0  collisions 0
+
+		lo:0: flags=73<UP,LOOPBACK,RUNNING>  mtu 65536
+		        inet 172.16.3.100  netmask 255.255.255.255
+		        loop  txqueuelen 0  (Local Loopback)
+
+	3、RS1、2安装nginx以及php-fpm、在VS上配置ipvsadm的dr均衡 rr算法
+		RS操作：
+		$ yum install -y nginx php-fpm php-mbstring php-mcrypt
+
+		VS操作：
+		$ ipvsadm -A -t 172.16.3.100:80 -s rr
+		$ ipvsadm -a -t 172.16.3.100:80 -r 172.16.3.20:80 -g
+		$ ipvsadm -a -t 172.16.3.100:80 -r 172.16.3.30:80 -g
+
+
+	4、'RS1与RS2配置'nginx对于php-fpm的代理：(两台同样的步骤)
+		(1)编辑php-fpm的配置文件：
+			$ vim /etc/php-fpm.d/www.conf 
+			user = nginx
+			group = nginx
+			pm.status_path = /status
+			ping.path = /ping
+			ping.response = pong
+
+			$ mkdir -pv /var/lib/php/session 
+			$ systemctl start php-fpm 
+
+		(2)编辑nginx配置文件：(删除默认配置文件中server块的信息，新建一个80虚拟主机配置文件)
+			添加fastcgi配置location：
+
+			$ vim /etc/nginx/conf.d/www1.conf
+			server {
+			        listen 80;
+			        server_name     172.16.3.20;
+			        root            /data/www1;
+			        index           index.html index.htm index.php;
+
+			        location ~* \.php$ {
+			                fastcgi_pass    127.0.0.1:9000;
+			                fastcgi_index   index.php;
+			                fastcgi_param   SCRIPT_FILENAME /nfs$fastcgi_script_name;
+
+			                include         fastcgi_params;
+			        }
+			}
+
+
+		   	创建目录以及php测试页：
+		   		$ mkdir -pv /data/www1
+		   		$ mkdir -pv /data/cache 
+		   		$ vim /data/index.php
+		   		NODE 1 / NODE2 (根据机器的不同选项性的修改这里的信息)
+		   		<?php 
+		   			phpinfo();
+		   		?>
+
+		   	重启服务，测试Php的测试页是否正常访问
+		   		$ nginx -t 
+		   		$ nginx -s reload
+
+		   		http://172.16.3.20/index.php
+		   		http://172.16.3.30/index.php
+
+
+
+		(3)拷贝wordpress以及discuzx到ngnix /nfs目录下
+			'RS1/RS2：'
+			$ mkdir -pv /nfs/{wp,pma,discuzx}
+
+
+
+			'MAC:'
+			$ scp wordpress-4.7.4-zh_CN.tar.gz root@172.16.3.20:/nfs
+			wordpress-4.7.4-zh_CN.tar.gz                                100% 8308KB   2.9MB/s   00:02
+
+
+
+			'拷贝完之后，在NFS在上创建共享目录：'
+			$ vim /etc/exports
+			/nfs/wp         172.16.3.20(rw,no_root_squash) 172.16.3.30(rw,no_root_squash)
+			/nfs/pma        172.16.3.20(rw,no_root_squash) 172.16.3.30(rw,no_root_squash)
+			/nfs/discuzx    172.16.3.20(rw,no_root_squash) 172.16.3.30(rw,no_root_squash)
+
+			$ mkdir -pv /nfs/{wp,pma,discuzx}
+			$ useradd -r nginx
+			$ systemctl start nfs.service
+
+			'回到RS1：'
+			$ mount -t 172.16.3.50:/nfs/wp /nfs/wp 
+			$ tar -xf wordpress-4.7.4-zh_CN.tar.gz -C /nfs/wp 
+			$ chown -R nginx.nginx /nfs
+			$ 打开网页进行测试：
+				http://172.16.3.20/wp/wordpress/index.php 
+
+
+
+			'回到RS2：'
+			$ mount -t 172.16.3.50:/nfs/wp /nfs/wp
+			$ 打开网页测试即可：
+				http://172.16.3.30/wp/wordpress/index.php 
+
+
+			这时看到的wordpress应该是无图片的，我们需要在执行完创建数据库的信息之后，把wordpress的配置文件修改成功之后
+			拷贝一份WordPress到我们的nginx的root目录下
+
+
+
+
+	5、创建wordpress以及discuzx的数据库以及用户：
+		修改配置文件：
+			$ vim /etc/my.cnf.d/server.conf 
+			[mysqld]
+			skip_name_resolve=ON
+			innodb_file_per_table=ON
+			log-bin=mysql_bin
+
+		MySQL操作：
+			$ mysql
+			> CREATE DATABASE wordpress_db;
+			> CREATE DATABASE discuzx_db;
+			> GRANT ALL PRIVILEGES ON wordpress_db.* TO 'wordpress'@'172.16.3.20' IDENTIFIED BY 'root@123';
+			> GRANT ALL PRIVILEGES ON wordpress_db.* TO 'wordpress'@'172.16.3.30' IDENTIFIED BY 'root@123';
+			> GRANT ALL PRIVILEGES ON wordpress_db.* TO 'wordpress'@'172.16.3.50' IDENTIFIED BY 'root@123';
+			> GRANT ALL PRIVILEGES ON discuzx_db.* TO 'discuzx'@'172.16.3.20' IDENTIFIED BY 'root@123';
+			> GRANT ALL PRIVILEGES ON discuzx_db.* TO 'discuzx'@'172.16.3.30' IDENTIFIED BY 'root@123';
+			> GRANT ALL PRIVILEGES ON discuzx_db.* TO 'discuzx'@'172.16.3.50' IDENTIFIED BY 'root@123';
+			> FLUSH PRIVILEGES;
+
+		授权完完毕，之后最好在两台RS进行登录测试！
+
+	6、回到RS1上对配置文件进行修改
+
+		$ vim /data/wordpress/wp-config.inc.php
+		// ** MySQL 设置 - 具体信息来自您正在使用的主机 ** //
+		/** WordPress数据库的名称 */
+		define('DB_NAME', 'wordpress_db');
+
+		/** MySQL数据库用户名 */
+		define('DB_USER', 'wordpress');
+
+		/** MySQL数据库密码 */
+		define('DB_PASSWORD', 'root@123');
+
+		/** MySQL主机 */
+		define('DB_HOST', '172.16.3.40');
+
+		打开网页进行测试：
+		http://172.16.3.20/wp/wordpress/index.php 
+		http://172.16.3.20/wp/wordpress/index.php 
+
+
+
+
+	7、修改nginx虚拟主机配置文件：
+		$ vim /etc/nginx/conf.d/www1.conf 
+		添加一条：
+		location /wp/wordpress {
+                root    /nfs;
+        }
+
+        '如果单独访问某个RS的wordpress出现乱码或者排版不正常，加如下一条location：'
+        $ vim /etc/nginx/conf.d/www1.conf 
+        location / {
+        	root /data/www1;
+        }
+
+    8、现在打开网页进行WordPress创建就可以正常访问了
+
+
+    9、下面开始做两台WordPress的负载均衡
+    	(1)先要允许3.100的网络访问php-fpm资源：
+    		RS1/RS2：
+    		$ vim /etc/php-fpm.d/www.conf 
+    		将listen.allowed_clients = 127.0.0.1注释掉：
+    		;listen.allowed_clients = 127.0.0.1
+
+    		重启服务 
+    		$ systemctl restart php-fpm 
+    		即可
+    	(2)打开网页http://172.16.3.100/wp/wordpress即可访问
+
+
+    10、在VS进行操作：
+    	(1)添加规则：
+    		$ ipvsadm -A -t 172.16.3.100:80 -s sh
+    		$ ipvsadm -a -t 172.16.3.100:80 -r 172.16.3.30:80 -g
+    		$ ipvsadm -a -t 172.16.3.100:80 -r 172.16.3.20:80 -g
+
+   	11、打开网页测试:
+   		http://172.16.3.100/wp/wordpress
+
+
+
+   	'添加discuzx：'
+   		1、在数据库服务器上创建discuzx的数据库以及用户：
+   			MariaDB [(none)]> CREATE DATABASE discuzx;
+			Query OK, 1 row affected (0.00 sec)
+
+			> GRANT ALL PRIVILEGES ON discuzx.* TO 'discuzx'@'172.16.3.20' IDENTIFIED BY 'root@123';
+			Query OK, 0 rows affected (0.01 sec)
+
+			> GRANT ALL PRIVILEGES ON discuzx.* TO 'discuzx'@'172.16.3.30' IDENTIFIED BY 'root@123';
+			Query OK, 0 rows affected (0.00 sec)
+
+			> GRANT ALL PRIVILEGES ON discuzx.* TO 'discuzx'@'172.16.3.50' IDENTIFIED BY 'root@123';
+			Query OK, 0 rows affected (0.00 sec)
+
+			> FLUSH PRIVILEGES;
+			Query OK, 0 rows affected (0.01 sec)
+
+		2、在NFS-Server上拷贝discuzx并解压至共享目录：
+			'MAC：'
+			$ scp Discuz_X3.3_SC_UTF8.zip root@172.16.3.50:/nfs/discuzx
+			Discuz_X3.3_SC_UTF8.zip                                     100%   10MB   2.1MB/s   00:05
+
+			'NFS'
+			$ cd /nfs/discuzx/
+			$ unzip Discuz_X3.3_SC_UTF8.zip
+			$ mv upload/* ./
+			$ chown -R nginx.nginx *
+
+		3、在RS1、RS2的nginx虚拟主机上添加一条location配置：
+			$ vim /etc/nginx/conf.d/www1.conf
+				location /discuzx {
+		                root    /nfs;
+		        }
+
+	    4、在RS上挂载NFS上的discuzx：
+	    	$ mkdir -pv /nfs/discuzx
+	    	$ mount -t nfs 172.16.3.50:/nfs/discuzx /nfs/discuzx
+
+	    	打开浏览器验证各RS可以正产访问discuz
+
+	    5、通过http://172.16.3.100/discuzx来对discuzx进行初始化安装与配置
+	    	'其实填入之前设定的数据库和用户名，以及数据库的IP地址即可'
+
+
+
+	
+
+'实验：'
+	1、使用ldriectord生成规则，实现健康状态检查;
+		实现2台RS wordpress会话持久连接(persistent=600)  nfs mysql
+
+	wordpress文件放在RS上，只有upload放在NFS上
+
+
+	在上一个实验的基础上：
+		'VS操作：'
+		1、实现会话持久连接：
+			重新定义规则
+			$ ipvsadm -C
+			$ ipvsadm -A -t 172.16.3.100:80 -s rr -p 600
+			其他设置不变
+
+		2、使用ldirectord实现会话持久连接：
+			'从ftp下载ldirector：'
+			$ wget ftp://172.16.0.1/pub/Sources/6.x86_64/corosync/ldirectord-3.9.5-5.1.x86_64.rpm
+
+			'安装ldirector：'
+			$ yum install ./ldirectord-3.9.5-5.1.x86_64.rpm
+			$ rpm -ql ldirectord
+
+			'配置sorry server： '
+			$ yum install nginx 
+			$ echo "Sorry Server" > /usr/share/nginx/html/index.html
+
+			'拷贝ldriectord配置文件模板：'
+			$ cp /usr/share/doc/ldirectord-3.9.5/ldirectord.cf /etc/ha.d/
+
+				配置文件模板详解：
+					# Global Directives						#全局配置
+					checktimeout=3							#检查超时时间
+					checkinterval=1							#检查间隔，1秒
+					#fallback=127.0.0.1:80					#sorry server；当RS全挂掉时，使用fallback必须lvs是gate模式，也就是dr
+					#fallback6=[::1]:80						#ipv6的sorry server
+					autoreload=yes 							#自动加载
+					#logfile="/var/log/ldirectord.log" 		#日志文件
+					#logfile="local0" 						#rsyslog的local0，指明发给local0的faclitiy
+					#emailalert="admin@x.y.z" 				#发送邮件
+					#emailalertfreq=3600   					#
+					#emailalertstatus=all 					#当出现什么状态发送邮件
+					quiescent=no 							#静默模式是否开启
+
+					# Sample for an http virtual service
+					virtual=192.168.6.240:80
+					        real=192.168.6.2:80 gate 		#RS
+					        real=192.168.6.3:80 gate 		#RS
+					        real=192.168.6.6:80 gate 		#RS
+					        fallback=127.0.0.1:80 gate 		#每个虚拟主机的单独的fallback
+					        service=http 					#使用的协议，应用层协议
+					        scheduler=rr 					#调度算法
+					        #persistent=600 				#持久连接是否开启
+					        #netmask=255.255.255.255 		#网络掩码
+					        protocol=tcp  					#传输层协议
+					        checktype=negotiate				#检测方式
+					        checkport=80 					#检查80端口
+					        request="index.html" 			#请求哪个页面
+					        receive="Test Page" 			#请求页面中要包含的信息
+					        virtualhost=www.x.y.z 			#可以向虚拟主机发请求
+
+			'编辑ld配置文件：'
+			$ vim /etc/ha.d/ldirectord.cf
+			# Global Directives
+			checktimeout=3
+			checkinterval=1
+			#fallback=127.0.0.1:80
+			#fallback6=[::1]:80
+			autoreload=yes
+			logfile="/var/log/ldirectord.log"
+			#logfile="local0"
+			#emailalert="admin@x.y.z"
+			#emailalertfreq=3600
+			#emailalertstatus=all
+			quiescent=no
+
+			# Sample for an http virtual service
+			virtual=172.16.3.100:80
+			        real=172.16.3.20:80 gate
+			        real=172.16.3.30:80 gate
+			        #real=192.168.6.3:80 gate
+			        #real=192.168.6.6:80 gate
+			        fallback=127.0.0.1:80 gate
+			        service=http
+			        scheduler=rr
+			        persistent=600
+			        #netmask=255.255.255.255
+			        protocol=tcp
+			        checktype=negotiate
+			        checkport=80
+			        request="index.html"
+			        #receive="NODE"
+			        #receive="Test Page"
+			        virtualhost=www.x.y.z
+
+
+		3、'启动服务，自动生成ipvsadm规则：'
+			$ ipvsadm -C 
+			$ systemctl start ldirectord.service 
+			$ ipvsadm -ln 
+
+		4、在RS1、RS2进行关闭或者启动Nginx服务，在VS上查看ipvsadm -ln 查看状态检查：
+			[root@master ha.d]# ipvsadm -ln
+			IP Virtual Server version 1.2.1 (size=4096)
+			Prot LocalAddress:Port Scheduler Flags
+			  -> RemoteAddress:Port           Forward Weight ActiveConn InActConn
+			TCP  172.16.3.100:80 rr persistent 600
+			  -> 172.16.3.30:80               Route   1      0          11
+			
+
+			'当两台RS都宕机，启动sorryt server '
+			[root@master ha.d]# ipvsadm -ln
+			IP Virtual Server version 1.2.1 (size=4096)
+			Prot LocalAddress:Port Scheduler Flags
+			  -> RemoteAddress:Port           Forward Weight ActiveConn InActConn
+			TCP  172.16.3.100:80 rr persistent 600
+			  -> 127.0.0.1:80                 Route   1      0          0
+			
+
+			[root@master ha.d]# ipvsadm -ln
+			IP Virtual Server version 1.2.1 (size=4096)
+			Prot LocalAddress:Port Scheduler Flags
+			  -> RemoteAddress:Port           Forward Weight ActiveConn InActConn
+			TCP  172.16.3.100:80 rr persistent 600
+			  -> 172.16.3.20:80               Route   1      0          0
+			[root@master ha.d]# ipvsadm -ln
+			IP Virtual Server version 1.2.1 (size=4096)
+			Prot LocalAddress:Port Scheduler Flags
+			  -> RemoteAddress:Port           Forward Weight ActiveConn InActConn
+			TCP  172.16.3.100:80 rr persistent 600
+			  -> 172.16.3.30:80               Route   1      0          11
+			[root@master ha.d]# ipvsadm -ln
+			IP Virtual Server version 1.2.1 (size=4096)
+			Prot LocalAddress:Port Scheduler Flags
+			  -> RemoteAddress:Port           Forward Weight ActiveConn InActConn
+			TCP  172.16.3.100:80 rr persistent 600
+			  -> 172.16.3.30:80               Route   1      0          0
+			[root@master ha.d]# ipvsadm -ln
+			
+
+
+			'两台RS都启动正产运行，sorry server自动移除'
+			[root@master ha.d]# ipvsadm -ln
+			IP Virtual Server version 1.2.1 (size=4096)
+			Prot LocalAddress:Port Scheduler Flags
+			  -> RemoteAddress:Port           Forward Weight ActiveConn InActConn
+			TCP  172.16.3.100:80 rr persistent 600
+			  -> 172.16.3.20:80               Route   1      0          0
+			  -> 172.16.3.30:80               Route   1      0          0
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+'实验：配置FWM'
+	1、配置网卡别名
+	vs主机： 
+		$ ifconfig eno16777736 172.16.3.100 netmask 255.255.255.255 broadcast 172.16.3.100 up
+	RS1:
+		$ ifconfig eno16777736 172.16.3.100 netmask 255.255.255.255 broadcast 172.16.3.100 up
+	RS2:
+		$ ifconfig eno16777736 172.16.3.100 netmask 255.255.255.255 broadcast 172.16.3.100 up
+
+	2、RS主机配置vip网卡别名不接受arp广播：
+		(1)编写脚本：
+		$ vim set-rs.sh
+		#!/bin/bash
+		#
+		vip=172.16.3.100
+		mask=255.255.255.255
+
+		case $1 in
+		start)
+		    echo 1 > /proc/sys/net/ipv4/conf/all/arp_ignore
+		    echo 1 > /proc/sys/net/ipv4/conf/lo/arp_ignore
+		    echo 2 > /proc/sys/net/ipv4/conf/all/arp_announce
+		    echo 2 > /proc/sys/net/ipv4/conf/lo/arp_announce
+
+		    ifconfig lo:0 $vip netmask $mask broadcast $vip up
+		    route add -host $vip dev lo:0
+		    ;;
+		stop)
+		    ifconfig lo:0 down
+
+		    echo 0 > /proc/sys/net/ipv4/conf/all/arp_ignore
+		    echo 0 > /proc/sys/net/ipv4/conf/lo/arp_ignore
+		    echo 0 > /proc/sys/net/ipv4/conf/all/arp_announce
+		    echo 0 > /proc/sys/net/ipv4/conf/lo/arp_announce
+
+		    ;;
+		*)
+		    echo "Usage $(basename $0) start|stop"
+		    exit 1
+		    ;;
+		esac
+
+		(2)执行脚本：(两台都执行)
+		$ bash -x set-rs.sh start 
+
+		(3)查看
+		[root@node2 ~]# ifconfig
+		eno16777736: flags=4163<UP,BROADCAST,RUNNING,MULTICAST>  mtu 1500
+		        inet 172.16.3.30  netmask 255.255.0.0  broadcast 172.16.255.255
+		        inet6 fe80::20c:29ff:fe7e:d37c  prefixlen 64  scopeid 0x20<link>
+		        ether 00:0c:29:7e:d3:7c  txqueuelen 1000  (Ethernet)
+		        RX packets 29398  bytes 28021610 (26.7 MiB)
+		        RX errors 0  dropped 10  overruns 0  frame 0
+		        TX packets 2935  bytes 270276 (263.9 KiB)
+		        TX errors 0  dropped 0 overruns 0  carrier 0  collisions 0
+
+		lo: flags=73<UP,LOOPBACK,RUNNING>  mtu 65536
+		        inet 127.0.0.1  netmask 255.0.0.0
+		        inet6 ::1  prefixlen 128  scopeid 0x10<host>
+		        loop  txqueuelen 0  (Local Loopback)
+		        RX packets 112  bytes 9744 (9.5 KiB)
+		        RX errors 0  dropped 0  overruns 0  frame 0
+		        TX packets 112  bytes 9744 (9.5 KiB)
+		        TX errors 0  dropped 0 overruns 0  carrier 0  collisions 0
+
+		lo:0: flags=73<UP,LOOPBACK,RUNNING>  mtu 65536
+		        inet 172.16.3.100  netmask 255.255.255.255
+		        loop  txqueuelen 0  (Local Loopback)
+
+	3、配置fwm
+		$ iptables -t mangle -A PREROUTING -d 172.16.3.100 -p tcp -m multiport 80,8080 -j MARK --set-mark 6
+		$ iptables -t mangle -A PREROUTING -d 172.16.3.100 -p tcp -m multiport --dports 80,8080 -j MARK --set-mark 6
+		$ iptables -vnL -t mangle
+		$ yum install -y ipvsadm
+		$ ipvsadm -ln
+		$ ipvsadm -A -f 6 -s wrr
+		$ ipvsadm -a -f 6 -r 172.16.3.20 -g
+		$ ipvsadm -a -f 6 -r 172.16.3.30 -g
+
+
+
+
+
+
+
+
+
+
+
+

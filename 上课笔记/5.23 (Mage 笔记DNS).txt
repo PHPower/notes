@@ -1,0 +1,1151 @@
+5.23 (Mage 笔记DNS)
+
+
+名称解析：
+	从主机名获取因特网地址的过程称为名称解析，该过程由 gethostbyname 子例程完成。
+	将一个因特网地址转换成主机名的过程称为逆向名称解析，该过程由 gethostbyaddr 子例程完成。这些例程作为基本附件放入名称转换例程库作为解析器。
+
+	运行 TCP/IP 的主机上的解析器例程通常试图使用以下资源来解析名称：
+		BIND/DNS (named)
+		网络信息服务 (NIS)
+		本地 /etc/hosts 文件
+
+	名称解析库：存放  域名 <--> IP  两者对应关系的一个库
+		在之前没有DNS之前，是通过手动修改 /etc/hosts中的信息，来达到解析的功能
+
+	键入网站域名 --> 执行域名转换成IP地址 --> 通过DNS主机 (Domain NameService)帮助我们解析 域名 --> 返回域名的IP地址 -->  访问域名的IP地址
+
+
+关系型数据库：
+		性能很差
+		修改时，会锁定表
+
+
+
+DNS: Domain Name Service
+域名：www.magedu.com(主机名，FQDN：Full Qualified Domain Name, 完全限定域名)
+DNS：名称解析，Name Resolving 名称转换（背后有查询过程，数据库）
+	FQDN<-->IP
+	172.16.0.1		www.magedu.com.
+	172.16.0.2		mail.magedu.com.
+	
+nsswitch:
+
+
+hosts: 	files	dns
+file: /etc/hosts
+dns: DNS
+
+stub resolver: 名称解析器	
+
+ping www.magedu.com
+
+hosts: 
+	IPADDR	FQDN	Ailases
+	172.16.0.1	www.magedu.com	www
+	
+	
+	A --> D
+		hosts
+		
+1、周期性任务
+	
+2、Server, Server
+	1KW
+	
+3、分布式数据库
+
+	
+
+
+	
+	IANA: IP, FQDN
+		ftp: hosts
+	ICANN: 
+
+
+	TLD:
+		组织域：.com, .org, .net, .cc
+		国家域: .cn, .tw, .hk, .iq, .ir, .jp
+		反向域: IP-->FQDN
+			反向：IP-->FQDN
+			正向：FQDN-->IP
+
+	IP-->FQDN:
+
+	FQDN-->IP:
+	www.magedu.com.		IP1
+
+	查询：
+		递归：只发出一次请求
+		迭代：发出多次请求
+	
+	解析：
+		正向：FQDN-->IP
+		反向：IP-->FQDN
+	
+	两段式：递归，迭代
+
+	DNS：分布式数据库
+		上级仅知道其直接下级；
+		下级只知道根的位置；
+
+	DNS服务器：
+		接受本地客户查询请求（递归）
+		外部客户端请求：请求权威答案
+			肯定答案：TTL
+			否定答案：TTL
+		外部客户端请求：非权威答案
+		
+	
+	DNS服务器类型
+		主DNS服务器: 数据修改
+		辅助DNS服务器：请求数据同步
+			serial number
+			refresh
+			retry
+			expire
+			nagative answer TTL
+		缓存DNS服务器
+		转发器
+		
+
+
+	数据库中的，每一个条目称作一个资源记录(Resource Record, RR)
+		资源记录的格式：
+
+		TTL 600;
+
+		NAME	[TTL]   	IN			RRT		VALUE
+		www.magedu.com.		IN			A		1.1.1.1
+
+
+		1.1.1.1				IN			PTR		www.magedu.com.
+
+
+	资源记录类型：
+		SOA(Start Of Authority): 
+			ZONE NAME	TTL		IN		SOA		FQDN	ADMINISTRATOR_MAILBOX (
+								serial number
+								refresh
+								retry
+								expire
+								na ttl )
+			时间单位：M（分钟）、H（小时）、D（天）、W（周），默认单位是秒
+			邮箱格式：admin@magedu.com -写为-> admin.magedu.com
+			
+			magedu.com.		600		IN		SOA		ns1.magedu.com.		admin.magedu.com. (
+								2013040101
+								1H
+								5M
+								1W
+								1D )
+		NS(Name Server): ZONE NAME --> FQDN
+			magedu.com.		600		IN		NS		ns1.magedu.com.
+			magedu.com.		600		IN		NS		ns2.magedu.com.
+			ns1.magedu.com.	600		IN		A		1.1.1.2
+			ns2.magedu.com.	600		IN		A		1.1.1.5
+		MX(Mail eXchanger): ZONE NAME --> FQDN
+			ZONE NAME	TTL		IN		MX  pri		VALUE
+			优先级：0-99，数字越小级别越高
+				magedu.com.	600		IN		MX	10	mail.magedu.com.
+				mail.magedu.com.	600		IN	A	1.1.1.3
+		A（address）：	FQDN-->IPv4	
+		AAAA：FQDN-->IPv6
+		PTR(pointer)：IP-->FQDN
+		CNAME(Canonical NAME): FQDN-->FQDN
+			www2.magedu.com.		IN		CNAME		www.magedu.com.
+		TXT
+		CHAOS
+		SRV
+
+
+
+
+域：Domain
+区域：Zone
+
+
+.com
+magedu.com.		IN		NS		ns.magedu.com.
+ns.magedu.com.	IN		A		192.168.0.10
+
+
+magedu.com.   192.168.0.0/24
+
+www		192.168.0.1
+mail	192.168.0.2, MX
+
+建立两个区域文件：
+正向区域文件
+magedu.com.		IN		SOA	
+
+www.maged.com.	IN	A	192.168.0.1
+简写为：
+www			IN	A	192.168.0.1
+
+	
+	反向区域文件：
+	0.168.192.in-addr.arpa.		IN	SOA	
+
+	1.0.168.192.in-addr.arpa.		IN	PTR		www.magedu.com.
+	1		IN		PTR		www.magedu.com.
+
+
+	区域传送的类型：
+		完全区域传送: axfr 
+		增量区域传送：ixfr
+	
+	区域类型：
+		主区域：master
+		从区域：slave
+		提示区域：hint
+		转发区域：forward
+
+	.com.	
+
+	magedu.com.
+
+	DNS资源记录类型及意义：
+	SOA：起始授权记录
+	NS：名称服务器
+	MX：邮件交换器
+	CNAME：别名记录
+	A：FQDN-->IPv4
+	AAAA: FQDN-->IPv6
+	PTR：IP-->FQDN
+
+
+	递归：请求一次
+	迭代：请求多次，参考答案
+
+
+	DNS服务器类型：
+		主
+		辅助
+		缓存
+		转发器
+		
+	ZONE DOMAIN
+
+
+
+
+
+'DNS:(Domain Name Service)域名解析服务'
+	
+	是一个C/S架构的协议
+
+	传输层协议： TCP， UDP， SCTP
+			TCP: Transmission Control Protocol
+				面向连接的协议：双方通信之前需要事先建立虚连接；
+			UDP：User Datagram Protocol
+				无连接的协议：双方无须通信之前需要事先建立虚连接；
+
+	1、初级DNS阶段：
+
+		DNS客户端 --> 向DNS服务器发起询问 --> 返回IP地址 --> 访问站点   
+			无需保存在本地
+
+
+	2、进阶DNS阶段：
+		DNS服务器：
+			进行分级 --> 省市县类似的分级 --> 一级一级转发
+
+
+	'DNS服务器类型：'
+			负责解析至少一个域：
+				主名称服务器；
+				辅助名称服务器；
+			不负责解析：
+				缓存名称服务器；
+	
+
+	'域名：自右而左'
+
+		TLD：top level domain
+
+		www.magedu.com.  --> 主机名 
+		www.mageed.com   --> 域名 
+
+		其中：
+			. ：表示第一级（可以省去）
+			com：顶级域
+			magedu：二级域
+			www：主机名
+			.magedu.com.：域名后缀
+
+
+				. 和 com ：由美国的机构定义的
+
+			顶级域：
+				1、国家的 两位
+					jp cn us tw 
+				2、三位：
+					com、net、org、edu、gov
+
+			组织域：.com, .net, .org, .gov, .edu, .mil
+			国家域：.iq, .tw, .hk, .jp, .cn, ...
+			
+
+
+	'namespace：'
+		分层而管，自上而下（层级结构）
+			找主机名：
+				先是从根域查找 --> 顶级域 --> 二级域 --> 主机名 （这样就找到了我们要访问的主机名）
+
+
+
+	'名称解析过程：'
+
+		先查找根域的DNS服务器(世界上有13个服务器) --> 返回顶级域的地址 --> 访问顶级域 询问二级域地址 --> 返回二级域地址 --> 访问二级域 询问主机地址 --> 如果有主机，则访问；没有返回查无此人
+		Client --> hosts文件 --> DNS Local Cache --> DNS  Server (recursion) --> 
+			自己负责解析的域：直接查询数据库并返回答案；
+			不是自己负责解析域：Server Cache --> iteration(迭代)
+				
+				解析答案：
+					肯定答案：
+					否定答案：不存在查询的键，因此，不存在与其查询键对应的值；
+					
+					权威答案：由直接负责的DNS服务器返回的答案；
+					非权威答案：
+
+		这个过程是：
+			迭代 + 递归
+
+		工作模式：UDP协议+TCP协议
+
+		监听端口：53端口
+
+		每一级只知道自己下级的信息，并不知道上级的信息，所以下级要访问上级时，需要访问根域再查找
+
+
+
+	根域：
+		正向解析：
+			
+		反向解析：
+			
+
+
+	线索域：(属于顶级域)
+		实现IP到主机的映射
+
+	区域zone：
+		正向解析区域：
+			主机名 --> IP地址 
+		反向解析区域：
+			IP地址 --> 主机名
+
+
+	FQDN：Full Qualified Domain Name
+
+
+	nsswitch：
+		定义某个名称解析服务有谁来解析
+
+		host file dns
+
+			先查找本地DNS缓存 --> 查找网卡内定义的DNS服务器 --> 从根域查找 ....  --> 查找到主机IP地址 缓存到DNS服务器 --> 访问主机IP地址
+
+			一般在网卡上定义2个DNS服务器：
+				一般只使用的第一个，第二个是以备第一个服务器宕掉了。
+
+
+
+'主从DNS服务器：'
+
+	master/slave
+
+	轮循返回请求
+
+	主DNS服务器： 维护所负责解析的域数据库的那台服务器；读写操作均可进行；
+	从DNS服务器： 从主DNS服务器那里或其他的DNS服务器那里“复制”一份解析库；但只能进行读操作；
+		"复制"操作的实施方式：
+			序列号：serial，也就是数据库的版本号；'主服务器数据库内容发生变化时，其版本号递增'
+			刷新时间间隔：refresh，'从服务器'每多久到主服务器检查序列号更新状况
+			重试时间间隔：retry，'从服务器'从主服务器请求同步解析库失败时，再次发起尝试请求的时间间隔
+			过期时长：expire，'从服务器'始终联系不到主服务器时，多久之后放弃从主服务器同步数据；停止提供服务
+			否定答案的缓存时长：negative answer ttl，取决于变化频度（不超过6分钟默认）
+
+
+		主服务器"通知"从服务器 随时更新数据
+
+
+		区域传送： 
+			全量传送：axfr 从服务器第一次上线做全量传送（通过TCP服务53端口进行）
+			增量传送：ixfr，仅传送变量的数据
+
+				通过TCP协议53端口进行传送，解析使用UDP 53端口
+
+
+'区域zone和域domain：'
+	
+	magedu.com域： 
+		FQDN --> IP  
+			正向解析库；区域
+		IP --> FQDN
+			反向解析库；区域
+
+	正向解析库：不能包含反向解析
+	反向解析库：不能包含正向解析
+
+	FQDN是完全合格域名/全程域名缩写，Fully Qualified Domain Name，即是域名，访问时将由DNS进行解析，得到IP。
+
+	FQDN = Hostname + DomainName
+
+
+'区域数据库文件：'
+	资源记录：Resource Record，简称rr
+		记录类型：A，AAAA，PTR，SOA，NS，CNAME，MX
+
+	SOA：Start Of Authority，起始授权记录；一个'区域解析库'有且只能有一个SOA记录，而且必须放在第一条；指明一个区域的正相反相解析
+	NS ： Name Service，域名服务记录；一个区域解析库可以有多个NS记录；其中一个为主的，如果有多个从，必须都写出来。
+	A：Address，地址记录，FQDN --> IPv4
+	AAAA：地址记录，FQDN --> IPv6
+	CNAME：Canonical Name ，正式名称(别名记录)；
+	PTR：Pointer，指针记录， IP --> FQDN
+	MX：Mall eXchanger ，邮件交换器
+		优先级：0-99，数字越小级别越高
+
+
+	资源记录的定义格式：
+		语法： 
+			name [TTL] IN RR_TYPE  value 
+
+
+	各资源详解:
+
+		SOA：一个区域的第一条资源记录
+			name: 当前区域的名字；例如”mageud.com.”，或者“2.3.4.in-addr.arpa.”；
+				value：有多部分组成
+					(1) 当前区域的区域名称（也可以使用主DNS服务器名称）；
+					(2) 当前区域管理员的邮箱地址；但地址中不能使用@符号，一般使用点号来替代；
+					(3) (主从服务协调属性的定义以及否定答案的TTL)
+						
+					例如：
+						magedu.com. 	86400 	IN 		SOA 	magedu.com. 	admin.magedu.com.  (
+									2017010801	; serial
+									2H 			; refresh
+									10M 		; retry
+									1W			; expire
+									1D			; negative answer ttl 
+						)	
+
+		NS：
+				name: 当前区域的区域名称
+				value：当前区域的某DNS服务器的名字，例如dns.magedu.com.；
+					注意：一个区域可以有多个ns记录； 
+					
+				例如：
+					magedu.com. 	86400 	IN 	NS  	dns1.magedu.com.
+					magedu.com. 	86400 	IN 	NS  	dns2.magedu.com.
+					
+		MX：
+			name: 当前区域的区域名称
+			value：当前区域某邮件交换器的主机名；
+				注意：MX记录可以有多个；但每个记录的value之前应该有一个数字表示其优先级；
+				
+			例如：
+				magedu.com. 		IN 	MX 	10  	mx1.magedu.com.
+				magedu.com. 		IN 	MX 	20  	mx2.magedu.com.
+				
+		A：
+			name：某FQDN，例如www.magedu.com.
+			value：某IPv4地址；
+			
+			例如：
+				www.magedu.com.		IN 	A	1.1.1.1
+				www.magedu.com.		IN 	A	1.1.1.2
+				bbs.magedu.com.			IN 	A	1.1.1.1
+	
+		AAAA：
+			name：FQDN
+			value: IPv6
+		
+		PTR：(反向解析)
+			name：IP地址，有特定格式，IP反过来写，而且加特定后缀；例如1.2.3.4的记录应该写为4.3.2.1.in-addr.arpa.；
+			value：FQDN
+			
+			例如：
+				4.3.2.1.in-addr.arpa.  	IN  PTR	www.magedu.com.
+				
+		CNAME：
+			name：FQDN格式的别名；
+			value：FQDN格式的正式名字；
+			
+			例如：
+				web.magedu.com.  	IN  	CNAME  www.magedu.com.
+				
+		注意：
+			(1)TTL可以从全局继承
+			(2)@可以表示当前区域的名称 --> magedu.com 
+			(3)相邻的两条记录其name相同时，后面的可省略
+			(4)对于正向区域来说，各MX，NS等类型的记录的value为FQDN，此FQDN应该有一个A记录
+
+
+
+
+'DNS协议 --> BIND软件、PowerDNS'
+	http://www.isc.org 
+
+	学习文档：
+		http://anyisalin.blog.51cto.com/10917514/1753638 
+
+
+	智能解析：(通过bind view 或者 smart dns)
+		根据用户的运行商，智能解析到不同运营商的服务器IP上
+
+	程序环境：(CentOS7)
+		主程序：/usr/sbin/named 
+		Unit File：/usr/lib/systemd/system/named.service 
+		配置文件：/etc/named.conf
+		区域解析库：/var/named 
+			/var/named/named/ca：资源记录（存放根域）
+			/var/named/named.localhost：本地记录（正向解析）
+			/var/named/named.loopback
+
+
+'实验题：'	定义一个DNS解析：('实验') 步骤如下：
+
+			一、关闭ndssec功能：(安全防火墙功能)
+				/etc/named.conf
+
+					dnssec-enable no;
+					dnssec-validation no;
+
+
+			二、解析一个区域：
+				1、定义：/etc/named.rfs1912.conf
+					zone "maxie.com" IN {
+						type master;
+						file "ZONE_FILE";
+					}
+
+				2、定义解析库文件 /var/named/named.maxie 
+					[root@localhost named]# cat named.maxie
+					$TTL 600M
+					maxie.com. IN	SOA	maxie.com.	nsadim.maxie.com. (
+									2017052301	; serial
+										1H	; refresh
+										5M	; retry
+										1W	; expire
+										6H )	; minimum
+						IN	NS	dns1.maxie.com.
+						IN	NS	dns2.maxie.com.
+					dns1.maxie.com. IN	A	172.16.1.131
+					dns2.maxie.com. IN	A	172.16.1.132
+					www.maxie.com.	IN	A	172.16.1.12
+					web	IN	CNAME	www
+					[root@localhost named]# pwd
+					/var/named
+
+				修改及属组权限：
+					$ chgrp named /var/named/named.maxie
+					$ chmod o= /var/named/named.maxie 
+
+
+						TTL：定义全局默认超时时间
+						2017052301	; serial：定义序列号
+						1H	; refresh：刷新时间
+						5M	; retry：重试时间
+						1W	; expire：超时时间
+						6H )	; minimum：否定答案缓存TTL值
+						web	IN	CNAME	www：别名，将cname.maxie.com. 解析到 www.maxie.com. 的地址
+
+
+			三、检查、启动并测试DNS服务：
+				$ named-checkconf				#检查主配置文件语法
+				$ named-checkzone "maxie.com" /var/named/named.maxie  #检查maxie.com zone所对应的解析库文件
+
+
+			四、解析域名：
+				[root@localhost named]# host -t A www.maxie.com 172.16.1.131
+				Using domain server:
+				Name: 172.16.1.131
+				Address: 172.16.1.131#53
+				Aliases:
+
+				www.maxie.com has address 172.16.1.12
+
+				[root@localhost named]# host -t NS maxie.com 172.16.1.131
+				Using domain server:
+				Name: 172.16.1.131
+				Address: 172.16.1.131#53
+				Aliases:
+
+				maxie.com name server dns1.maxie.com.
+				maxie.com name server dns2.maxie.com.
+
+
+
+
+
+回顾：
+	DNS：Domain Name Server, 53/tcp 53/udp 
+
+	Domain: zone 
+		正向、反向解析区域
+
+		每一个区域对应一个数据文件：
+			区域解析库文件：
+				存放资源记录
+					记录格式：
+						name TTL IN RR_TYPE VALUE 
+
+
+						RR_TYPE：
+							SOA：
+								name:Domain Name , value:....
+							NS： 
+								name:Domain Name , value: DN server hostname （域名服务器的主机名）
+							MX： 
+								name:DN , value:MX Server Hostname 
+							A，AAAA： 
+								name:FQDN , value:IPv4 or IPv6
+
+							PTR：
+								name:IPv4 , value:FQDN 
+
+							CNAME 
+								name:FQDN , value:FQDN 
+
+
+'DNS and Bind(2)'
+	
+	BIND的安装配置：
+		BIND: Berkeley Internet Name Domain , ISC.org(组织维护) 
+			dns：是协议
+			bind：dns协议的一种实现
+			named：bind程序运行起来的主程序名
+			named：bind的用户
+
+		程序包：
+			bind-libs：被bind和bind-utils包中的程序共同用到的库文件
+			bind-utils：bind客户端程序集，例如dig，host，nslookup
+
+			bind：提供的dns server程序、以及几个常用的测试程序
+			bind-chroot：选装，让named运行于jail模式下（'更安全'）
+
+
+		bind：
+			主配置文件：/etc/named.conf 
+				或包含进来其他文件；
+					/etc/named.iscdlv.key 
+					/etc/named.rfc1912.zones #定义区域的文件
+					/etc/named.root.key 
+
+			解析库文件：
+				/var/named目录下：
+					一般名字为：ZONE_NAME.zone 
+
+				注意：
+					(1)一台DNS服务器可同时为多个区域提供解析；
+					(2)必须要有根区域解析库文件：named.ca 
+					(3)还应该有两个区域解析库文件：localhost和127.0.0.1的正反向解析库
+
+
+			rndc：remote		name domain controller
+				监听953端口(默认只工作在本机)，因此仅允许本地使用
+
+
+			bind程序安装完成之后，默认即可做缓存服务器
+
+
+
+			'配置缓存服务器：' (实验)
+				(1)安装bind
+					yum install bind 
+				(2)编辑配置文件
+					vim /etc/named.conf
+					修改端口的地址：
+					listen-on port 53 { 127.0.0.1; 172.16.0.68; }
+					allow-query { any; }
+
+					recursion yes;  #不允许递归，这里必须为yes
+
+					dnssec-enable no;
+					dnssec-validation no;	#验证数据解析，以及签名；避免缓存毒化；这里做实验修改为no
+				(3)启动服务，并测试
+					$ named-checkconf
+					$ systemctl start named 
+					$ ss -tunl
+						查看53端口是否正常监听
+
+					现在这台机器就是缓存服务器了
+				(4)测试www.baidu.com 
+					$ host -t A www.baidu.com 172.16.0.68
+					如果这台机器能访问互联网，就可以当缓存服务器了
+
+
+
+
+		测试工具：
+			dig , host ,nslookup等
+
+			dig命令：挖掘工具
+
+				dig [-t RR_TYPE] name [@Server] [query options]
+
+					用于测试dns系统，因此其不会查询hosts
+
+					查询选项：
+						+[no]trace：跟踪解析过程
+						+[no]recurse：进行递归解析（一般服务的本地的主机进行递归解析，不给外网的进行递归解析，非常消耗资源）
+
+					注意：反向解析测试(反向查看IP地址对应的主机名)
+						dig -x IP 
+
+					模拟完全区域传送：
+						dig -t axfr DOMAIN [@server]
+
+
+			host命令：
+				host [-t RR_TYPE] 
+
+
+!!!			rndc命令：
+
+				rndc flush ：清空解析缓存
+
+
+
+	实验	'配置解析一个正向区域：'
+
+
+	实验'配置解析一个反向解析区域：'
+			'反向解析文件主要是：解析PTR记录'
+
+		(1)cd /var/named 
+		(2)修改配置文件
+			vim /etc/named.rfs1912.zones 
+			添加反向zone的解析
+			zone "16.172.in-addr.arpa" IN {
+				type master
+				file "172.16.zone"
+			}
+		(3)添加zone文件；
+
+			$ cd /var/named 
+			$ vim 172.16.zone   #这个文件中的@：表示/etc/named.rfs1912.zones中 zone的名字，也就是"16.172.in-addr.arpa"这个名字
+				$TTL 9527
+				$ORIGIN 16.172.in-addr.arpa.		#这一步，在出现transfer failed的时候可以尝试设置，这可能是因为同一个网内出现了两个一样的反向解析服务器
+				@	IN	SOA	maxiecloud.com.	nsadmin.maxiecloud.com. (
+						2017052301
+						3H
+						20M
+						1W
+						1D )
+					IN	NS	dns1.maxiecloud.com.
+					IN	NS	dns2.maxiecloud.com.
+				51.1	IN	PTR	dns1.maxiecloud.com.
+				52.1	IN	PTR	dns2.maxiecloud.com.
+				12.1	IN	PTR	www.maxiecloud.com.
+
+			#这里如果后面自己补上了全部的地址，就必须在最后加上"."
+			#如果不补全，则无需加"."
+
+
+		(4)测试： 
+			$ rndc reload 
+			$ dig -t axfr 16.172.in-addr.arpa @172.16.1.51
+			$ dig -x 172.16.1.12 @172.16.1.51
+
+
+
+
+'主从服务器：'!!!!!!!!!!!!!!!!!!!!!!!!补充笔记!!!!!!!!!!!!!!!!!!!!!!!!
+	注意：从服务器是区域级别的概念
+
+	配置一个'从区域：'
+		配置一个从区域：
+			On Slave 
+
+				'先同步两台主从节点的时间！！！！'
+
+
+				需要对slave节点上的配置文件，进行修改：
+
+				options {
+					//listen-on port 53 { 127.0.0.1; };		#注释掉这段信息
+					directory 	"/var/named";
+					dump-file 	"/var/named/data/cache_dump.db";
+					statistics-file "/var/named/data/named_stats.txt";
+					memstatistics-file "/var/named/data/named_mem_stats.txt";
+					allow-query     { any; };				#修改为any
+
+						dnssec-enable no;					#设置为no
+						dnssec-validation no;				#设置为no
+
+
+				(1) 定义区域
+					定义一个从区域； 
+						zone "ZONE_NAME"  IN {
+							type  slave;
+							file  "slaves/ZONE_NAME.zone";
+							masters  { MASTER_IP; };
+						};
+
+						zone "maxiecloud.com" IN {
+						        type slave;
+						        file "slaves/maxiecloud.zone";
+						        masters { 172.16.1.51; };
+						};
+						
+						配置文件语法检查：named-checkconf
+						
+
+				(2) 重载配置
+					rndc  reload
+					systemctl  reload  named.service
+				
+			On Master
+				(1) 确保区域数据文件中为每个从服务配置NS记录，并且在正向区域文件需要每个从服务器的NS记录的主机名配置一个A记录，且此A后面的地址为真正的从服务器的IP地址；
+				
+			注意：时间要同步；
+				ntpdate命令；
+
+
+
+	主从节点支持：
+		链式复制：
+			主节点的从节点可以当另一台的从节点....
+
+
+
+
+'子域授权：'
+	一、现在区域中授权子域：
+		正向解析区域授权子域的方法：
+			在maxie.zone中添加：
+				ops.maxie.com. 		IN 		NS dns1.ops.maxie.com. 
+				ops.maxie.com. 		IN 		NS dns2.ops.maxie.com.
+				dns1.ops.maxie.com. IN 		A  172.16.1.53		#子域DNS的IP地址
+				dns2.ops.maxie.com. IN 		A  172.16.1.54
+
+			在子域的named.rfs1912.zones中添加子域信息：
+
+
+	二、'定义转发：'
+		注意：被转发的服务器必须为当前服务做递归
+
+		(1)区域转发：仅转发对特定区域的解析请求
+			zone "ZONE_NAME" IN {			#这里的ZONE_NAME是区域的名称，而非子域名称；所以这里应该是maxiecloud.com
+				type forward;
+				forward {first|only};
+				forwarders { SERVER_IP; };
+			};
+
+				first：首先转发；转发器不响应时，自行去迭代查询；
+				only：只转发；
+
+		(2)全局转发：针对凡本地没有通过zone定义的区域查询请求，通通转给某转发器；
+			options {
+				...
+				forward {only|first};
+				forwarders { SERVER_IP;};
+				...
+			};
+
+
+	三、'子域定义父域：（这样子域在查找父域的区域时或解析时，无需再向根域查找了，直接定义了父域的位置，直接从父域查找即可）'
+		在子域的/etc/named.rfs1912.zones 中添加：
+
+			zone "maxie.com" IN {
+				type forward;
+				forward only;
+				forwarders { 172.16.1.131; 172.16.1.132; };
+			}
+
+				first：如果上级没有结果，则查找根域
+				only：如果查找上级没有结果，则不再查找
+
+	四、'全局转发：如果自己解析不了，则全部推给 172.16.0.1让其解析'
+		转发器：必须允许为当前服务器做递归
+
+		在/etc/named.conf中添加：
+			options中添加：
+				forward only;
+				forwarders { 172.16.0.1; }
+
+
+	!!!!!!!!!!!!!多台计算机协作时，需要同步ntpdate,同步时间!!!!!!!!!!!!!!!!!!!
+
+	
+
+
+'bind中的安全相关配置：'
+	
+	acl：访问控制列表；把一个或多个地址归并一个命名的集合，随后通过此名称即可对此全集内的所有主机实现统一调用；
+
+		所有的acl在/etc/named.conf中定义，并在/etc/named.rfs1912.zones中调用
+
+		acl acl_name {
+			ip;
+			net/prelen;
+		};
+
+		实例：
+			acl mynet {
+				172.16.0.0/16;
+				172.0.0.0/8;
+			};
+
+		bind有四个内置的ACL：
+			none：没有任何主机；
+			any：任意主机
+			local：本机
+			localnet：本机的IP所属的网络
+
+	
+
+	'访问控制指令：'
+		'1、'allow-query {}：允许查询的主机；白名单；
+			(1)在/etc/named.conf中添加
+				acl test {
+					172.16.1.51;
+					172.16.1.52;
+				};
+			(2)在/etc/named.rfs1912.zones中添加 
+				zone "maxiecloud.com" IN {
+					type master;
+					file "maxiecloud.zone";
+					allow-query { test; };
+				};
+			(3)检查配置，重读配置文件：
+				$ named-checkconf
+				$ rndc reload 
+			(4)测试：（在同一局域网内的不同IP主机上进行测试）
+				$ dig -t A www.maxiecloud.com @172.16.1.51
+				$ dig -t A www.maxiecloud.com @172.16.1.52
+				$ dig -t A www.maxiecloud.com @172.16.1.53
+
+
+		'2、'allow-transfer {}：允许向哪些主机做区域传送；默认为向所有主机；应该配置仅允许'从服务器'；
+			(1)在/etc/named.conf中添加：
+				acl tran {
+					172.16.1.52;
+					172.16.1.51;
+					127.0.0.1;
+				};
+			(2)在/etc/named.rfs1912.zones中添加：
+				zone "maxiecloud.com" IN {
+					type master;
+					file "maxiecloud.zone";
+					allow-transfer { tran; };
+				};		
+			(3)检查配置，重读配置文件：
+				$ named-checkconf
+				$ rndc reload 
+			(4)测试：（在同一局域网内的不同IP主机上进行测试）
+				$ dig -t axfr maxiecloud.com @172.16.1.51
+				$ dig -t axfr maxiecloud.com @172.16.1.52
+				$ dig -t axfr maxiecloud.com @172.16.1.53
+
+
+		'3、'allow-recursion {}：允许哪些主机向当前DNS服务器发起递归查询请求；
+			(1)在/etc/named.conf中添加：
+				acl localnet {
+					127.0.0.0/8
+					172.16.0.0/16
+				};
+
+			(2)在/etc/named.conf的options中添加：
+				allow-recursion { localnet; };
+
+			(3)检查配置，重读配置文件：
+				$ named-checkconf
+				$ rndc reload 
+
+			(4)测试：（在同一局域网内的不同IP主机上进行测试）
+				$ dig -t A www.maxiecloud.com @172.16.1.51
+				$ dig -t NS maxiecloud.com @172.16.1.52
+				$ dig -t axfr maxiecloud.com @172.16.1.53
+
+		'4、'allow-update {}： DDNS，允许动态更新区域数据库文件中内容；'（一般此项都要配置成none）'
+			(让DNS与DHCP联动，让DHCP自动改DNS中的IP地址)
+				在/etc/named.rfs1912.zones中的每个区域中添加：
+					allow-update { none; };
+
+
+
+'bind view：'
+	视图：
+		(1)定义acl：
+			在/etc/named.conf中添加: 
+
+					acl localnet {
+						192.168.10.0/24;
+					};
+
+					acl mynet {
+						172.16.0.0/16;
+						127.0.0.0/8
+					};
+
+			剪切named.conf中的zone到named.rfs1912.zones的 view local 中
+
+		(2)编辑/etc/named.rfs1912.zones 
+
+			view local {
+
+			match-clinets { localnet; };
+
+				所有zone
+
+			zone "maxie.com" IN {
+				type master;
+				file "maxie.zone/localnet";
+			};
+
+			};
+
+
+			view my {
+
+				match-clients { mynet; };
+				zone "maxie.com" IN {
+					type master;
+					file "maxie.zone/mynet";
+				};
+
+		
+			};
+
+
+
+			view ex {
+
+				match-clinets { any; };
+				zone "maxie.com" IN {
+					type master;
+					file "maxie.zone/ex";
+				};
+
+		
+			};
+
+			注意： match-clinets {any;} 必须放在最后 ，越小放在越前
+
+
+		(3)在 /var/named/创建 maxie.zone目录
+			$ mkdir /var/named/maxie.zone 
+
+		(4)创建 file：
+			$ vim localnet
+				$TTL 610
+				@	IN 		SOA  	maxiecloud.com.		nsadmin.maxiecloud.com. (
+							2017052301
+							1H
+							2M
+							1D
+							2D )
+				@	IN 		NS 		dns1.maxiecloud.com.
+				dns1 	IN 	A 		172.16.0.6
+				www 	IN 	A 		1.1.1.1
+
+			$ vim mynet 
+				$TTL 620
+				@	IN 		SOA  	maxiecloud.com.		nsadmin.maxiecloud.com. (
+							2017052301
+							1H
+							2M
+							1D
+							2D )
+				@	IN 		NS 		dns1.maxiecloud.com.
+				dns1 	IN 	A 		172.16.0.6
+				www 	IN 	A 		2.1.1.1
+
+			$ vim ex 
+				$TTL 630
+				@	IN 		SOA  	maxiecloud.com.		nsadmin.maxiecloud.com. (
+							2017052301
+							1H
+							2M
+							1D
+							2D )
+				@	IN 		NS 		dns1.maxiecloud.com.
+				dns1 	IN 	A 		172.16.0.6
+				www 	IN 	A 		3.1.1.1
+
+		(5)修改目录权限：
+			$ chown -R  :named maxie.zone/
+			$ chmod -R o=  maxie.zone/
+
+		(6)测试效果：
+			修改/etc/named.conf中的acl的信息：
+				acl localnet {
+						172.16.1.11
+					};
+
+					acl mynet {
+						172.16.1.51
+						127.0.0.0/8
+					};
+
+			在上面定义的IP地址上进行测试：
+				$ dig -t A www.maxiecloud.com @172.16.1.53
+
+	
+
+
+
+bind view ：（马哥笔记）
+	view  VIEW_NAME {
+				zone
+				zone
+				zone
+			}
+			
+			
+			view internal  {
+				match-clients { 172.16.0.0/8; };
+				zone "magedu.com"  IN {
+					type master;
+					file  "magedu.com/internal";
+				};
+			};
+			
+			view external {
+				match-clients { any; };
+				zone "magecdu.com" IN {
+					type master;
+					file "magedu.com/external";
+				};
+			};
+
+
+
+
+博客作业：正向解析区域、反向解析区域；主/从；子域；转发；基本安全控制；  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

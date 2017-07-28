@@ -1,0 +1,1403 @@
+7.4 (Mage MariaDB进阶)
+
+
+db-engines.com ：数据库排名网站
+
+
+
+MongoDB：最像Mysql的非关系型数据库
+
+Redis：键值存储
+
+
+'数据库 类型：'
+	Relational DBMS：关系型数据库   --> RDBMS
+		Oracle --> 转型云计算数据库
+		MySQL
+		MariaDB
+
+	NoSQL:
+		Doucument store
+			search store：搜索
+		key-value store
+		wide column store：列式存储
+		Graph DBMS：图式存储
+
+	Search engine：倒排索引
+		Solr
+		ElasticSearch
+	Time Series DBMS：时间序列数据库
+		InfluxDB
+
+
+
+
+'索引：'
+	加速读操作
+	原始数据变化，索引也变化，对写入压力较大
+
+
+
+'程序的调用接口：'
+	函数
+	类
+
+	远程调用：RBC --> 远程过程调用
+	同步调用：等待 --> 阻塞/非阻塞
+	异步调用：
+
+
+生产者 -->  消息队列(消息中间件，对消费者基于订阅机制)  -->  消费者
+	'有些功能并不是一定要依赖于消费者要返回信息，生产者才能继续工作'
+	NySQL的中间件：
+		'MySQL Router'
+
+
+文件系统：
+	存放数据，进行查询等操作时非常低效
+
+数据管理系统：
+	对数据进行增删改查
+	根据满足的目标分类：
+		1、满足数据的一致性
+		2、搜索
+		3、时间
+		4、
+
+
+
+'RDBMS：' 
+	
+	'核心'：二维关系 --> 列 --> 行 --> 形成二维表
+		一个实体：多个列的一行，描述一个实体
+
+
+	范式：第一范式、第二范式、第三范式
+
+
+	关系运算：
+		选择
+		投影
+
+	约束：
+		主键约束(相当于Key)：惟一、非空；一张表只能有一个；
+		惟一键约束：惟一，可以'存在多个'；
+		外键约束：参考性约束；
+		检查性约束：check；
+
+	三层模型：
+		物理层 --> SA     --> 安装数据库
+		逻辑层 --> DBA 	 --> 设计数据库，以及表
+		视图层 --> Coder	 --> 程序猿
+
+
+	安装：
+		1、rpm包：便于安装
+		2、linux generic --> tar包：便于迁移  绿色安装
+
+
+			
+MariaDB/MySQL：
+
+	中间件：MaxScale、MySQL Router
+
+	特性：
+		插件式存储引擎
+		单进程多线程 --> 3GB内存
+
+
+	安装MySQL：
+		OS Vendor：rpm
+		MySQL：
+			source code：源码，使用cmake工具编译安装
+			binary package：
+				i686, x86_64; 
+				glibc VERSION
+			prepackage：rpm, deb
+				os, arch, 
+
+
+
+!!!		!!!	'安装MySQL：'   上午第二个视频
+
+
+		!!!		使用官方tar包安装		
+
+				'安装mysql-5.7：'
+					从ftp下载tar包并解压：
+						$ wget ftp://172.16.0.1/pub/Sources/7.x86_64/mysql/mysql-5.7.18-linux-glibc2.5-x86_64.tar.gz 
+						$ tar -xf mysql-5.7.18-linux-glibc2.5-x86_64.tar.gz  -C /usr/local 
+						$ cd /usr/local 
+						$ ln -sv /usr/local/mysql-5.7.18-linux-glibc2.5-x86_64.tar.gz mysql 
+						$ cd mysql 
+
+					1、创建数据目录，属主属组属于运行者用户身份mysql
+						$ vim /etc/profile.d/mysql.sh 
+						export PATH=/usr/local/mysql/bin:$PATH
+						$ useradd -r mysql 
+						$ chown -R root.mysql ./*
+						$ mkdir -pv /data/mysql 
+						$ mkfs.ext4 /dev/sdb 
+						$ mount -t ext4 /dev/sdb /data/mysql 
+						$ chown -R mysql.mysql /data/mysql 
+
+					2、复制启动脚本：
+						$ cp /usr/local/mysql/support-files/mysql.server /etc/init.d/mysqld
+						$ chkconfig --add mysqld
+						$ chkconfig --list mysqld 
+
+
+					
+					3、 查看配置文件路径，并修改配置文件：/usr/local/mysql/etc/my.cnf
+						$ mkdir /usr/local/mysql/etc/
+						$ cp /etc/my.cnf /usr/local/mysql/etc/
+						$ vim /usr/local/mysql/etc/my.cnf
+
+						[mysqld]
+						datadir=/data/mysql
+						socket=/tmp/mysql.sock
+						user=mysql
+						# Disabling symbolic-links is recommended to prevent assorted security risks
+						symbolic-links=0
+
+						[mysqld_safe]
+						log-error=/usr/local/mysql/logs/mysqld.log
+						pid-file=/var/run/mysqld/mysqld.pid
+
+						!includedir /usr/local/mysql/etc/my.cnf.d
+
+
+						$ mkdir -pv /usr/local/mysql/etc/my.cnf.d
+						
+
+					4、属于自己手动创建error.log，修改属主属组
+						$ touch /usr/local/mysql/etc/logs/error.log 
+						$ chown -R mysql.mysql /usr/local/mysql/etc/logs/
+
+					5、初始化：
+						$ mysqld --initialize-insecure --user=mysql --basedir=/usr/local/mysql --datadir=/data/mysql
+						以上初始化对 5.7.6以上的生效
+
+						shell> bin/mysql_install_db --user=mysql    # MySQL 5.7.5
+						shell> bin/mysqld --initialize --user=mysql # MySQL 5.7.6 and up
+						shell> bin/mysql_ssl_rsa_setup              # MySQL 5.7.6 and up
+
+
+						我们这里是5.7.18，使用
+
+						$ mysql_install_db --user=mysql --datadir=/data/mysql/ --basedir=/usr/local/mysql
+
+
+
+					
+					
+
+
+
+
+		服务端程序：
+			mysqld，mysqld_safe(大多数运行此服务)，mysqld_multi  单主机运行多实例
+
+		客户端程序：
+			mysql, mysqldump, mysqlbinlog, mysqladmin, ...
+
+		非客户端类管理程序：
+			myisamchk, myisampack, ...
+
+
+	'配置文件'：
+		读取多处的多个配置文件，而且会以指定的次序的进行； 
+			
+		$ my_print_defaults ：'获取配置文件的读取顺序'
+		
+		
+			Default options are read from the following files in the given order:
+			/etc/mysql/my.cnf  /etc/my.cnf ~/.my.cnf 
+			
+			'不同的配置文件中出现同一参数且拥有不同值时，后读取将为最终生效值； '
+			
+			修改默认读取的配置文件（mysqld_safe命令）：
+				 --defaults-file=file_name
+				
+			于读取的默认配置文件之外再加载一个文件：	
+				--defaults-extra-file=path
+				 				
+		
+		配置文件格式：ini风格的配置文件，能够为mysql的各种应用程序提供配置信息：
+			[mysqld]：适用于mysqld
+			[mysqld_safe]
+			[mysqld_multi]
+			[server]：适用于所有server
+			[mysql]
+			[mysqldump]
+			[client]
+			...
+			
+				PARAMETER = VALUE    ：以 参数 / 值 的形式来定义  ，有些不支持运行时修改
+				
+				PARAMETER：
+					innodb_file_per_table：
+					innodb-file-per-table 
+	
+
+
+		mysql --> mysql protocol --> mysqld 
+			mysql：交互式CLI工具；
+			
+			'mysql [options] db_name'
+				
+				'常用选项：'
+					--host=host_name, -h host_name：服务端地址；
+					--user=user_name, -u user_name：用户名；
+					--password[=password], -p[password]：用户密码； 
+					--port=port_num, -P port_num：服务端端口； 
+					--protocol={TCP|SOCKET|PIPE|MEMORY}：
+						本地通信：基于本地回环地址进行请求，将基于本地通信协议；
+							Linux：SOCKET  --> 在本地通信时，建议使用SOCKET，只有当使用127.0.0.1,localhost时，使用SOCKET
+							Windows：PIPE，MEMORY
+
+						非本地通信：使用非本地回环地址进行的请求； TCP协议；
+					--socket=path, -S path'：只有当使用本地连接mysql时，使用。'
+					--database=db_name, -D db_name：'连接时使用的默认数据库'
+					--compress, -C：数据压缩传输
+					--execute=statement, -e statement：非交互模式执行SQL语句；
+					--vertical, -E：查询结果纵向显示；
+					
+				'命令：'
+					客户端命令：于客户端执行；
+					服务端命令：SQL语句，需要一次性完整地发往服务端；语句必须有结束符；
+
+					获取命令帮助：
+						> \?
+						> help 
+					
+					?         (\?) Synonym for help.
+					clear     (\c) Clear the current input statement.
+					connect   (\r) Reconnect to the server. Optional arguments are db and host.
+					delimiter (\d) Set statement delimiter.
+					edit      (\e) Edit command with $EDITOR.
+					ego       (\G) Send command to mysql server, display result vertically.
+					exit      (\q) Exit mysql. Same as quit.
+					go        (\g) Send command to mysql server.
+					help      (\h) Display this help.
+					nopager   (\n) Disable pager, print to stdout.
+					notee     (\t) Dont write into outfile.
+					pager     (\P) Set PAGER [to_pager]. Print the query results via PAGER.
+					print     (\p) Print current command.
+					prompt    (\R) Change your mysql prompt.
+					quit      (\q) Quit mysql.
+					rehash    (\#) Rebuild completion hash.
+					source    (\.) Execute an SQL script file. Takes a file name as an argument.
+					status    (\s) Get status information from the server.
+					system    (\!) Execute a system shell command.
+					tee       (\T) Set outfile [to_outfile]. Append everything into given outfile.
+					use       (\u) Use another database. Takes database name as argument.
+					charset   (\C) Switch to another charset. Might be needed for processing binlog with multi-byte charsets.
+					warnings  (\W) Show warnings after every statement.
+					nowarning (\w) Dont show warnings after every statement.	
+					
+				'mysql命令的使用帮助：'
+					$ man mysql
+					$ mysql  --help  --verbose
+					
+			'sql脚本运行：'
+				mysql [options] [DATABASE] < /PATH/FROM/SOME_SQL_SCRIPT
+	
+					输入重定向实现
+
+
+
+
+
+		'mysqld服务器程序：工作特性的定义方式'
+				命令行选项
+				配置文件参数
+				
+				'服务器参数/变量'：设定MySQL的运行特性；
+					mysql> SHOW GLOBA|[SESSION] VARIABLES [LIKE clause];
+						GLOBA：'设定全局生效，只对以后的新连接生效'
+						SESSION：'设定单个连接生效，只对当前连接有效'
+
+						> SHOW SESSION VARIABLES LIKE 'skip_name_resolve';
+				
+
+				'状态（统计）参数/变量'：保存MySQL运行中的统计数据或状态数据；
+					mysql> SHOW GLOBAL |[SESSION] STATUS [LIKE clause];
+						
+						> SHOW GLOBAL STATUS;
+						> SHOW SESSION STATUS;
+
+
+				显示单个变量设定值的方法：
+					mysql> SELECT @@[global.|session.]system_var_name
+						
+						%：'匹配任意长度的任意字符；'
+						_：'匹配任意单个字符；'
+
+						> SHOW GLOBAL VARIABLES WHERE Variable_name='innodb_file_per_table';
+
+				
+				变量/参数级别：
+					全局：为所有会话设定默认； 
+					会话：跟单个会话相关；会话建立会从全局继承；
+					
+				
+				'服务器变量的调整方式：'
+					运行时修改：
+						global：'仅对修改后新建立的会话有效；'
+						session：'仅对当前会话有效，且立即生效；'
+					
+					启动前通过配置文件修改：
+						重启后生效；
+					
+				
+				'运行时修改变量值操作方法：'
+					mysql> HELP SET
+					
+					SET [GLOBAL | SESSION] system_var_name = expr
+					SET [@@global. | @@session. | @@]system_var_name = expr
+					
+						'有些值可以运行时修改，修改成功后，重启服务后失效。'
+						'保存在内存中'
+
+				'注意：'
+					GLOBAL：修改全局的值时，要求用户拥有管理员权限
+
+
+			安装完成后的安全初始化：
+				mysql_secure_installation
+				
+			运行前常修改的参数：
+				innodb_file_per_table=ON
+				skip_name_resolve=ON
+				...
+				
+
+
+		'SQL：ANSI SQL' 
+			SQL-86, SQL-89, SQL-92, SQL-99, SQL-03, ...
+			
+		
+
+		'MySQL的数据类型：' --> 定义了：'存储空间，存储方式，存储格式，数据范围，参与的运算范围'
+			字符型
+			数值型
+			日期时间型
+			内建类型
+			
+			'字符型：'
+				CHAR(#)， BINARY(#)：定长型；'CHAR不区分字符大小写，而BINARY区分'；
+				VARCHAR(#)， VARBINARY(#)：变长型
+				TEXT：TINYTEXT，TEXT，MEDIUMTEXT，LONGTEXT
+				BLOB：TINYBLOB，BLOB，MEDIUMBLOB， LONGBLOB
+					BLOB基于对象存储
+			
+			'数值型：'
+				浮点型：近似型
+					FLOAT
+					DOUBLE
+					REAL
+					BIT
+				整型：精确
+					INTEGER：TINYINT，SMALLINT，MEDIUMINT，INT，BIGINT
+					DECIMAL：精确数据类型 --> 10进制数据
+			
+			'日期时间型：'
+				日期：DATE
+				时间：TIME
+				日期j时间：DATETIME
+				时间戳：TIMESTAMP
+				年份：YEAR(2), YEAR(4)
+			
+			'内建：'
+				ENUM：枚举  --> 属于字符串
+					ENUM('Sun','Mon','Tue','Wed')
+				SET：集合 --> 属于字符串
+					
+			'类型修饰符：'
+				字符型：NOT NULL，NULL，DEFALUT ‘STRING’，CHARACET SET ‘CHARSET’，COLLATION 'collocation'
+				整型：NOT NULL， NULL， DEFALUT value, AUTO_INCREMENT, UNSIGNED
+				日期时间型：NOT NULL， NULL， DEFAULT 
+
+				查看支持的字符集：
+					> SHOW CHARSET;
+
+				查看支持的排序规则：
+					> SHOW COLLOCATIONS;
+
+
+			
+		
+
+		'SQL MODE'：定义mysqld对约束等违反时的响应行为等设定；
+			> SHOW VARIABLES LIKE 'sql_mode';
+
+			'常用的MODE：'
+				TRADITIONAL：传统关系型模型,比默认模式更为严格
+
+				STRICT_TRANS_TABLES：
+				STRICT_ALL_TABLES：
+				
+			修改方式：
+				mysql> SET GLOBAL sql_mode='MODE';
+				mysql> SET @@global.sql_mode='MODE';
+				
+				如果 sql_mode=''; 表示使用空模式
+
+
+
+		SQL：DDL，DML
+			DDL：
+				mysql> HELP Data Definition
+				
+				CREATE, ALTER, DROP
+					DATABASE, TABLE
+					INDEX, VIEW, USER
+					FUNCTION, FUNCTION UDF, PROCEDURE, TABLESPACE, TRIGGER, SERVER 
+					
+			DML:
+				mysql> HELP Data Manipulation
+				
+				INSERT/REPLACE, DELETE, SELECT, UPDATE
+		
+
+
+
+		'SELECT：'
+			
+			Query Cache：缓存查询的执行结果；
+				key：查询语句的hash值； 
+				value：查询语句的执行结果；
+				
+				SQL语句的编写方式：
+					SELECT name FROM tbl2;
+					select name from tbl2;
+			
+			
+			'查询执行路径：'
+				请求-->查询缓存
+				请求-->查询缓存-->解析器-->预处理器-->优化器(优化查询语句)-->查询执行引擎-->存储引擎-->缓存-->响应
+			
+
+				
+			SELECT语句的执行流程：
+				FROM  --> WHERE --> Group By --> Having --> Order BY --> SELECT --> Limit 
+				
+			'单表查询：'
+				
+				SELECT
+					[ALL | DISTINCT | DISTINCTROW ]
+					[SQL_CACHE | SQL_NO_CACHE] [SQL_CALC_FOUND_ROWS]
+					select_expr [, select_expr ...]
+					[FROM table_references
+					[WHERE where_condition]
+					[GROUP BY {col_name | expr | position}
+					[ASC | DESC], ... [WITH ROLLUP]]
+					[HAVING where_condition]
+					[ORDER BY {col_name | expr | position}
+					[ASC | DESC], ...]
+					[LIMIT {[offset,] row_count | row_count OFFSET offset}]	
+					
+				用法：
+					SELECT col1, col2, ... FROM tble_name；'极其危险，慎用'
+					SELECT col1, col2, ... FROM tble_name WHERE clause；
+					SELECT col1, col2, ... FROM tble_name  [WHERE clause] GROUP BY col_name [HAVING clause]； 
+					
+				
+				DISTINCT：数据去重；
+				SQL_CACHE：显式指定缓存查询语句的结果；
+				SQL_NO_CACHE：显式指定不缓存查询语句的结果；
+				
+				'query_cache_type服务器变量有三个值：'
+					ON：启用缓存；只要没有不缓存的配置，其他都缓存
+						SQL_NO_CACHE：不缓存；默认符合缓存条件都缓存；
+					OFF：关闭；
+					DEMAND：按需缓存；
+						SQL_CACHE：缓存；默认不缓存；
+
+					> SET @@global.query_cache_type=ON; --> 有时需要在配置文件中添加并重启服务
+
+
+				
+
+				'字段可以使用别名 ：'  使用 AS
+					col1 AS alias1, col2 AS alias2, ...
+				
+
+
+				'WHERE子句：指明过滤条件以实现“选择”功能；'
+					过滤条件：布尔型表达式；
+					
+					[WHERE where_condition]
+						算术操作符：+, -, *, /, %
+						比较操作符：=, <>, !=, <=>, >, >=, <, <=
+						
+							IS NULL， IS NOT NULL
+							区间：BETWEEN min AND max 
+							IN：列表；
+							LIKE：模糊比较，%和_；
+							RLIKE或REGEXP
+							
+						'逻辑操作符：'
+							AND， OR， NOT， XOR(异或，二者不同才为真)
+						
+
+				'GROUP BY'：根据指定的字段把查询的结果进行'分组'以用于'聚合'运算；
+					avg(), max(), min(), sum(), count()
+					
+					HAVING：对分组聚合后的结果进行条件过滤；
+					
+				'ORDER BY'：根据指定的字段把查询的结果进行'排序'；
+					升序：ASC
+					降序：DESC 
+					
+				LIMIT：对输出结果进行'数量限制'
+					[LIMIT {[offset,] row_count | row_count OFFSET offset}]
+				
+
+!!!		'使用 hello.sql脚本 导入数据库信息'
+			$ lftp 172.16.0.1 
+			> cd pub/Files
+			> get hello.sql 
+			修改数据库引擎：
+			$ sed -i 's@ENGINE=MyISAM@ENGINE=InnoDB@g' hello.sql 
+			$ cp hello.sql /tmp/
+			导入信息：
+			$ mysql < hello.sql 
+
+
+			'多表查询：'：   非常消耗资源，在两张表建立连接查询关系时，需要生成一个临时表在内存空间中，如果临时表过于大，则需要在磁盘上存储
+					'在生产环境中，需要加更多的查询条件'
+
+				连接操作：
+					交叉连接：笛卡尔乘积 --> m*n
+						交叉连接；并没有什么卵用的连接。。。。
+
+					'内连接：'
+						等值连接：让表之间的字段以等值的方式建立连接；
+							> SELECT * FROM students,classes WHERE students.ClassID = classes.ClassID;	
+
+						不等值连接：
+						自然连接
+						自连接:
+							> SELECT * FROM students AS s,students AS t WHERE s.TeacherID = t.StuID;
+
+					'外连接：'(以左/右为标准，为标准的表所有行必须出现，有对应项就显示，没有对应项就留空)
+						'不支持全外连接'
+
+						左外连接：(左表为标准)
+							FROM tb1 LEFT JOIN tb2 ON tb1.col = tb2.col 
+							> SELECT * FROM students AS s LEFT JOIN classes AS c ON  s.ClassID = c.ClassID;
+
+						右外连接：(右表为标准)
+							FROM tb1 RIGHT JOIN tb2 ON tb1.col = tb2.col 
+							> SELECT * FROM students AS s  RIGHT JOIN classes AS c  ON s.ClassID = c.ClassID;
+
+
+					'注意：使复杂的判断前置，也就是让程序判断，而非数据库；减轻数据库压力'
+
+
+							
+			'子查询：在查询中嵌套查询；'  查询嵌套查询 --> 
+				
+				用于WHERE子句中的子查询；
+					(1) 用于比较表达式中的子查询：子查询仅能返回单个值； 
+					(2) 用于IN中的子查询：子查询可以返回一个列表值； 
+					(3) 用于EXISTS中的子查询：'存在性判断'
+				用于FROM子句中的子查询；
+					SELECT tb_alias.col1, ... FROM (SELECT clause) AS tb_alias WHERE clause; 
+					 
+					> SELECT * FROM (SELECT * FROM students WHERE age>20) AS s WHERE Gender='M';
+
+			'联合查询：将多个查询语句的执行结果相合并；'
+				UNION 
+					SELECT clause UNION SELECT cluase；
+					将两个查询语句的结果合并显示
+					
+					> SELECT Name,Age From 
+
+
+		'练习题'
+			练习：导入hellodb.sql生成数据库
+				(1) 在students表中，查询年龄大于25岁，且为男性的同学的名字和年龄；
+					> SELECT Name,Age FROM students WHERE age > 25 AND Gender='M';
+
+				(2) 以ClassID为分组依据，显示每组的平均年龄；
+					> SELECT ClassID,avg(age) FROM students GROUP BY ClassID;
+
+				(3) 显示第2题中平均年龄大于30的分组及平均年龄；
+					> SELECT ClassID,avg(age) AS AGE FROM students GROUP BY ClassID HAVING  AGE > 30;
+
+				(4) 显示以L开头的名字的同学的信息；
+					> SELECT * FROM students WHERE Name RLIKE '^L.*';
+
+				(5) 显示TeacherID非空的同学的相关信息；
+					> SELECT * FROM students WHERE TeacherID is not null;
+
+				(6) 以年龄排序后，显示年龄最大的前10位同学的信息；
+					> SELECT * FROM students ORDER BY  age DESC LIMIT 10;
+
+				(7) 查询年龄大于等于20岁，小于等于25岁的同学的信息；用三种方法；
+					> SELECT * FROM students WHERE age>=20 and age<=25;
+
+					> SELECT * FROM students WHERE age BETWEEN 20 AND 25;
+
+					> SELECT * FROM (SELECT * FROM students WHERE age>=20) AS a  WHERE a.age <= 25;
+
+					
+			
+			练习：导入hellodb.sql，以下操作在students表上执行
+				1、以ClassID分组，显示每班的同学的人数；
+					> SELECT Classid,count(Name) FROM students GROUP BY ClassID;
+
+				2、以Gender分组，显示其年龄之和；
+					> > SELECT Gender,sum(Age) FROM students GROUP BY Gender; 
+				
+
+				3、以ClassID分组，显示其平均年龄大于25的班级；
+					> SELECT ClassID,avg(age) AS AGE FROM students GROUP BY Gender HAVING AGE > 25; 
+				
+
+				4、以Gender分组，显示各组中年龄大于25的学员的年龄之和；
+					> SELECT Gender,sum(age) FROM (SELECT Age,Gender FROM students WHERE age > 25 ) as t GROUP BY Gender;
+
+
+			练习：导入hellodb.sql，完成以下题目：
+				1、显示前5位同学的姓名、课程及成绩；
+					> SELECT Name,Course,Score FROM (SELECT * FROM students LIMIT 5) AS T1,courses AS C1,scores AS S1 WHERE T1.StuID = S1.StuID AND S1.CourseID = C1.CourseID;
+					+-------------+----------------+-------+
+					| Name        | Course         | Score |
+					+-------------+----------------+-------+
+					| Shi Zhongyu | Kuihua Baodian |    77 |
+					| Shi Zhongyu | Weituo Zhang   |    93 |
+					| Shi Potian  | Kuihua Baodian |    47 |
+					| Shi Potian  | Daiyu Zanghua  |    97 |
+					| Xie Yanke   | Kuihua Baodian |    88 |
+					| Xie Yanke   | Weituo Zhang   |    75 |
+					| Ding Dian   | Daiyu Zanghua  |    71 |
+					| Ding Dian   | Kuihua Baodian |    89 |
+					| Yu Yutong   | Hamo Gong      |    39 |
+					| Yu Yutong   | Dagou Bangfa   |    63 |
+					+-------------+----------------+-------+
+					10 rows in set (0.00 sec)
+
+				2、显示其成绩高于80的同学的名称及课程；
+					> SELECT Name,Course,Score FROM students AS T1,courses AS C1,(SELECT * FROM scores WHERE Score > 80) AS S1 WHERE T1.StuID = S1.StuID AND S1.CourseID = C1.CourseID;
+					+-------------+----------------+-------+
+					| Name        | Course         | Score |
+					+-------------+----------------+-------+
+					| Shi Zhongyu | Weituo Zhang   |    93 |
+					| Shi Potian  | Daiyu Zanghua  |    97 |
+					| Xie Yanke   | Kuihua Baodian |    88 |
+					| Ding Dian   | Kuihua Baodian |    89 |
+					| Shi Qing    | Hamo Gong      |    96 |
+					| Xi Ren      | Hamo Gong      |    86 |
+					| Xi Ren      | Dagou Bangfa   |    83 |
+					| Lin Daiyu   | Jinshe Jianfa  |    93 |
+					+-------------+----------------+-------+
+					8 rows in set (0.00 sec)
+				
+
+				3、求前8位同学每位同学自己两门课的平均成绩，并按降序排列；
+					> SELECT Name,AVG_SCORE FROM (SELECT * FROM students LIMIT 8) AS T1,(SELECT StuID,avg(score) AS AVG_SCORE FROM scores GROUP BY StuID) AS S1 WHERE T1.StuID = S1.StuID ORDER BY AVG_SCORE desc;
+					+-------------+-----------+
+					| Name        | AVG_SCORE |
+					+-------------+-----------+
+					| Shi Qing    |   96.0000 |
+					| Shi Zhongyu |   85.0000 |
+					| Xi Ren      |   84.5000 |
+					| Xie Yanke   |   81.5000 |
+					| Ding Dian   |   80.0000 |
+					| Lin Daiyu   |   75.0000 |
+					| Shi Potian  |   72.0000 |
+					| Yu Yutong   |   51.0000 |
+					+-------------+-----------+
+					8 rows in set (0.00 sec)
+				
+
+				4、显示每门课程课程名称及学习了这门课的同学的个数；
+					> SELECT course,count(name) FROM (SELECT Name,Course FROM students,courses,scores WHERE students.StuID = scores.StuID AND scores.CourseID = courses.CourseID) as A GROUP BY course;
+					> SELECT courses.Course,count(StuID) FROM scores LEFT JOIN courses ON scores.CourseID = courses.CourseID GROUP BY scores.CourseID;
+
+
+			思考：
+				1、如何显示其年龄大于平均年龄的同学的名字？
+
+
+				2、如何显示其学习的课程为第1、2，4或第7门课的同学的名字？
+				3、如何显示其成员数最少为3个的班级的同学中年龄大于同班同学平均年龄的同学？
+				4、统计各班级中年龄大于全校同学平均年龄的同学。	
+
+
+
+
+
+	MySQL --> MariaDB --> Percona-Server
+
+		InnoDB --> XtraDB --> Percona升级版的 InnoDB
+
+	ODBC：oracle 连接数据库系统
+	JDBC：java 连接数据库系统
+
+
+	SQL Interface：SQL接口
+
+	Parser ：分析器
+
+	Optimizer：优化器
+
+	Caches & Buffer：缓存和缓冲
+
+	Pluggable Storage Engines：插件式存储引擎
+
+	Files & Logs：文件和日志
+		Files：
+			Data,index 
+		Logs：
+			Redo、Undo
+
+	裸设备：
+		基于
+	
+
+	'存储引擎：'
+		高性能MySQL  --> DBA必看
+
+	
+		'> SHOW ENGINES;'
+			Transactions：是否支持事务功能
+			Savepoints：保存点
+			XA：分布式事务
+
+		'查看某张表的存储引擎'
+			> SHOW TABLE STATUS\G
+			> SHOW TABLE STATUS WHERE Engine='MyISAM'\G 
+
+
+
+		'存储引擎是表级别的'  --> 在同一数据库建议使用用一个存储引擎
+
+		表类型：也称为"表类型"，表级别概念，不建议在同一个库中的表上使用不同的ENGINE；
+			
+
+
+		'创建表时，指定存储引擎：'
+			> CREATE TABLE ... ENGINE[=]STORAGE_ENGINE_NAME ...
+			> SHOW TABLE STATUS 
+		
+		
+
+		'常见的存储引擎：'
+			MyISAM, Aria, InnoDB, MRG_MYISAM, CSV, BLACKHOLE, MEMORY, PERFORMANCE_SCHEMA, ARCHIVE, FEDERATED
+			
+		
+		
+
+
+
+		'InnoDB：InnoBase' --> 写入操作较多使用
+
+			> SHOW ENGINE InnoDB STATUS;  --> '查看引擎的状态信息'
+
+
+			Percona-XtraDB, Supports transactions, row-level locking, and foreign keys
+				
+			数据存储于"表空间(table space)逻辑容器"中： --> 一个黑盒空间 
+				所有数据库的所有存储引擎为innodb都存放在这个'黑盒空间中' --> 存放在datadir目录下 -->ibdata1文件中
+					'这个文件将会非常大'
+
+				
+				(1) 所有数据库中的所有类型为'InnoDB表的数据和索引存储于同一个表空间中；'
+					表空间文件：datadir定义的目录中
+						文件：ibdata1, ibdata2, ...
+				
+
+				(2) innodb_file_per_table=ON，意味着'每表使用单独的表空间文件；'
+					每张表的数据文件（数据和索引，存储于数据库目录）都存储于自己专用的表空间文件中(并存储于数据库目录下 类似于mydb目录下) : tbl_name.ibd 
+
+						> SHOW GLOBAL VARIABLES LIKE 'innodb_file_per_table';
+
+						> SELECT @@global.innodb_file_per_table;
+
+						tbl_name.ibd ：每表自己单独的表空间文件
+						tbl_name.frm ：每表单独的表结构定义
+					
+				表结构的定义：在数据库目录，tbl_name.frm 
+				
+			'事务型存储引擎，'适合对事务要求较高的场景中；但较适用于处理大量'短期事务'；
+				只适用于处理短期事务
+
+			基于MVCC（Mutli Version Concurrency Control）支持高并发；支持四个事务隔离级别，默认级别为REPEATABLE-READ；间隙锁以'防止幻读'；
+				'MVCC'：多版本并发控制
+				读锁：是共享的
+				写锁：排他的，不允许其他人读/写
+
+
+			使用'聚集索引'（主键索引）；
+				把数据与索引创建在一起；找到索引，就找到了数据
+				'聚集索引在一张表上只能有一个'
+
+				辅助索引：指向数据
+
+
+			支持"自适应Hash索引"；
+				键值索引，除MEMORY存储引擎能够创建，其他都不支持
+
+			'锁粒度：'
+				行级锁；间隙锁；
+			
+			
+			'总结：'
+				数据存储：表空间；
+				并发：MVCC，间隙锁，行级锁； --> 支持的并发较高
+				索引：聚集索引、辅助索引；
+				性能：预读操作、内存数据缓冲、内存索引缓存、自适应Hash索引、插入操作缓存区；
+				备份：支持热备； --> 基于InnoDB存储引擎结构
+					
+		
+
+
+		'MyISAM：'  --> 读多写少
+			
+			'支持全文索引'（FULLTEXT index）、压缩、空间函数（GIS,基于空间/地理位置）；
+			
+			'不支持事务'
+			
+			锁粒度：'表级锁'
+			
+			'崩溃无法保证表安全恢复'
+			
+			'适用场景：'只读或读多写少的场景、较小的表（以保证崩溃后恢复的时间较短）；
+			
+			文件：'每个表有三个文件'，存储于数据库目录中
+				tbl_name.frm：表格式定义；
+				tbl_name.MYD：'数据文件'； 
+				tbl_name.MYI：'索引文件'；
+					主键也是索引 --> 主键索引
+				
+			'特性：'
+				加锁和并发：表级锁；
+				修复：手动或自动修复、但可能会丢失数据；
+				索引：非聚集索引；
+				延迟索引更新；
+				表压缩；
+				
+		行格式：
+			 {DEFAULT|DYNAMIC|FIXED|COMPRESSED|REDUNDANT|COMPACT}
+			 
+		
+
+		'其它的存储引擎：'
+			CSV：将CSV文件（以逗号分隔字段的文本文件）作为MySQL表文件；  --> '方便跨数据库导入导出'
+			MRG_MYISAM：将多个MyISAM表'合并成的虚拟表'；
+			BLACKHOLE：类似于/dev/null，'不真正存储数据'； --> 级联复制使用
+			MEMORY：'内存存储引擎'，支持hash索引，表级锁，常用于'临时表/缓存表'；
+			FEDERATED: 用于访问其它'远程MySQL服务器上表'的存储引擎接口；
+
+
+			
+		
+		'MariaDB额外支持很多种存储引擎：'(需要编译安装)
+			OQGraph、SphinxSE、TokuDB、Cassandra、CONNECT、SQUENCE、...
+				TokuDB：海量MySQL存储引擎
+
+
+		
+		'搜索引擎：'
+			lucene(java开发), sphinx(c++开发)
+				lucene二次开发：
+					Solr, ElasticSearch 
+
+
+
+		注意：
+			'左前缀，btree，只索引一部分'
+			
+		ETL：抽取	
+		
+
+
+	'并发控制：'
+		锁：Lock 
+		
+		锁类型 ：
+			读锁：共享锁，可被多个读操作共享；
+			写锁：排它锁，独占锁；
+			
+		
+		锁'粒度：'
+			表锁：在表级别施加锁，并发性'较低；'
+			行锁：在行级另施加锁，并发性'较高；'
+			
+		
+		锁策略：在锁粒度及数据安全性之间寻求一种平衡机制；
+		
+			存储引擎：级别以及何时施加或释放锁由存储引擎自行决定；
+			MySQL Server：表级别，可自行决定，也允许显式请求； 
+					
+		锁类别：
+			'显式锁'：用户手动请求的锁； --> MySQL大多是显示锁
+
+			'隐式锁'：存储引擎自行根据需要施加的锁；
+			
+
+
+		'显式锁的使用'：
+			(1) LOCK TABLES 
+			
+				LOCK TABLES  tbl_name  read|write, tbl_name read|write, ...
+				
+				UNLOCK TABLES：解锁
+
+				> LOCK TABLE tb2 read;   --> 添加读锁,能读，但不能写入
+				> LOCK TABLE tb2 write;  --> 添加写锁,读写都不能操作，是独占的
+
+				
+			(2) FLUSH TABLES ： 刷写所有表 --> 将内存中的所有表 写入到磁盘中 
+				锁定所有表 --> 当需要对数据库备份时使用 --> 温备份(能读不能写)
+
+				FLUSH TABLES tbl_name,... [WITH READ LOCK];
+				
+				UNLOCK TABLES;
+
+				> FLUSH TABLES WITH READ LOCK;   --> 锁定所有表
+				> UNLOCK TABLES; 				--> 解锁
+				
+			(3) SELECT cluase
+				[FOR UPDATE | LOCK IN SHARE MODE]
+
+							
+	
+
+
+
+
+
+
+	'事务：'  --> 只对 InnoDB有效
+
+		事务：'一组原子性的SQL查询、或者是一个或多个SQL语句组成的独立工作单元；'
+		
+			
+			'事务日志：'
+				innodb_log_files_in_group ：一个日志组中有几个日志文件
+				innodb_log_group_home_dir ：日志路径
+				innodb_log_file_size	  ：日志大小
+				innodb_mirrored_log_groups：镜像，默认为1，设置为2开启镜像
+
+
+				'注意：'
+					在设置日志选项时，需要先将其备份出来，再删除原有的日志文件：/var/lib/mysql/ib_logfile*
+
+
+
+				'把修改的操作 写入 到日志中'  --> 日志将操作同步到磁盘上
+					将操作的步骤会记录下来 ，也会记录同步后的操作
+					在出现回滚时，事务日志如果太大，而且服务器崩溃重启 --> 启动mysql --> 使用事务日志回滚，但是文件太大，启动过慢，有可能会以为出现了故障， ctrl+c ，这样会造成 无法回滚并无法启动mysql
+
+				防止事务日志过大：
+					创建事务日志组，每个组最少两个
+
+				防止事务日志出现单点故障：
+					1、双写
+					2、冗余 --> 不能在同一块磁盘上
+					3、RAID
+
+
+				日志大小：默认5M
+
+
+
+
+		
+		'ACID测试：'
+			A：AUTOMICITY，'原子性'；整个事务中的'所有操作要么全部成功执行，要么全部失败后回滚'；
+			C：CONSISTENCY，'一致性'；数据库总是应该'从一个一致性状态转为另一个一致性状态'； 
+			I：ISOLATION，'隔离性'；一个事务所做出的操作在提交之前，是否能为其它事务可见；出于保证并发操作之目的，隔离有多种级别； 
+				级别越低，隔离性越差
+
+			D：DURABILITY，'持久性'；事务一旦提交，其所做出的修改会永久保存；
+			
+
+		'自动提交：单语句事务'
+
+			mysql> SELECT @@autocommit;
+			+------------------------+
+			| @@autocommit 			 |
+			+------------------------+
+			|            1           |
+			+------------------------+
+			
+			mysql> SET @@session.autocommit=0；
+
+
+			
+
+		'手动控制事务：'
+			查看帮助：
+			> HELP TRANSACTIONS;
+
+
+			启动：START TRANSACTION 
+			提交：COMMIT 	   -->提交后无法回滚
+			回滚：ROLLBACK  --> 没提交之前可以回滚  --> 无法滚回创建表和修改表结构
+
+			
+			事务支持'savepoints：' --> 里程碑 --> 类似于快照功能，游戏中的保存点(存档)
+
+				SAVEPOINT identifier
+				ROLLBACK [WORK] TO [SAVEPOINT] identifier
+				RELEASE SAVEPOINT identifier	
+
+				> SAVEPOINT first;   --> 后面的first 可以自定义
+				> ROLLBACK TO first; --> 滚回保存点
+				> COMMIT;			 --> 提交，提交后无法再回滚
+
+			
+	
+		'事务隔离级别：'(从低到高排序↓)
+			'READ-UNCOMMITTED：读未提交 --> 脏读；             --> 可以看见未提交的数据，但是无法操作'
+				> SET @@session.tx_isolation='READ-UNCOMMITTED';
+				> START TRANSACTION;
+
+
+			'READ-COMMITTED：读提交--> 不可重复读；保证并发能力   -->  读两次可能结果不一样'
+				当A对tb1写入了一行数据，而为COMMIT。B则无法查看到tb1新增的数据；
+				当A对tb1执行COMMIT操作，这时B可以看到更新后的数据
+				
+				> SET @@session.tx_isolation='READ-COMMITtED';
+
+
+
+			'REPEATABLE-READ：可重复读 --> 幻读；              --> MYSQL默认的，如果A机器提交了之后，B机器执行rollback后，可以看到提A机器交后的数据'
+				> SET @@session.tx_isolation='REPEATABLE-READ';
+
+				A操作：
+					MariaDB [mydb]> START TRANSACTION;
+					Query OK, 0 rows affected (0.00 sec)
+
+					MariaDB [mydb]> INSERT INTO tb1 VALUES(1,'Tom');
+					Query OK, 1 row affected (0.00 sec)
+
+					MariaDB [mydb]> SELECT * FROM tb1;
+					+------+------+
+					| id   | Name |
+					+------+------+
+					|    1 | Tom  |
+					+------+------+
+					1 row in set (0.00 sec)
+
+					MariaDB [mydb]> ROLLBACK;
+					Query OK, 0 rows affected (0.01 sec)
+
+					MariaDB [mydb]> SELECT * FROM tb1;
+					Empty set (0.00 sec)
+
+					MariaDB [mydb]> INSERT INTO tb1 VALUES(1,'Tom');
+					Query OK, 1 row affected (0.00 sec)
+
+					MariaDB [mydb]> SELECT * FROM tb1;
+					+------+------+
+					| id   | Name |
+					+------+------+
+					|    1 | Tom  |
+					+------+------+
+					1 row in set (0.00 sec)
+
+					MariaDB [mydb]> COMMIT;
+					Query OK, 0 rows affected (0.00 sec)
+
+				B操作：
+					MariaDB [mydb]> START TRANSACTION;
+					Query OK, 0 rows affected (0.00 sec)
+
+					MariaDB [mydb]> SELECT * FROM tb1;
+					Empty set (0.00 sec)
+
+					MariaDB [mydb]> SELECT * FROM tb1;
+					Empty set (0.00 sec)
+
+					MariaDB [mydb]> SELECT * FROM tb1;
+					Empty set (0.00 sec)
+
+					MariaDB [mydb]> SELECT * FROM tb1;
+					Empty set (0.00 sec)
+
+					MariaDB [mydb]> ROLLBACK;
+					Query OK, 0 rows affected (0.00 sec)
+
+					MariaDB [mydb]> SELECT * FROM tb1;
+					+------+------+
+					| id   | Name |
+					+------+------+
+					|    1 | Tom  |
+					+------+------+
+					1 row in set (0.00 sec)
+
+			
+			'SERIALIZABLE：串行化； --> 并发极低               -->等待对方结束事务，另一方才能执行除读/查操作以外的操作'
+
+			
+			mysql> SELECT @@session.tx_isolation;
+			+----------------------------------+
+			| @@session.tx_isolation           |
+			+----------------------------------+
+			| REPEATABLE-READ                  |
+			+----------------------------------+
+			
+
+
+			> SET @@session.autocommit=0;
+
+			> SET @@session.tx_isolation='READ-UNCOMMITTED';
+
+			> 
+
+
+
+			'注意：如果使用READ-COMMITTED/UNCOMMITTED时，必须要使用'：SET @@session.binlog_format='ROW'; 这条命令设置二进制日志格式
+
+	
+		查看InnoDB存储引擎的状态信息：
+			SHOW ENGINE innodb STATUS; 
+
+
+
+			
+		
+
+
+
+
+
+
+
+
+
+
+'MySQL用户和权限管理 '
+	用户账号：user@host
+		user：账户名称；
+		host：此账户可通过哪些客户端主机请求创建连接线程； 
+			%：任意长度牟任意字符；
+			_：任意单个字符；
+		
+	MySQL权限类别：
+		库级别：
+		表级别：
+		字段级别：
+		管理类：
+		程序类：
+		
+		管理类：
+			CREATE USER
+			RELOAD
+			LOCK TABLES
+			REPLICATION CLIENT， REPLICATION SLAVE
+			SHUTDOWN
+			FILE
+			SHOW DATABASES
+			PROCESS 
+			SUPER
+			
+		程序类：
+			FUNCTION，PROCEDURE，TRIGGER
+			
+			操作：CREATE，ALTER，DROP，EXECUTE
+			
+		库和表级别：
+			CREATE，ALTER，DROP
+			INDEX
+			CREATE VIEW
+			SHOW VIEW
+			GRANT
+			OPTION：能够把自己获得的权限生成一个副本转赠给其它用户；
+			
+		数据操作：
+			表：
+				INSERT/DELETE/UPDATE/SELECT 
+				
+			字段：
+				SELECT(col1,col2,...)
+				UPDATE(col1,col2,...)
+				INSERT(col1,col2,...)
+				
+		所有权限：ALL， ALL PRIVILEGES
+		
+		元数据数据库（数据字典）：mysql
+			授权：
+				db, host, user
+				tables_priv, column_priv, procs_priv, proxies_priv
+				
+		
+	MySQL用户管理：
+		'user'@'host';
+			host:
+				IP
+				主机名				
+				NETWORK
+					%, _
+					
+		skip_name_resolve={ON|OFF}
+		
+		创建用户：
+			CREATE USER  'user'@'host' [IDENTIFIED BY [PASSWORD] 'password'] [,'user'@'host' [IDENTIFIED BY [PASSWORD] 'password']...]
+			
+		重命名：RENAME USER
+			RENAME USER old_user TO new_user[, old_user TO new_user] ...
+			
+		删除用户：
+			DROP USER 'user'@'host' [, 'user'@'host'] ...
+			
+		让MySQL重新加载授权表：
+			FLUSH PRIVILEGES
+			
+		修改用户密码：
+			(1) SET PASSWORD [FOR 'user'@'host'] = PASSWORD('cleartext password');
+			(2) UPDATE mysql.user SET Password=PASSWORD('cleartext password')  WHERE User='USERNAME' AND Host='HOST';
+			(3) mysqladmin -uUSERNAME -hHOST -p  password 'NEW_PASS'
+			
+			生效：FLUSH PRIVILEGES
+			
+		忘记管理员密码的解决办法：
+			(1) 启动mysqld进程时，使用--skip-grant-tables和--skip-networking选项；
+				CentOS 7：mariadb.service
+				CentOS 6：/etc/init.d/mysqld
+			(2) 通过UPDATE命令修改管理员密码； 
+			(3) 以正常 方式启动mysqld进程；
+			
+		授权：GRANT
+			GRANT  priv_type [(column_list)] [, priv_type [(column_list)]] ...
+				ON [object_type] priv_level
+				TO user_specification [, user_specification] ...
+				[REQUIRE {NONE | ssl_option [[AND] ssl_option] ...}]
+				[WITH with_option ...]
+			
+				object_type:
+					TABLE
+					| FUNCTION
+					| PROCEDURE
+					
+				priv_level:
+					*
+					| *.*
+					| db_name.*
+					| db_name.tbl_name
+					| tbl_name
+					| db_name.routine_name
+					
+					
+				ssl_option:
+					SSL
+					| X509
+					| CIPHER 'cipher'
+					| ISSUER 'issuer'
+					| SUBJECT 'subject'				
+				
+				with_option:
+					GRANT OPTION
+					| MAX_QUERIES_PER_HOUR count
+					| MAX_UPDATES_PER_HOUR count
+					| MAX_CONNECTIONS_PER_HOUR count
+					| MAX_USER_CONNECTIONS count	
+					
+		查看授权：SHOW GRANTS
+			SHOW GRANTS [FOR 'user'@'host']
+					
+		取消授权：REVOKE
+			REVOKE  priv_type [(column_list)][, priv_type [(column_list)]] ...
+				ON [object_type] priv_level
+				FROM  'user'@'host' [,  'user'@'host'] ...
+				
+			REVOKE ALL PRIVILEGES, GRANT OPTION
+				FROM user [, user] ...
+	
+	练习：创建一个用户，授权其仅能够查询mydb.tbl1表的name和age字段；
+	
+	练习：授权一个仅能够通过ssl连接的用户账号，而后完成连接测试；
+	
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

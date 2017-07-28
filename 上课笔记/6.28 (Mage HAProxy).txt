@@ -1,0 +1,1157 @@
+6.28 (Mage HAProxy)
+
+
+HAProxy:
+
+	LB Cluster:
+		四层：
+			lvs, nginx(stream)，haproxy(mode tcp)
+		七层：
+			http: nginx(http, ngx_http_upstream_module), haproxy(mode http), httpd, ats, perlbal, pound...
+			
+	'HAProxy：'
+		http://www.haproxy.org
+		http://www.haproxy.com 
+		
+		文档：
+			http://cbonte.github.io/haproxy-dconv/
+
+			
+		HAProxy is a TCP/HTTP reverse proxy which is particularly suited for high availability environments. Indeed, it can:
+			:  - route HTTP requests depending on statically assigned cookies
+			:  - spread load among several servers while assuring server persistence
+			:    through the use of HTTP cookies
+			:  - switch to backup servers in the event a main server fails
+			:  - accept connections to special ports dedicated to service monitoring
+			:  - stop accepting connections without breaking existing ones
+			:  - add, modify, and delete HTTP headers in both directions
+			:  - block requests matching particular patterns
+			:  - report detailed status to authenticated users from a URI intercepted by the application
+			
+		版本：1.4, 1.5, 1.6, 1.7
+
+		'工作范围：四层、七层'  
+			http 
+			mysql 
+			fastcgi --> 使用tcp协议调度
+
+		
+		'程序环境：'
+			主程序：/usr/sbin/haproxy
+			主配置文件：/etc/haproxy/haproxy.cfg
+			Unit file：/usr/lib/systemd/system/haproxy.service
+			
+		
+		'配置段：'
+			'global：全局配置段' (无特殊需要，尽量无需修改)
+				进程及安全配置相关的参数
+				性能调整相关参数
+				Debug参数
+			
+			'proxies：代理配置段'
+				defaults：为frontend, listen, backend'提供默认配置'；
+				fronted：前端，相当于nginx, server {}
+				backend：后端，相当于nginx, upstream {}
+				listen：同时设置前端和后端;一一对应的关系
+
+			
+			
+			
+			'简单的配置示例：'
+				# 接收前端服务器请求
+				frontend web
+					# 监听的端口
+					bind *:80
+					default_backend     websrvs
+			
+				# 设置发送请求至后端服务器
+				backend websrvs
+					balance roundrobin
+					server srv1 172.16.100.6:80 check
+					server srv2 172.16.100.7:80 check				
+
+				其他配置段则无需修改，使用默认值即可
+				
+
+
+
+			'global配置参数：'
+				'进程及安全管理：'chroot, deamon，user, group, uid, gid
+				
+					log：定义全局的syslog服务器；最多可以定义两个；
+						log <address> [len <length>] <facility> [max level [min level]]
+							facility：帮助用户分类存储日志(将日志归类)
+								后端存储日志的位置，都是由facility定义
+								需要在`rsyslog`中配置
+
+						
+					nbproc <number>：要启动的haproxy的进程数量；('建议工作在单进程模型下'，1个进程处理所有请求)
+					ulimit-n <number>：每个haproxy进程可打开的最大文件数；
+					chroot：切根，以安全模式运行
+					daemon：以守护进程运行
+					stats socket ：套接字文件
+					pidfile ：pid文件
+
+			
+				'性能调整：'
+					maxconn <number>：设定每个haproxy进程所能接受的最大并发连接数；Sets the maximum per-process number of concurrent connections to <number>.
+					maxconnrate <number>：Sets the maximum per-process number of connections per second to <number>. 
+						每个进程每秒种所能创建的最大连接数量；
+					
+					maxsessrate <number>：每秒创建的会话数
+					
+					maxsslconn <number>: Sets the maximum per-process number of concurrent SSL connections to <number>.
+						每进程能够处理最大的SSL会话数
+
+					spread-checks <0..50, in percent>
+						后端主机健康状态检查
+						0..50：百分比 (范围是0-50)
+
+
+						'公有云的调度器大部分都是：'
+							HAProxy
+			
+
+
+			'代理配置段：'
+				- defaults <name>：默认配置
+				- frontend <name>：以服务端的身份对客户请求时使用
+				- backend  <name>：以客户端的身份对后端服务器请求时使用
+				- listen   <name>：一一对应时、或者只需监听前端，不用处理后端时(类似status页)
+				
+					<name>：标识符，只能是大小写字母，数字，-，_，.号，:号，区分字符大小写
+
+
+				A "frontend" section describes a set of listening sockets accepting client connections.
+				A "backend" section describes a set of servers to which the proxy will connect to forward incoming connections.
+				A "listen" section defines a complete proxy with its frontend and backend parts combined in one section. It is generally useful for TCP-only traffic.
+			
+				All proxy names must be formed from upper and lower case letters, digits, '-' (dash), '_' (underscore) , '.' (dot) and ':' (colon). 区分字符大小写；
+				
+				
+				'配置参数：'
+					
+					bind：Define one or several listening addresses and/or ports in a frontend.
+						bind [<address>]:<port_range> [, ...] [param*]
+						'绑定监听的地址和端口'
+						'可以使用在 frontend和listen中'
+						
+						'示例:'
+						listen http_proxy
+							'#多个端口使用逗号分隔'
+							bind :80,:443
+							bind 10.0.0.1:10080,10.0.0.1:10443
+							bind /var/run/ssl-frontend.sock user root mode 600 accept-proxy
+				
+					
+					balance：'后端服务器组内的服务器调度算法'(不能用在frontend)
+						balance <algorithm> [ <arguments> ]
+						balance url_param <param> [check_post]				
+			
+						'调度算法：'
+							roundrobin：Each server is used in turns, according to their weights.
+								server options： weight #
+								'动态轮询算法'：支持权重的运行时调整，支持慢启动；每个后端中最多支持4095个后端服务器(server)-->相当于无上限；
+									追踪每个服务器的连接数量，根据连接数量，进行调度。
+							
+							static-rr：
+								'静态轮询算法'：不支持权重的运行时调整及慢启动；后端主机数量无上限；
+									仅根据算法本身计算
+									都不考虑后端算法
+							
+
+							leastconn：最少连接
+								推荐使用在具有较长会话的场景中，例如MySQL、LDAP等；
+								
+							
+							first：先到先得(只有当 当前服务器资源用完/上限之后，才会调度)
+								根据服务器在列表中的位置，自上而下进行调度；前面服务器的连接数达到上限，新请求才会分配给下一台服务；
+									最大化利用服务器时，使用
+									弹性调度时使用
+								
+
+							source：源地址hash；
+								根据hash-type的类型来决定这里使用的hash方法
+									除权取余法：
+									一致性哈希：更消耗资源
+										节点多时，性能会下降
+								
+							uri：'类似于nginx的hash_uri'
+								对URI的左半部分做hash计算，并由服务器总权重相除以后派发至某挑出的服务器；
+								当使用缓存服务器在后端时，使用此调度算法；对uri进行调度，根据请求的uri --> 提高缓存命中率
+
+								
+								'建议使用consistent 一致性hash'
+
+									<scheme>://<user>:<password>@<host>:<port>/<path>;<params>?<query>#<frag>
+										左半部分：/<path>;<params>
+										整个uri：/<path>;<params>?<query>#<frag>
+										
+							
+							url_param：对用户请求的uri听<params>部分中的参数的值作hash计算，并由服务器总权重相除以后派发至某挑出的服务器；通常用于追踪用户，以确保来自同一个用户的请求始终发往同一个Backend Server；
+								根据uri中的值，进行调度。
+								只要访问的值相同，调度到相同的后端服务器(如果有缓存，则更为精确的缓存)
+							
+
+							hdr(<name>)：对于每个http请求，此处由<name>指定的http首部将会被取出做hash计算； 并由服务器总权重相除以后派发至某挑出的服务器；没有有效值的会被轮询调度； 
+								hdr(Cookie)
+								指定hash的首部
+								name：请求的方法
+
+								根据不同的首部来进行调度。
+								
+						
+							rdp-cookie(微软的)
+								远程桌面协议
+								端口号：3389
+							rdp-cookie(<name>)	
+							
+
+
+						
+						'hash-type：哈希算法'
+							hash-type <method> <function> <modifier>
+								map-based：除权取余法(取模)，哈希数据结构是静态的数组；(静态映射hash)
+								consistent：一致性哈希，哈希数据结构是一个树；
+									弹性增删节点
+								
+							<function> is the hash function to be used : 哈希函数
+								sdbm
+								djb2
+								wt6
+
+						
+						default_backend <backend>    (类似于nginx location / 中的proxy_pass)
+							'设定默认的backend，用于frontend中；'
+							use.backend
+							
+						default-server [param*]
+							'为backend中的各server设定默认选项；'
+
+
+
+
+							'配置示例'
+								#---------------------------------------------------------------------
+								# main frontend which proxys to the backends
+								#---------------------------------------------------------------------
+								frontend  main
+								    bind *:80
+								    default_backend             websrv
+
+								#---------------------------------------------------------------------
+								# static backend for serving up images, stylesheets and such
+								#---------------------------------------------------------------------
+								backend websrv
+								    balance     roundrobin
+								    server      srv1 172.16.1.70:80 check
+								    server      srv2 172.16.1.20:80 check
+
+
+
+
+
+
+
+
+
+回顾：
+	tcp/http reverse proxy；
+	haproxy.cfg
+		global, proxies
+		proxies：
+			defaults
+			frontend
+			listen
+			backend
+					
+					
+		proxies：bind、balance、hash-type、default_backend、server
+			balance：
+				roundrobin、static-rr、leastconn、first、source、uri、hdr(<HEADER>)、url_param、...
+			
+HAProxy(2)
+					
+					'server <name> <address>[:[port]] [param*]'
+						定义后端主机的各服务器及其选项；
+					
+					
+						server <name> <address>[:port] [settings ...]
+						default-server [settings ...]：'设置默认的params'
+						
+						<name>：服务器在haproxy上的内部名称；出现在日志及警告信息；
+						
+						<address>：服务器地址，支持使用主机名；
+						
+						[:[port]]：端口映射；省略时，表示同bind中绑定的端口；
+						
+
+						[param*]：参数
+							maxconn <maxconn>：'当前server的最大并发连接数；'(压测完后，上线之前要设置)
+
+							backlog <backlog>：当前server的连接数达到上限后的'后援队列长度'；超过则拒绝响应
+								backlog 500 ：后援队列500个
+							
+							backup：设定当前server为'备用服务器'；
+								可以设置降级，前端服务器访问量过大时，启动降级。
+								设置成静态页面，提供给用户，但是需要处理动态资源时，提示用户系统繁忙
+								
+								'backup不能直接放在已经设置了一堆参数的后面'   配置如下：↓
+									server      srv1 172.16.1.70:80 backup
+    								server      srv2 172.16.1.20:80 check weight 1
+
+
+							check：对当前server做'健康状态检测'；
+								addr ：检测时使用的'IP地址'；(当后端服务器有多个IP地址时，避免检查后端服务器的业务IP地址，对后端服务器增加压力)
+								port ：针对此'端口'进行检测；
+								inter <delay>：连续两次检测之间的时间间隔，默认为2000ms; 
+								rise <count>：连续多少次检测结果为“成功”才标记服务器为可用；默认为2；
+								fall <count>：连续多少次检测结果为“失败”才标记服务器为不可用；默认为3；
+									
+									注意：httpchk，"smtpchk", "mysql-check", "pgsql-check" and "ssl-hello-chk" 用于定义应用层检测方法；
+									
+							cookie <value>：为当前server指定其cookie值，用于实现基于cookie的会话黏性；
+								'为后端服务器指定静态cookie'
+								响应报文中设置Set-Cookie
+							
+							disabled：标记为不可用；(人工设置服务器为down状态)
+							
+							redir <prefix>：将发往此server的所有GET和HEAD类的请求重定向至指定的URL；
+								'重定向URL'
+								redir http://172.16.1.50/index.html
+							
+							weight <weight>：权重，默认为1; 
+								weight 2 ：权重为2	
+
+
+
+
+						
+							
+					'统计接口启用相关的参数：'
+
+
+
+						stats enable ：'可以直接定义在 backend段中'
+							启用统计页；基于默认的参数启用stats page；
+								- stats uri   : /haproxy?stats
+								- stats realm : "HAProxy Statistics"
+								- stats auth  : no authentication
+								- stats scope : no restriction
+						
+						stats auth <user>:<passwd>
+							认证时的账号和密码，可使用多次；
+							
+						stats realm <realm>
+							认证时的realm；弹出对话框时的提示信息
+							
+						stats uri <prefix>
+							自定义stats page uri
+							
+						stats refresh <delay>
+							设定自动刷新时间间隔；单位为秒
+							stats refresh 2s
+							
+						stats admin { if | unless } <cond>   (除了default之中，其他段都可以定义)
+							启用stats page中的管理功能
+								'功能很强大'
+							
+						'配置示例：'(配置单独的stats，只能通过这里单独的端口进行访问)
+							
+							frontend  main
+							    bind *:80
+							    default_backend             websrv
+
+							listen stats
+							    bind :9099
+							    stats enable
+							    stats realm "HAPorxy Stats Page"
+							    stats auth admin:admin
+							    stats admin if TRUE #如果认证通过，则就能访问
+
+
+
+						'自定义配置：'
+								backend websrv
+							    balance     roundrobin
+							    stats       enable
+							    server      srv1 172.16.1.70:80 check weight 2
+							    server      srv2 172.16.1.20:80 check weight 1
+							
+							访问：http://172.16.1.100/haproxy?stats	 即可
+							
+							
+					
+
+					maxconn <conns>：'为指定的frontend定义其最大并发连接数；默认为2000；'
+						Fix the maximum number of concurrent connections on a frontend.  
+					
+						frontend  main
+						    bind *:80
+						    default_backend	websrv
+						    maxconn 5000
+
+
+					mode { tcp|http|health }
+						'定义haproxy的工作模式；'
+							tcp：基于'layer4实现代理'；可代理mysql, pgsql, ssh, ssl等协议；
+							http：仅当代理的'协议为http'时使用；
+							health：工作为'健康状态检查的响应模式'，当连接请求到达时回应“OK”后即断开连接；
+						
+						
+						'示例：'代理后端ssh:22服务
+
+							listen ssh
+								maxconn 5	#最大连接5个
+								bind :22022 #监听访问端口
+								balance leastconn #调度算法
+								mode tcp 	#工作模式
+								server sshsrv1 172.16.100.6:22 check
+								server sshsrv2 172.16.100.7:22 check		
+							
+					
+
+					cookie <name> [ rewrite | insert | prefix ] [ indirect ] [ nocache ]  [ postonly ] [ preserve ] [ httponly ] [ secure ]  [ domain <domain> ]* [ maxidle <idle> ] [ maxlife <life> ]
+							'为后端服务器指定cookie'
+
+						<name>：is the name of the cookie which will be monitored, modified or inserted in order to bring persistence.
+							rewirte：重写；
+							insert：插入；
+							prefix：前缀；
+							indirect
+							nocache
+							
+						'基于cookie的session sticky的实现：'  将同一个地址的访问发往同一个后端服务器(不建议使用，一般是基于cookie绑定，而这里是基于IP)
+							backend websrvs
+								# WEBSRV：cookie的自定义名，可以自定义
+								# insert：插入
+								# nocache：
+								# indirect：
+								cookie WEBSRV insert nocache indirect
+								server srv1 172.16.100.6:80 weight 2 check rise 1 fall 2 maxconn 3000 cookie srv1
+								server srv2 172.16.100.7:80 weight 1 check rise 1 fall 2 maxconn 3000 cookie srv2				
+							
+	
+						
+					
+					option forwardfor [ except <network> ] [ header <name> ] [ if-none ]
+						Enable insertion of the X-Forwarded-For header to requests sent to servers
+						
+						在由haproxy'发往后端主机的请求报文'中添加“X-Forwarded-For”首部，其值'前端客户端的地址'；
+							用于'向后端主发送真实的客户端IP'；
+
+							'只需启用 option forwardfor 即可生效，修改后端日志格式，就可以获取真实IP'
+							
+							[ except <network> ]：请求报请来自此处指定的网络时不予添加此首部；
+							[ header <name> ]：使用自定义的首部名称，而非“X-Forwarded-For”；
+							
+				
+
+
+				'错误页自定义选项'	
+
+					errorfile <code> <file>：'自定义错误响应码的错误页'(haproxy本机)
+						Return a file contents instead of errors generated by HAProxy
+						
+						
+						<code>：is the HTTP status code. Currently, HAProxy is capable of  generating codes 
+						
+							能够处理的响应码：200, 400, 403, 408, 500, 502, 503, and 504.
+						
+						<file>：designates a file containing the full HTTP response.
+						
+						
+						
+						'示例：'
+							errorfile 400 /etc/haproxy/errorfiles/400badreq.http
+							errorfile 408 /dev/null  # workaround Chrome pre-connect bug
+							errorfile 403 /etc/haproxy/errorfiles/403forbid.http
+							errorfile 503 /etc/haproxy/errorfiles/503sorry.http	
+							
+					
+
+					errorloc <code> <url>：'自定义错误页' (通过url响应，可以实现跨站重定向)
+					
+
+					errorloc302 <code> <url>：'重定向响应码为302'
+					
+						errorfile 403 http://www.magedu.com/error_pages/403.html
+						
+					
+
+
+				'请求修改选项'
+
+					reqadd  <string> [{if | unless} <cond>]
+						Add a header at the end of the HTTP request
+						'在请求报文中添加首部'
+					
+
+					rspadd <string> [{if | unless} <cond>]    ：上下文，除了default都可以
+						Add a header at the end of the HTTP response
+						'在响应给客户端的报文中添加首部'
+
+						rspadd X-Via:\ HAPorxy
+							必须使用\ 转义空格字符，不能使用双引号
+					
+
+					reqdel  <search> [{if | unless} <cond>]
+					reqidel <search> [{if | unless} <cond>]  (ignore case)
+						Delete all headers matching a regular expression in an HTTP request
+						'删除请求报文的某个首部'
+					
+
+					rspdel  <search> [{if | unless} <cond>]
+					rspidel <search> [{if | unless} <cond>]  (ignore case)
+						Delete all headers matching a regular expression in an HTTP response
+						'删除响应报文的首部'
+
+
+						rspidel  Server.*
+							'删除响应报文中 只要是 Server.开头的首部'
+						
+
+					'配置示例'
+						frontend  main
+						    bind *:80
+						    default_backend             websrv
+						    maxconn 5000
+						    rspadd X-Via:\ HAPorxy
+						    rspidel Server.*
+
+												
+
+
+
+							
+				'日志系统：'
+					log：
+						log global
+						log <address> [len <length>] <facility> [<level> [<minlevel>]]
+						no log
+
+						如果自己定义了全局日志，而且在其他段中没有指明日志，则使用全局定义的日志
+						如果有全局的日志，而且在某个段(frontend/backend)中定义了日志，则使用自定义的日志
+
+						
+						'注意：'
+							默认发往本机的日志服务器；
+								(1) local2.*      /var/log/local2.log 
+								(2) $ModLoad imudp
+									$UDPServerRun 514
+
+						'默认日志格式：'
+
+							 Field   Format                                Extract from the example above
+						      1   process_name '[' pid ']:'                            haproxy[14385]:
+						      2   'Connect from'                                          Connect from
+						      3   source_ip ':' source_port                             10.0.1.2:33312
+						      4   'to'                                                              to
+						      5   destination_ip ':' destination_port                   10.0.3.31:8012
+						      6   '(' frontend_name '/' mode ')'                            (www/HTTP)
+							
+
+						    'tcp日志格式：'
+
+						    	option tcplog  --> 指定日志格式
+
+						      	Field   Format                                Extract from the example above
+							      1   process_name '[' pid ']:'                            haproxy[14387]:
+							      2   client_ip ':' client_port                             10.0.1.2:33313
+							      3   '[' accept_date ']'                       [06/Feb/2009:12:12:51.443]
+							      4   frontend_name                                                    fnt
+							      5   backend_name '/' server_name                                bck/srv1
+							      6   Tw '/' Tc '/' Tt*                                           0/0/5007
+							      7   bytes_read*                                                      212
+							      8   termination_state                                                 --
+							      9   actconn '/' feconn '/' beconn '/' srv_conn '/' retries*    0/0/0/0/3
+							     10   srv_queue '/' backend_queue                                      0/0
+
+
+							'http日志格式：'
+
+								option httplog --> 指定日志格式为 httplog
+
+								Field   Format                                Extract from the example above
+							      1   process_name '[' pid ']:'                            haproxy[14389]:
+							      2   client_ip ':' client_port                             10.0.1.2:33317
+							      3   '[' request_date ']'                      [06/Feb/2009:12:14:14.655]
+							      4   frontend_name                                                http-in
+							      5   backend_name '/' server_name                             static/srv1
+							      6   TR '/' Tw '/' Tc '/' Tr '/' Ta*                       10/0/30/69/109
+							      7   status_code                                                      200
+							      8   bytes_read*                                                     2750
+							      9   captured_request_cookie                                            -
+							     10   captured_response_cookie                                           -
+							     11   termination_state                                               ----
+							     12   actconn '/' feconn '/' beconn '/' srv_conn '/' retries*    1/1/1/1/0
+							     13   srv_queue '/' backend_queue                                      0/0
+							     14   '{' captured_request_headers* '}'                   {haproxy.1wt.eu}
+							     15   '{' captured_response_headers* '}'                                {}
+							     16   '"' http_request '"'                      "GET /index.html HTTP/1.1"
+
+
+										
+					log-format <string>：
+						'课外实践：参考文档实现combined格式的记录'
+
+						自定义日志：
+
+							log-format %T\ %t\ Some\ Text
+							log-format %{+Q}o\ %t\ %s\ %{-Q}r
+
+							log-format-sd %{+Q,+E}o\ [exampleSDID@1234\ header=%[capture.req.hdr(0)]]
+						
+					
+							At the moment, the default HTTP format is defined this way :
+
+							    log-format "%ci:%cp [%tr] %ft %b/%s %TR/%Tw/%Tc/%Tr/%Ta %ST %B %CC \
+							                %CS %tsc %ac/%fc/%bc/%sc/%rc %sq/%bq %hr %hs %{+Q}r"
+
+							the default CLF format is defined this way :
+
+							    log-format "%{+Q}o %{-Q}ci - - [%trg] %r %ST %B \"\" \"\" %cp \
+							                %ms %ft %b %s %TR %Tw %Tc %Tr %Ta %tsc %ac %fc \
+							                %bc %sc %rc %sq %bq %CC %CS %hrl %hsl"
+
+							and the default TCP format is defined this way :
+
+							    log-format "%ci:%cp [%t] %ft %b/%s %Tw/%Tc/%Tt %B %ts \
+							                %ac/%fc/%bc/%sc/%rc %sq/%bq"
+
+
+					capture cookie <name> len <length>
+						Capture and log a cookie in the request and in the response.
+						'记录指定cookie的日志'
+						name：cookie的名字
+						length：记录日志的长度
+					
+					capture request header <name> len <length>
+						Capture and log the last occurrence of the specified request header.
+						'捕获请求报文的指定首部的值并记录下来'
+
+						capture request header X-Forwarded-For len 15
+						
+					
+					capture response header <name> len <length>
+						Capture and log the last occurrence of the specified response header.
+						'捕获响应报文的指定首部的值并记录'
+
+						capture response header Content-length len 9
+						capture response header Location len 15
+							'记录locaiton首部的值，且只记录15个字节'
+				
+				
+
+
+
+				为指定的MIME类型启用'压缩传输功能'   --> 多用途互联网邮件扩展（MIME，Multipurpose Internet Mail Extensions）
+					'可用的上下文：所有段内都可以'
+
+					compression algo <algorithm> ...
+						：启用http协议的压缩机制，指明压缩算法gzip, deflate；
+						查看响应报文中 Content-Encoding是否开启压缩
+
+					compression type <mime type> ...
+						：指明压缩的MIME类型；
+							http://www.w3school.com.cn/media/media_mimeref.asp
+
+					
+
+
+				对后端服务器做'http协议'的'健康状态检测'：(上下文：除frontend，都可以使用)
+					option httpchk
+					option httpchk <uri> 			
+					option httpchk <method> <uri>
+					option httpchk <method> <uri> <version>		
+						定义基于http协议的7层健康状态检测机制；
+
+						#使用 httpchk 检查 /index.html资源
+						option      httpchk /index.html
+						
+					http-check expect [!] <match> <pattern>
+						Make HTTP health checks consider response contents or specific status codes.
+						'检查，指定返回的内容/响应码'
+						
+						rstatus：匹配响应码
+						rstring：匹配内容
+
+
+						只取的是 http的头部信息，这样查找到的如果要匹配网页内容的话，肯定是找不到的。
+
+						#检查响应码    是2开头的
+						http-check  expect rstatus ^2
+
+
+
+
+
+				'连接超时时长：'
+
+					timeout client <timeout>
+						Set the maximum inactivity time on the client side. 
+						默认单位是毫秒; 
+						
+					timeout server <timeout>
+						Set the maximum inactivity time on the server side.
+						
+					timeout http-keep-alive <timeout>
+						持久连接的持久时长；
+						作为代理服务器，面向客户端开启持久连接，尽量要小 --> 1s  2s 
+						
+					timeout http-request <timeout>
+						Set the maximum allowed time to wait for a complete HTTP request
+						'等待客户端发送请求报文的超时时长'
+
+					timeout connect <timeout>
+						Set the maximum time to wait for a connection attempt to a server to succeed.
+						'HAProxy与后端服务器 连接建立的超时时间'
+
+					timeout client-fin <timeout>
+						Set the inactivity timeout on the client side for half-closed connections.
+						半关闭连接超时时间；'提高会话复用性'
+							客户端
+
+					timeout server-fin <timeout>
+						Set the inactivity timeout on the server side for half-closed connections.
+						半关闭连接超时时间；'提高会话复用性'
+							服务端
+					
+					
+					
+					use_backend <backend> [{if | unless} <condition>]
+						Switch to a specific backend if/unless an ACL-based condition is matched.
+						当符合指定的条件时使用特定的backend；
+						
+					block { if | unless } <condition>
+						Block a layer 7 request if/unless a condition is matched
+						'阻塞请求'  7层检查机制
+
+						'实例：'
+							acl invalid_src src 172.16.200.2
+							block if invalid_src
+							errorfile 403 /etc/fstab	
+						
+
+					http-request { allow | deny } [ { if | unless } <condition> ]
+						Access control for Layer 7 requests
+						'http访问控制'
+
+					tcp-request connection {accept|reject}  [{if | unless} <condition>]
+						Perform an action on an incoming connection depending on a layer 4 condition
+						
+						示例：
+							listen ssh
+								bind :22022
+								balance leastconn
+								acl invalid_src src 172.16.200.2
+								tcp-request connection reject if invalid_src
+								mode tcp
+								server sshsrv1 172.16.100.6:22 check
+								server sshsrv2 172.16.100.7:22 check backup			
+				
+	
+
+
+
+
+
+
+	'acl：'  'acl只检查，不控制'
+
+	!!!	'概念：'
+			haproxy的ACL用于实现基于请求报文的首部、响应报文的内容或其它的环境状态信息来做出转发决策，这大大增强了其配置弹性。
+			其配置法则通常分为两步，首先去定义ACL，即定义一个测试条件，而后在条件得到满足时执行某特定的动作，如阻止请求或转发至某特定的后端
+
+
+		The use of Access Control Lists (ACL) provides a flexible solution to perform content switching and generally to take decisions based on content extracted from the request, the response or any environmental status.
+		
+		acl <aclname> <criterion> [flags] [operator] [<value>] ...
+			<aclname>：ACL names must be formed from upper and lower case letters, digits, '-' (dash), '_' (underscore) , '.' (dot) and ':' (colon).ACL names are case-sensitive.
+				acl的名称(标识符)
+
+			<criterion>	：匹配标准 
+
+
+			<value>的类型：
+				- boolean：真假
+				- integer or integer range：整数值
+				- IP address / network：IP地址、网络地址
+				- string (exact, substring, suffix, prefix, subdir, domain)
+					匹配指定的首部的值
+					exact：精确匹配
+					substring：
+					suffix：后缀匹配
+					prefix：前缀匹配
+					subdir：子路径匹配
+					domain：域名子串匹配
+
+
+				- regular expression：正则表达式匹配
+				- hex block：16进制数字块
+			
+
+			<flags>：'标志位'
+				-i : ignore case during matching of all subsequent patterns.
+					忽略字符大小写
+				
+				-m : use a specific pattern matching method
+					特殊匹配
+
+				-n : forbid the DNS resolutions
+					DNS解析
+
+				-u : force the unique id of the ACL
+					ACL id必须唯一
+
+				-- : force end of flags. Useful when a string looks like one of the flags.	
+					强制结束 flags
+
+				-i : ignore case during matching of all subsequent patterns.
+			   -f : load patterns from a file.
+			   -m : use a specific pattern matching method
+			   -n : forbid the DNS resolutions
+			   -M : load the file pointed by -f like a map file.
+			   -u : force the unique id of the ACL
+			   -- : force end of flags. Useful when a string looks like one of the flags.
+
+				
+			
+			 
+			 [operator] 
+				匹配整数值：eq、ge、gt、le、lt
+				
+				匹配字符串：
+					- exact match     (-m str) : the extracted string must exactly match the patterns ;
+					- substring match (-m sub) : the patterns are looked up inside the extracted string, and the ACL matches if any of them is found inside ;
+					- prefix match    (-m beg) : the patterns are compared with the beginning of the extracted string, and the ACL matches if any of them matches.
+					- suffix match    (-m end) : the patterns are compared with the end of the extracted string, and the ACL matches if any of them matches.
+					- subdir match    (-m dir) : the patterns are looked up inside the extracted string, delimited with slashes ("/"), and the ACL matches if any of them matches.
+					- domain match    (-m dom) : the patterns are looked up inside the extracted string, delimited with dots ("."), and the ACL matches if any of them matches.	
+
+					-m method : 指定模式匹配方法
+
+						其中flag中的 -m 选项可使用的模式匹配方法如下，需要说明的是有些方法已被默认指定无需声明，例如int，ip
+
+						"found" : 只是用来探测数据流中是否存在指定数据，不进行任何比较
+						"bool" : 检查结果返回布尔值。匹配没有模式，可以匹配布尔值或整数，不匹配0和false，其他值可以匹配
+						"int" : 匹配整数类型数据；可以处理整数和布尔值类型样本，0代表false，1代表true
+						"ip" : 匹配IPv4，IPv6地址类型数据。该模式仅被IP地址兼容，不需要特别指定
+						"bin" : 匹配二进制数据
+						"len" : 匹配样本的长度的整数值
+						"str" : 精确匹配，根据字符串匹配文本
+						"sub" : 子串匹配，匹配文本是否包含子串
+						"reg" : 正则匹配，根据正则表达式列表匹配文本
+						"beg" : 前缀匹配，检查文本是否以指定字符串开头
+						"end" : 后缀匹配，检查文本是否以指定字符串结尾
+						"dir" : 子目录匹配，检查部分文本中以" / "作为分隔符的内容是否含有指定字符串
+						"dom" : 域匹配。检查部分文本中以" . "作为分隔符的内容是否含有指定字符串
+					
+			
+			
+			'acl作为条件时的逻辑关系：'
+				- AND (implicit)
+
+				- OR  (explicit with the "or" keyword or the "||" operator)
+					或的关系
+				
+				- Negation with the exclamation mark ("!")
+					取反
+				
+					if invalid_src invalid_port
+					if invalid_src || invalid_port
+					if ! invalid_src invalid_port
+					
+			
+			<criterion> ：'匹配标准'
+				dst : ip  -->目标IP
+				dst_port : integer
+				src : ip  -->源IP
+				src_port : integer
+				
+					acl invalid_src  src  172.16.200.2
+						'如果源IP是172.。则是非法的源IP'
+						invalid_src：是自定义的，之后要通过别的方法进行调用
+
+					'acl只检查，不控制'
+
+					
+				
+
+				-i :不区分大小写
+
+				'path : string'
+					'提取请求url的地址信息，从第一个"/"开始，不包含host，不包含参数'
+
+					This extracts the requests URL path, which starts at the first slash and ends before the question mark (without the host part).
+						/path;<params>
+
+						'path匹配↑'
+						
+					path     : exact string match
+					path_beg : prefix match
+					path_dir : subdir match
+					path_dom : domain match '域名子串匹配'
+					path_end : suffix match
+					path_len : length match
+					path_reg : regex match
+					path_sub : substring match	
+
+
+					#请求资源为图片，则调用图片服务器后端
+					 acl picture path_end -i .jpg .png .gif
+					 use_backend server_pic if picture
+						
+				
+				'url : string'
+					提取URL的全部内容，包含host和参数ACL 衍生类似，不再列举
+
+					This extracts the requests URL as presented in the request. A typical use is with prefetch-capable caches, and with portals which need to aggregate multiple information from databases and keep them in caches.
+					
+					'url匹配'
+
+					url     : exact string match
+					url_beg : prefix match
+					url_dir : subdir match
+					url_dom : domain match
+					url_end : suffix match
+					url_len : length match
+					url_reg : regex match
+					url_sub : substring match
+					
+				
+
+				'req请求报文'：hdr([<name>[,<occ>]]) : string
+					提取http请求的指定首部字段值，< occ >可指定出现的位置ACL 衍生 :
+					
+					This extracts the last occurrence of header <name> in an HTTP request.
+					
+					'请求报文首部访问控制'
+
+					hdr([<name>[,<occ>]])     : exact string match
+					hdr_beg([<name>[,<occ>]]) : prefix match
+					hdr_dir([<name>[,<occ>]]) : subdir match
+					hdr_dom([<name>[,<occ>]]) : domain match
+					hdr_end([<name>[,<occ>]]) : suffix match
+					hdr_len([<name>[,<occ>]]) : length match
+					hdr_reg([<name>[,<occ>]]) : regex match
+					hdr_sub([<name>[,<occ>]]) : substring match					
+					
+					
+					'示例：'
+						acl bad_curl hdr_sub(User-Agent) -i curl
+						block if bad_curl	
+
+						#阻断火狐浏览器发送的请求
+						acl firefox hdr_reg(User-Agent)     -i      .*firefox.*
+						block if firefox				
+				
+					'method : integer + string'
+						提取请求报文中的请求方法Example：
+
+						#拒绝GET HEAD 方式之外的HTTP请求
+						acl valid_method method GET HEAD
+						http-request deny if ! valid_method
+
+
+				status : integer
+					Returns an integer containing the HTTP status code in the HTTP response.
+					
+			
+
+
+			'Pre-defined ACLs：內建ACL'
+
+				ACL name		Equivalent to	Usage
+				FALSE			always_false	never match
+				HTTP			req_proto_http	match if protocol is valid HTTP
+				HTTP_1.0		req_ver 1.0	match HTTP version 1.0
+				HTTP_1.1		req_ver 1.1	match HTTP version 1.1
+				HTTP_CONTENT	hdr_val(content-length) gt 0	match an existing content-length
+				HTTP_URL_ABS	url_reg ^[^/:]*://	match absolute URL with scheme
+				HTTP_URL_SLASH	url_beg /	match URL beginning with "/"
+				HTTP_URL_STAR	url *	match URL equal to "*"
+				LOCALHOST		src 127.0.0.1/8	match connection from local host
+				METH_CONNECT	method CONNECT	match HTTP CONNECT method
+				METH_GET		method GET HEAD	match HTTP GET or HEAD method
+				METH_HEAD		method HEAD	match HTTP HEAD method
+				METH_OPTIONS	method OPTIONS	match HTTP OPTIONS method
+				METH_POST		method POST	match HTTP POST method
+				METH_TRACE		method TRACE	match HTTP TRACE method
+				RDP_COOKIE		req_rdp_cookie_cnt gt 0	match presence of an RDP cookie
+				REQ_CONTENT		req_len gt 0	match data in the request buffer
+				TRUE			always_true	always match
+				WAIT_END		wait_end	wait for end of content analysis				
+
+				
+				#拒绝GET HEAD 方式之外的HTTP请求
+					http-request deny if ! METH_GET
+									
+									
+	HAProxy：global, proxies（fronted, backend, listen, defaults）
+		balance：
+			roundrobin, static-rr
+			leastconn
+			first
+			source
+			hdr(<name>)
+			uri (hash-type)
+			url_param
+			
+		Nginx调度算法：ip_hash, hash, leastconn, 
+		lvs调度算法：
+			rr/wrr/sh/dh, lc/wlc/sed/nq/lblc/lblcr
+				
+
+		'基于ACL的动静分离示例：'
+			动态节点使用：ap或者np
+
+			frontend  web *:80
+				acl url_static       path_beg       -i  /static /images /javascript /stylesheets
+				acl url_static       path_end       -i  .jpg .gif .png .css .js .html .txt .htm
+
+				use_backend staticsrvs          if url_static
+				default_backend             appsrvs
+
+			backend staticsrvs
+				balance     roundrobin
+				server      stcsrv1 172.16.100.6:80 check
+
+			backend appsrvs
+				balance     roundrobin
+				server  app1 172.16.100.7:80 check
+				server  app1 172.16.100.7:8080 check
+
+			listen stats
+				bind :9091
+				stats enable
+				stats auth admin:admin
+				stats admin if TRUE		
+		
+	
+
+	'配置HAProxy支持https协议： '
+	!!!	1 支持ssl会话；
+			bind *:443 ssl crt /PATH/TO/SOME_PEM_FILE
+				ssl：要求必须使用 ssl会话
+				crt：指明证书文件路径 --> 证书和私钥都在这个文件内
+			
+			crt后的证书文件要求PEM格式，且同时包含证书和与之匹配的所有私钥；
+			
+
+				'cat  demo.crt demo.key > demo.pem '
+				将两个文件打包到一个文件内，后缀必须是 .pem 	
+
+
+	!!!	2 把80端口的请求重向定443；
+			bind *:80
+			redirect scheme https if !{ ssl_fc }
+				scheme：协议
+				ssl_fc：如果请求的是非ssl前端的，则重定向(无需定义，因为是內建的，直接调用 ssl_fc)
+
+		
+		3 如何向后端传递用户请求的协议和端口
+			http_request set-header X-Forwarded-Port %[dst_port]
+			http_request add-header X-Forwared-Proto https if { ssl_fc }
+			
+		
+		
+		
+		'实践（博客）作业：'
+			http:
+				(1) 动静分离部署wordpress，动静都要能实现负载均衡，要注意会话的问题；
+				(2) 在haproxy和后端主机之间添加varnish进行缓存；
+				(3) 给出设计拓扑，写成博客；
+				
+				(4) haproxy的设定要求：
+					(a) stats page，要求仅能通过本地访问使用管理接口； 
+						设置acl，仅允许本机访问
+
+
+					(b) 动静分离；
+					(c) 分别考虑不同的服务器组的调度算法；
+				(5) haproxy高可用； --> keepalived
+				 
+
+
+
+
+'nginx与haproxy功能大概相同，精通一门即可，但是也要懂，练习'
+
+
+
+不同语言 通过消息队列 --> 套接字异步通信
+
+或者 通过Python 将其融合
+
+
+
+
+
+Go相比Python更简单
+
+
+
+需求驱动 --> 学习开发
+
+
+
+
+
+
+
+实例配置文件：
+
+
+
+frontend  main
+    acl invalid_src src 172.16.1.11
+    block if invalid_src
+    errorfile 403 /data/test/403.html
+    bind *:80
+    default_backend             websrv
+    maxconn 5000
+    rspadd X-Via:\ HAPorxy
+    rspidel Server.*
+
+listen stats
+    bind :9099
+    stats enable
+    stats realm "HAPorxy Stats Page"
+    stats auth admin:adminu
+    stats admin if TRUE
+
+#---------------------------------------------------------------------
+# static backend for serving up images, stylesheets and such
+#---------------------------------------------------------------------
+backend websrv
+    balance     roundrobin
+    option	httpchk /index.html
+    http-check	expect rstatus ^2
+    server      srv1 172.16.1.70:80 check weight 2
+    server      srv2 172.16.1.20:80 check weight 1
+
+listen ssh
+    bind :22022
+    maxconn 5
+    balance leastconn
+    mode tcp
+    server sshsrv1 172.16.1.70:22 check
+    server sshsrv2 172.16.1.20:22 check
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

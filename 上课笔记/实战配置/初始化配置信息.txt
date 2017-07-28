@@ -1,0 +1,270 @@
+'IP地址划分：'
+	调度器：
+		Master：172.16.1.10/16		内网：192.168.1.10/24
+		Backup：172.16.1.20/16		内网：192.168.1.20/24
+
+	varnish：
+		Master：192.168.1.30/24
+		Backup：192.168.1.40/24
+
+	静态WEB：
+		A：192.168.1.50/24
+		B：192.168.1.60/24
+
+	动态AP站点：
+		A：192.168.1.70/24
+		B：192.168.1.80/24
+
+		Memcache：
+			A：192.168.1.110/24
+			B：192.168.1.120/24
+
+	MySQL：
+		192.168.1.90/24
+
+	NFS：
+		192.168.1.100/24
+
+
+'ssh无密钥登陆：'
+
+	1、设置主机名
+
+
+	2、ssh-keygen生成私钥
+
+
+	3、ssh-copy-id传送公钥
+
+
+
+
+
+
+
+'内存分配：'
+
+
+	HA：
+		两台调度器：
+			1G内存 4核心CPU
+
+
+		两台varnish：
+			1G内存 4核心CPU
+
+
+	负载均衡：
+		两台静态WEB站点：http
+			512内存 2核心CPU
+
+		两台动态WEB站点：ap
+			512内存 2核心CPU
+		两台memcached
+			512内存 2核心CPU 
+
+
+
+存储以及数据库：
+	MySQL：
+		512内存 2核心CPU
+
+	NFS：
+		512内存 2核心CPU
+	
+
+
+
+
+
+
+
+
+'安装包初始化：'
+
+cat yum-init.sh
+
+#!/bin/bash
+#
+
+ip=$1
+
+ifconfig eno16777736 $1/16 up
+systemctl restart network
+
+if [ "$ver" == nginx ];then
+    ntpdate 172.16.0.1
+    yum install -y -q nginx keepalived
+    [ $? -eq 0 ]  && echo "yum success" || echo "failed"
+elif [ "$ver" == varnish ];then
+    yum install -y -q varnish keepalived
+    [ $? -eq 0 ]  && echo "yum success" || echo "failed"
+elif [ "$ver" == http ];then
+    yum install -y -q httpd
+    [ $? -eq 0 ]  && echo "yum success" || echo "failed"
+elif [ "$ver" == ap ];then
+    yum install -y -q httpd php php-mysql php-mbstring php-mcrypt
+    [ $? -eq 0 ]  && echo "yum success" || echo "failed"
+else
+    echo "Usage: arg1 is hostname u want set var"
+    echo "Usage: arg2 is (nginx|varnish|http|ap|nfs|mysql)"
+fi
+
+
+
+
+
+'初始化脚本：'
+
+
+# cat init.sh
+#!/bin/bash
+#
+
+#hostname
+hname=$1
+hostnamectl set-hostname ${hname}
+
+#yum software
+
+ver=$2
+
+if [ "$ver" == nginx ];then
+    iptables -F
+    setenforce 0
+    ntpdate 172.16.0.1
+    yum install -y -q nginx keepalived
+    [ $? -eq 0 ]  && echo "yum success" || echo "failed"
+
+elif [ "$ver" == http ];then
+    yum install -y httpd
+    yum install -y -q nfs-utils
+    iptables -F
+    setenforce 0
+    scp root@192.168.1.10:/etc/hosts /etc/
+    echo "$hname Static Server" > /var/www/html/index.html
+    mkdir -pv /var/www/html/{wordpres,discuzx}
+    mount -t nfs 192.168.1.100:/data/my_wordpress /var/www/html/wordpress
+    mount -t nfs 192.168.1.100:/data/my_discuzx /var/www/html/discuzx
+    systemctl start httpd 
+
+elif [ "$ver" == ap ];then
+    yum install -y -q nfs-utils
+    yum install -y -q httpd php php-mysql php-mbstring php-mcrypt
+    iptables -F
+    setenforce 0
+    scp root@192.168.1.10:/etc/hosts /etc/
+    mkdir -pv /var/www/html/{wordpres,discuzx}
+    mount -t nfs 192.168.1.100:/data/my_wordpress /var/www/html/wordpress
+    mount -t nfs 192.168.1.100:/data/my_discuzx /var/www/html/discuzx
+    cat > /var/www/html/index.php<<EOF
+${hname}
+<?php
+  phpinfo();
+?>
+EOF
+    systemctl start httpd
+
+elif [ "$ver" == nfs ];then
+    iptables -F
+    setenforce 0
+    scp root@192.168.1.10:/etc/hosts /etc/
+    cat > /etc/exports<<EOF
+/data/my_wordpress      192.168.1.50(rw,no_root_squash) 192.168.1.60(rw,no_root_squash) 192.168.1.70(rw,no_root_squash) 192.168.1.80(rw,no_root_squash)
+/data/my_discuzx        192.168.1.50(rw,no_root_squash) 192.168.1.60(rw,no_root_squash) 192.168.1.70(rw,no_root_squash) 192.168.1.80(rw,no_root_squash)
+EOF
+    mkdir -pv /data/my_wordpress
+    mkdir -pv /data/my_discuzx
+    scp maxie@192.168.1.1:/Users/machiyuan/Downloads/LinuxPackages/wordpress-4.7.4-zh_CN.tar.gz /data/
+    scp maxie@192.168.1.1:/Users/machiyuan/Downloads/LinuxPackages/Discuz_X3.3_SC_UTF8.zip /data/
+    tar -xf /data/wordpress-4.7.4-zh_CN.tar.gz -C /data 
+    mv /data/wordpress/* /data/my_wordpress
+    unzip /data/Discuz_X3.3_SC_UTF8.zip -d /data/
+    mv /data/upload/* /data/my_discuzx
+    useradd -u 48 apache
+    chown -R apache.apache /data
+    systemctl restart nfs
+    [ $? -eq 0 ] && echo "nfs deploy success" || echo "failed"
+
+elif [ "$ver" == mysql ];then
+    iptables -F
+    setenforce 0
+    scp root@192.168.1.10:/etc/hosts /etc/
+    scp root@192.168.1.10:/root/server.conf /etc/my.cnf.d/
+    scp root@192.168.1.10:/root/init.sql /root/
+    systemctl start mariadb.service
+    mysql < /root/init.sql
+
+else
+    echo "Usage: arg1 is hostname u want set var"
+    echo "Usage: arg2 is (nginx|varnish|http|ap|nfs|mysql)"
+fi
+
+
+'hosts文件：'
+
+$ cat /etc/hosts
+
+127.0.0.1   localhost localhost.localdomain localhost4 localhost4.localdomain4
+::1         localhost localhost.localdomain localhost6 localhost6.localdomain6
+172.16.1.200 www.maxie.com
+172.16.1.10 master www.maxie.com
+172.16.1.20 backup
+192.168.1.30 varnish1
+192.168.1.40 varnish2
+192.168.1.50 web1
+192.168.1.60 web2
+192.168.1.70 ap1
+192.168.1.80 ap2
+
+
+
+
+
+'nginx调度器，未配置varnish之前的配置'
+
+    upstream websrvs {
+    server 192.168.1.50:80;
+    server 192.168.1.60:80;
+    }
+
+    upstream apsrvs {
+    ip_hash;
+    server 192.168.1.70:80;
+    server 192.168.1.80:80;
+    }
+
+    server {
+        listen       80 default_server;
+        listen       [::]:80 default_server;
+        server_name  _;
+        root         /usr/share/nginx/html;
+
+        # Load configuration files for the default server block.
+        include /etc/nginx/default.d/*.conf;
+
+        location / {
+        proxy_pass  http://websrvs;
+        }
+
+    location ~* \.php {
+        proxy_pass  http://apsrvs;
+    }
+
+        error_page 404 /404.html;
+            location = /40x.html {
+        }
+
+        error_page 500 502 503 504 /50x.html;
+            location = /50x.html {
+        }
+    }
+
+
+
+
+
+
+
+
+
